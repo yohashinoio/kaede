@@ -1,6 +1,9 @@
 use super::{cursor::Cursor, token::TokenKind};
 
-pub fn lex(input: &str) -> Vec<TokenKind> {
+type Tokens = Vec<TokenKind>;
+pub type LResult = Tokens;
+
+pub fn lex(input: &str) -> LResult {
     let mut cursor = Cursor::new(input);
 
     let mut result = Vec::new();
@@ -42,6 +45,16 @@ fn is_whitespace(c: char) -> bool {
     )
 }
 
+// True if `c` is valid as a first character of an identifier.
+fn is_id_start(c: char) -> bool {
+    c == '_' || unicode_xid::UnicodeXID::is_xid_start(c)
+}
+
+// True if `c` is valid as a non-first character of an identifier.
+fn is_id_continue(c: char) -> bool {
+    unicode_xid::UnicodeXID::is_xid_continue(c)
+}
+
 impl Cursor<'_> {
     pub fn advance_token(&mut self) -> TokenKind {
         let first_char = match self.bump() {
@@ -50,12 +63,22 @@ impl Cursor<'_> {
         };
 
         let token = match first_char {
+            // Skipper
             c if is_whitespace(c) => {
                 self.eat_whitespace();
                 self.advance_token()
             }
 
+            // Number
             c @ '0'..='9' => TokenKind::Integer(self.number(c)),
+
+            // Identifier
+            c if is_id_start(c) => TokenKind::Ident(self.ident(c)),
+
+            // Punctuators
+            '(' => TokenKind::OpenParen,
+            ')' => TokenKind::CloseParen,
+            ',' => TokenKind::Comma,
 
             _ => unreachable!(),
         };
@@ -84,5 +107,23 @@ impl Cursor<'_> {
         }
 
         result
+    }
+
+    fn ident(&mut self, first: char) -> String {
+        let mut ident = String::from(first);
+
+        loop {
+            let c = self.first();
+
+            if is_id_continue(c) {
+                ident.push(c);
+            } else {
+                break;
+            }
+
+            self.bump();
+        }
+
+        ident
     }
 }

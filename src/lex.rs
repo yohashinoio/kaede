@@ -2,9 +2,11 @@
 
 mod cursor;
 mod lex;
-mod token;
+pub mod token;
 
 #[cfg(test)]
 mod tests;
 
 pub use lex::lex;
+
+pub use lex::LResult;

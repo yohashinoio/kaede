@@ -18,3 +18,16 @@ fn multi_numbers() {
         vec![Integer(48), Integer(10), Integer(5), Integer(8), Eof]
     );
 }
+
+#[test]
+fn identifier() {
+    assert_eq!(
+        lex("yoha io"),
+        vec![Ident(String::from("yoha")), Ident(String::from("io")), Eof]
+    );
+}
+
+#[test]
+fn punct() {
+    assert_eq!(lex("() ,"), vec![OpenParen, CloseParen, Comma, Eof]);
+}
