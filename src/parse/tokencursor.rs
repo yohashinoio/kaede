@@ -11,8 +11,7 @@ impl<T: Iterator<Item = TokenKind>> TokenCursor<T> {
         Self { tokens: tokens }
     }
 
-    // Returns the current cursor target.
-    pub fn point(&mut self) -> &TokenKind {
+    pub fn first(&mut self) -> &TokenKind {
         self.tokens.peek().unwrap_or(&TokenKind::Eof)
     }
 

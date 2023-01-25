@@ -37,7 +37,7 @@ impl<T: Iterator<Item = TokenKind>> TokenCursor<T> {
     }
 
     fn parse_ident(&mut self) -> Option<String> {
-        let is_ident = match self.point() {
+        let is_ident = match self.first() {
             TokenKind::Ident(_) => true,
             _ => false,
         };
