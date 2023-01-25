@@ -6,6 +6,8 @@ pub enum TokenKind {
     // Punctuators
     OpenParen,  // '('
     CloseParen, // ')'
+    OpenBrace,  // '{'
+    CloseBrace, // '}'
     Comma,      // ','
 
     Eof,

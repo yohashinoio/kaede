@@ -78,6 +78,8 @@ impl Cursor<'_> {
             // Punctuators
             '(' => TokenKind::OpenParen,
             ')' => TokenKind::CloseParen,
+            '{' => TokenKind::OpenBrace,
+            '}' => TokenKind::CloseBrace,
             ',' => TokenKind::Comma,
 
             _ => unreachable!(),

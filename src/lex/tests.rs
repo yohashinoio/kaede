@@ -29,5 +29,8 @@ fn identifier() {
 
 #[test]
 fn punct() {
-    assert_eq!(lex("() ,"), vec![OpenParen, CloseParen, Comma, Eof]);
+    assert_eq!(
+        lex("() , {}"),
+        vec![OpenParen, CloseParen, Comma, OpenBrace, CloseBrace, Eof]
+    );
 }
