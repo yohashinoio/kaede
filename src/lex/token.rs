@@ -10,5 +10,8 @@ pub enum TokenKind {
     CloseBrace, // '}'
     Comma,      // ','
 
+    // Reserved words
+    Function, // "fn"
+
     Eof,
 }

@@ -9,4 +9,4 @@ mod tests;
 
 pub use lex::lex;
 
-pub use lex::LResult;
+pub use lex::LexResult;

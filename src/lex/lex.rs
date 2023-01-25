@@ -1,9 +1,9 @@
 use super::{cursor::Cursor, token::TokenKind};
 
 type Tokens = Vec<TokenKind>;
-pub type LResult = Tokens;
+pub type LexResult = Tokens;
 
-pub fn lex(input: &str) -> LResult {
+pub fn lex(input: &str) -> LexResult {
     let mut cursor = Cursor::new(input);
 
     let mut result = Vec::new();
@@ -72,8 +72,15 @@ impl Cursor<'_> {
             // Number
             c @ '0'..='9' => TokenKind::Integer(self.number(c)),
 
-            // Identifier
-            c if is_id_start(c) => TokenKind::Ident(self.ident(c)),
+            // Identifier or reserved words
+            c if is_id_start(c) => {
+                let ident = self.ident(c);
+
+                match ident.as_str() {
+                    "fn" => TokenKind::Function,
+                    _ => TokenKind::Ident(ident),
+                }
+            }
 
             // Punctuators
             '(' => TokenKind::OpenParen,
