@@ -62,7 +62,7 @@ impl Cursor<'_> {
             None => return TokenKind::Eof,
         };
 
-        let token = match first_char {
+        match first_char {
             // Skipper
             c if is_whitespace(c) => {
                 self.eat_whitespace();
@@ -90,9 +90,7 @@ impl Cursor<'_> {
             ',' => TokenKind::Comma,
 
             _ => unreachable!(),
-        };
-
-        token
+        }
     }
 
     fn eat_whitespace(&mut self) {
