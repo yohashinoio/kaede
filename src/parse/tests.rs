@@ -6,10 +6,12 @@ use crate::{
 use super::*;
 
 #[test]
-fn function() {
+fn function() -> anyhow::Result<()> {
     let expect = vec![Top::Function(Function {
         name: "f".to_string(),
     })];
 
-    assert_eq!(parse(lex("fn f() {}")), expect);
+    assert_eq!(parse(lex("fn f() {}"))?, expect);
+
+    Ok(())
 }

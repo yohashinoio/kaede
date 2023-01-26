@@ -4,10 +4,12 @@ mod ast;
 mod lex;
 mod parse;
 
-fn main() {
-    let tokens = lex(" fn f");
+fn main() -> anyhow::Result<()> {
+    let tokens = lex(" fn f() {}");
 
-    let ast = parse(tokens);
+    let ast = parse(tokens)?;
 
     println!("{:?}", ast);
+
+    Ok(())
 }
