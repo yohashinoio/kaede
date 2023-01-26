@@ -1,12 +1,15 @@
 use crate::{
     ast::ast::{Top, TranslationUnit},
-    lex::{token::TokenKind, LexResult},
+    lex::token::TokenKind,
 };
 
 use super::tokencursor::TokenCursor;
 
-pub fn parse(lex_result: LexResult) -> TranslationUnit {
-    let mut cursor = TokenCursor::new(lex_result.into_iter().peekable());
+pub fn parse<T>(tokens: T) -> TranslationUnit
+where
+    T: Iterator<Item = TokenKind>,
+{
+    let mut cursor = TokenCursor::new(tokens.peekable());
 
     let mut result = Vec::new();
 
@@ -29,8 +32,6 @@ impl<T: Iterator<Item = TokenKind>> TokenCursor<T> {
             TokenKind::Function => Some(Top::Function {
                 name: self.parse_ident()?,
             }),
-
-            TokenKind::Eof => return None,
 
             t => unreachable!("{:?}", t),
         }

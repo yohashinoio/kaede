@@ -8,5 +8,3 @@ pub mod token;
 mod tests;
 
 pub use lex::lex;
-
-pub use lex::LexResult;

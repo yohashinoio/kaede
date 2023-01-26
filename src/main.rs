@@ -7,8 +7,6 @@ mod parse;
 fn main() {
     let tokens = lex(" fn f");
 
-    println!("{:?}", tokens);
-
     let ast = parse(tokens);
 
     println!("{:?}", ast);

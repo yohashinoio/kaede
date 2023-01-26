@@ -1,24 +1,16 @@
 use super::{cursor::Cursor, token::TokenKind};
 
-type Tokens = Vec<TokenKind>;
-pub type LexResult = Tokens;
-
-pub fn lex(input: &str) -> LexResult {
+pub fn lex(input: &str) -> impl Iterator<Item = TokenKind> + '_ {
     let mut cursor = Cursor::new(input);
 
-    let mut result = Vec::new();
+    std::iter::from_fn(move || {
+        let token = cursor.advance_token();
 
-    loop {
-        match cursor.advance_token() {
-            TokenKind::Eof => {
-                result.push(TokenKind::Eof);
-                break;
-            }
-            tok => result.push(tok),
+        match token {
+            TokenKind::Eof => None,
+            _ => Some(token),
         }
-    }
-
-    result
+    })
 }
 
 fn is_whitespace(c: char) -> bool {
