@@ -23,7 +23,7 @@ fn multi_numbers() {
 fn identifier() {
     assert_eq!(
         lex("yoha io").collect::<Vec<_>>(),
-        vec![Ident(String::from("yoha")), Ident(String::from("io"))]
+        vec![Ident("yoha".to_string()), Ident("io".to_string())]
     );
 }
 

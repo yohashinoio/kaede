@@ -48,7 +48,7 @@ fn is_id_continue(c: char) -> bool {
 }
 
 impl Cursor<'_> {
-    pub fn advance_token(&mut self) -> TokenKind {
+    fn advance_token(&mut self) -> TokenKind {
         let first_char = match self.bump() {
             Some(c) => c,
             None => return TokenKind::Eof,

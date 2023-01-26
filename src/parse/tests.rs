@@ -1,13 +1,15 @@
-use crate::{ast::ast::Top, lex::token::TokenKind};
+use crate::{
+    ast::ast::{Function, Top},
+    lex::lex,
+};
 
 use super::*;
 
 #[test]
 fn function() {
-    assert_eq!(
-        parse(vec![TokenKind::Function, TokenKind::Ident(String::from("f"))].into_iter()),
-        vec![Top::Function {
-            name: String::from("f")
-        }]
-    );
+    let expect = vec![Top::Function(Function {
+        name: "f".to_string(),
+    })];
+
+    assert_eq!(parse(lex("fn f() {}")), expect);
 }
