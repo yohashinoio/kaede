@@ -1,40 +1,34 @@
-use crate::{
-    ast::ast::{Function, Top},
-    lex::token::TokenKind,
-};
+use crate::{ast::ast::Top, lex::token::TokenKind};
 
-use super::tokencursor::TokenCursor;
+use super::parser::Parser;
 
-impl<T: Iterator<Item = TokenKind>> TokenCursor<T> {
+impl<T: Iterator<Item = TokenKind>> Parser<T> {
     /// None if end of tokens
-    pub fn parse_top(&mut self) -> anyhow::Result<Option<Top>> {
+    pub fn top(&mut self) -> anyhow::Result<Option<Top>> {
         let token = match self.bump() {
             Some(x) => x,
             None => return Ok(None),
         };
 
         match token {
-            TokenKind::Function => Ok(Some(Top::Function(self.parse_fn()?))),
+            TokenKind::Function => Ok(Some(self.func()?)),
 
             t => unreachable!("{:?}", t),
         }
     }
 
-    fn parse_fn(&mut self) -> anyhow::Result<Function> {
-        let name = self.parse_ident()?;
+    fn func(&mut self) -> anyhow::Result<Top> {
+        let name = self.ident()?;
 
         self.consume(TokenKind::OpenParen)?;
         self.consume(TokenKind::CloseParen)?;
 
         self.consume(TokenKind::OpenBrace)?;
 
-        let expr = self.parse_expr()?;
+        let expr = self.expr()?;
 
         self.consume(TokenKind::CloseBrace)?;
 
-        Ok(Function {
-            name: name,
-            body: expr,
-        })
+        Ok(Top::Function { name, body: expr })
     }
 }

@@ -1,46 +1,20 @@
-#[derive(Debug, PartialEq)]
-pub struct Add {
-    lhs: Box<Expr>,
-    rhs: Box<Expr>,
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum BinOpKind {
+    Add,
+    Sub,
+    Mul,
+    Div,
 }
 
-#[derive(Debug, PartialEq)]
-pub struct Sub {
-    lhs: Box<Expr>,
-    rhs: Box<Expr>,
-}
-
-#[derive(Debug, PartialEq)]
-pub struct Mul {
-    lhs: Box<Expr>,
-    rhs: Box<Expr>,
-}
-
-#[derive(Debug, PartialEq)]
-pub struct Div {
-    lhs: Box<Expr>,
-    rhs: Box<Expr>,
-}
-
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Expr {
     Integer(u64),
-
-    Add(Add),
-    Sub(Sub),
-    Mul(Mul),
-    Div(Div),
+    BinOp(Box<Expr>, BinOpKind, Box<Expr>),
 }
 
-#[derive(Debug, PartialEq)]
-pub struct Function {
-    pub name: String,
-    pub body: Expr,
-}
-
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Top {
-    Function(Function),
+    Function { name: String, body: Expr },
 }
 
 pub type TranslationUnit = Vec<Top>;

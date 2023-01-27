@@ -2,7 +2,7 @@ mod error;
 mod parse;
 mod parse_expr;
 mod parse_top;
-mod tokencursor;
+mod parser;
 
 #[cfg(test)]
 mod tests;

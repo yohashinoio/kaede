@@ -1,17 +1,17 @@
 use crate::{ast::ast::TranslationUnit, lex::token::TokenKind};
 
-use super::{error::ParseError, tokencursor::TokenCursor};
+use super::{error::ParseError, parser::Parser};
 
 pub fn parse<T>(tokens: T) -> anyhow::Result<TranslationUnit>
 where
     T: Iterator<Item = TokenKind>,
 {
-    let mut cursor = TokenCursor::new(tokens.peekable());
+    let mut parser = Parser::new(tokens.peekable());
 
     let mut result = Vec::new();
 
     loop {
-        let top = cursor.parse_top()?;
+        let top = parser.top()?;
 
         match top {
             Some(x) => result.push(x),
@@ -22,7 +22,7 @@ where
     Ok(result)
 }
 
-impl<T: Iterator<Item = TokenKind>> TokenCursor<T> {
+impl<T: Iterator<Item = TokenKind>> Parser<T> {
     pub fn consume(&mut self, tok: TokenKind) -> anyhow::Result<()> {
         if self.first() == &tok {
             self.bump();
@@ -34,5 +34,15 @@ impl<T: Iterator<Item = TokenKind>> TokenCursor<T> {
             but: self.first().clone(),
         }
         .into())
+    }
+
+    /// _b because it returns a bool type.
+    pub fn consume_b(&mut self, tok: TokenKind) -> bool {
+        if self.first() == &tok {
+            self.bump();
+            return true;
+        }
+
+        false
     }
 }

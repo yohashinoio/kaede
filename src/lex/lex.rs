@@ -82,10 +82,10 @@ impl Cursor<'_> {
             ',' => TokenKind::Comma,
 
             // Operators
-            '+' => TokenKind::Plus,
-            '-' => TokenKind::Minus,
-            '*' => TokenKind::Asterisk,
-            '/' => TokenKind::Slash,
+            '+' => TokenKind::Add,
+            '-' => TokenKind::Sub,
+            '*' => TokenKind::Mul,
+            '/' => TokenKind::Div,
 
             _ => unreachable!(),
         }

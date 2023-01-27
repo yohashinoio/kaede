@@ -14,7 +14,7 @@ impl<'a> Cursor<'a> {
     }
 
     pub fn first(&self) -> char {
-        self.chars.clone().nth(0).unwrap_or(EOF_CHAR)
+        self.chars.clone().next().unwrap_or(EOF_CHAR)
     }
 
     // pub fn second(&self) -> char {

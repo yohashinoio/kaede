@@ -1,4 +1,4 @@
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TokenKind {
     Integer(u64),
     Ident(String),
@@ -16,14 +16,10 @@ pub enum TokenKind {
     Comma,
 
     // Operators
-    /// '+'
-    Plus,
-    /// '-'
-    Minus,
-    /// '*'
-    Asterisk,
-    /// '/'
-    Slash,
+    Add,
+    Sub,
+    Mul,
+    Div,
 
     // Reserved words
     Function,
@@ -46,10 +42,10 @@ impl std::fmt::Display for TokenKind {
             CloseBrace => write!(f, "'}}'"),
             Comma => write!(f, "','"),
 
-            Plus => write!(f, "'+'"),
-            Minus => write!(f, "'-'"),
-            Asterisk => write!(f, "'*'"),
-            Slash => write!(f, "'/'"),
+            Add => write!(f, "'+'"),
+            Sub => write!(f, "'-'"),
+            Mul => write!(f, "'*'"),
+            Div => write!(f, "'/'"),
 
             Function => write!(f, "function"),
 

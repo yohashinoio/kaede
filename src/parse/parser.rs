@@ -2,13 +2,13 @@ use std::iter::Peekable;
 
 use crate::lex::token::TokenKind;
 
-pub struct TokenCursor<T: Iterator<Item = TokenKind>> {
+pub struct Parser<T: Iterator<Item = TokenKind>> {
     tokens: Peekable<T>,
 }
 
-impl<T: Iterator<Item = TokenKind>> TokenCursor<T> {
+impl<T: Iterator<Item = TokenKind>> Parser<T> {
     pub fn new(tokens: Peekable<T>) -> Self {
-        Self { tokens: tokens }
+        Self { tokens }
     }
 
     pub fn first(&mut self) -> &TokenKind {
