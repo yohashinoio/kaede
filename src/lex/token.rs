@@ -4,15 +4,31 @@ pub enum TokenKind {
     Ident(String),
 
     // Punctuators
-    OpenParen,  // '('
-    CloseParen, // ')'
-    OpenBrace,  // '{'
-    CloseBrace, // '}'
-    Comma,      // ','
+    /// '('
+    OpenParen,
+    /// ')'
+    CloseParen,
+    /// '{'
+    OpenBrace,
+    /// '}'
+    CloseBrace,
+    /// ','
+    Comma,
+
+    // Operators
+    /// '+'
+    Plus,
+    /// '-'
+    Minus,
+    /// '*'
+    Asterisk,
+    /// '/'
+    Slash,
 
     // Reserved words
-    Function, // "fn"
+    Function,
 
+    /// End of file
     Eof,
 }
 
@@ -29,6 +45,11 @@ impl std::fmt::Display for TokenKind {
             OpenBrace => write!(f, "'{{'"),
             CloseBrace => write!(f, "'}}'"),
             Comma => write!(f, "','"),
+
+            Plus => write!(f, "'+'"),
+            Minus => write!(f, "'-'"),
+            Asterisk => write!(f, "'*'"),
+            Slash => write!(f, "'/'"),
 
             Function => write!(f, "function"),
 

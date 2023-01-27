@@ -37,12 +37,12 @@ fn is_whitespace(c: char) -> bool {
     )
 }
 
-// True if `c` is valid as a first character of an identifier.
+/// True if `c` is valid as a first character of an identifier.
 fn is_id_start(c: char) -> bool {
     c == '_' || unicode_xid::UnicodeXID::is_xid_start(c)
 }
 
-// True if `c` is valid as a non-first character of an identifier.
+/// True if `c` is valid as a non-first character of an identifier.
 fn is_id_continue(c: char) -> bool {
     unicode_xid::UnicodeXID::is_xid_continue(c)
 }
@@ -80,6 +80,12 @@ impl Cursor<'_> {
             '{' => TokenKind::OpenBrace,
             '}' => TokenKind::CloseBrace,
             ',' => TokenKind::Comma,
+
+            // Operators
+            '+' => TokenKind::Plus,
+            '-' => TokenKind::Minus,
+            '*' => TokenKind::Asterisk,
+            '/' => TokenKind::Slash,
 
             _ => unreachable!(),
         }

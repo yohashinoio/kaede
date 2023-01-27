@@ -1,5 +1,5 @@
 use crate::{
-    ast::ast::{Function, Top},
+    ast::ast::{Expr, Function, Top},
     lex::lex,
 };
 
@@ -9,9 +9,10 @@ use super::*;
 fn function() -> anyhow::Result<()> {
     let expect = vec![Top::Function(Function {
         name: "f".to_string(),
+        body: Expr::Integer(4810),
     })];
 
-    assert_eq!(parse(lex("fn f() {}"))?, expect);
+    assert_eq!(parse(lex("fn f() { 4810 }"))?, expect);
 
     Ok(())
 }

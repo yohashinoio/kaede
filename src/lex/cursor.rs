@@ -17,9 +17,9 @@ impl<'a> Cursor<'a> {
         self.chars.clone().nth(0).unwrap_or(EOF_CHAR)
     }
 
-    pub fn second(&self) -> char {
-        self.chars.clone().nth(1).unwrap_or(EOF_CHAR)
-    }
+    // pub fn second(&self) -> char {
+    //     self.chars.clone().nth(1).unwrap_or(EOF_CHAR)
+    // }
 
     pub fn is_eof(&self) -> bool {
         self.chars.as_str().is_empty() || self.first() == EOF_CHAR
