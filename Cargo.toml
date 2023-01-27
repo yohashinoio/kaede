@@ -9,3 +9,4 @@ edition = "2021"
 anyhow = "1.0.68"
 thiserror = "1.0.38"
 unicode-xid = "0.2.4"
+inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm14-0"] }

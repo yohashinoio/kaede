@@ -8,7 +8,7 @@ mod lex;
 mod parse;
 
 fn main() -> anyhow::Result<()> {
-    let tokens = lex(" fn f() {}");
+    let tokens = lex(r" fn f() { 4810}");
 
     let ast = parse(tokens)?;
 
@@ -16,7 +16,7 @@ fn main() -> anyhow::Result<()> {
 
     let context = Context::create();
     let gen = CodeGen::new(&context, "sample");
-    let module = gen.codegen_module(&ast);
+    let module = gen.gen(&ast);
 
     println!("{}", module.print_to_string().to_string());
 
