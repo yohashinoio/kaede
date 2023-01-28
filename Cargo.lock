@@ -108,6 +108,7 @@ dependencies = [
 name = "kaede_parse"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "kaede_ast",
  "kaede_lex",
  "thiserror",

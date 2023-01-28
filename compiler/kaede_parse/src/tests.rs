@@ -1,7 +1,5 @@
-use crate::{
-    ast::ast::{Expr, Top},
-    lex::lex,
-};
+use kaede_ast::{Expr, Top};
+use kaede_lex::lex;
 
 use super::*;
 

@@ -2,6 +2,9 @@ mod error;
 mod expr;
 mod top;
 
+#[cfg(test)]
+mod tests;
+
 pub fn parse<T>(tokens: T) -> ParseResult<TranslationUnit>
 where
     T: Iterator<Item = TokenKind>,
