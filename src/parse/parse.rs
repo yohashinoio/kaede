@@ -1,8 +1,11 @@
 use crate::{ast::ast::TranslationUnit, lex::token::TokenKind};
 
-use super::{error::ParseError, parser::Parser};
+use super::{
+    error::{ParseError, ParseResult},
+    parser::Parser,
+};
 
-pub fn parse<T>(tokens: T) -> anyhow::Result<TranslationUnit>
+pub fn parse<T>(tokens: T) -> ParseResult<TranslationUnit>
 where
     T: Iterator<Item = TokenKind>,
 {
@@ -23,7 +26,7 @@ where
 }
 
 impl<T: Iterator<Item = TokenKind>> Parser<T> {
-    pub fn consume(&mut self, tok: TokenKind) -> anyhow::Result<()> {
+    pub fn consume(&mut self, tok: TokenKind) -> ParseResult<()> {
         if self.first() == &tok {
             self.bump();
             return Ok(());
@@ -32,8 +35,7 @@ impl<T: Iterator<Item = TokenKind>> Parser<T> {
         Err(ParseError::ExpectedError {
             expected: tok,
             but: self.first().clone(),
-        }
-        .into())
+        })
     }
 
     /// _b because it returns a bool type.

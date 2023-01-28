@@ -1,10 +1,10 @@
 use crate::{ast::ast::Top, lex::token::TokenKind};
 
-use super::parser::Parser;
+use super::{error::ParseResult, parser::Parser};
 
 impl<T: Iterator<Item = TokenKind>> Parser<T> {
     /// None if end of tokens
-    pub fn top(&mut self) -> anyhow::Result<Option<Top>> {
+    pub fn top(&mut self) -> ParseResult<Option<Top>> {
         let token = match self.bump() {
             Some(x) => x,
             None => return Ok(None),
@@ -17,7 +17,7 @@ impl<T: Iterator<Item = TokenKind>> Parser<T> {
         }
     }
 
-    fn func(&mut self) -> anyhow::Result<Top> {
+    fn func(&mut self) -> ParseResult<Top> {
         let name = self.ident()?;
 
         self.consume(TokenKind::OpenParen)?;

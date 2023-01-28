@@ -3,10 +3,13 @@ use crate::{
     lex::token::TokenKind,
 };
 
-use super::{error::ParseError, parser::Parser};
+use super::{
+    error::{ParseError, ParseResult},
+    parser::Parser,
+};
 
 impl<T: Iterator<Item = TokenKind>> Parser<T> {
-    pub fn expr(&mut self) -> anyhow::Result<Expr> {
+    pub fn expr(&mut self) -> ParseResult<Expr> {
         let mut node = self.mul()?;
 
         loop {
@@ -20,7 +23,7 @@ impl<T: Iterator<Item = TokenKind>> Parser<T> {
         }
     }
 
-    fn mul(&mut self) -> anyhow::Result<Expr> {
+    fn mul(&mut self) -> ParseResult<Expr> {
         let mut node = self.primary()?;
 
         loop {
@@ -34,7 +37,7 @@ impl<T: Iterator<Item = TokenKind>> Parser<T> {
         }
     }
 
-    fn primary(&mut self) -> anyhow::Result<Expr> {
+    fn primary(&mut self) -> ParseResult<Expr> {
         if self.consume_b(TokenKind::OpenParen) {
             // '(' expr ')'
             let node = self.expr()?;
@@ -45,19 +48,18 @@ impl<T: Iterator<Item = TokenKind>> Parser<T> {
         Ok(Expr::Integer(self.integer()?))
     }
 
-    pub fn integer(&mut self) -> anyhow::Result<u64> {
+    pub fn integer(&mut self) -> ParseResult<u64> {
         match self.bump().unwrap() {
             TokenKind::Integer(int) => Ok(int),
 
             _ => Err(ParseError::ExpectedError {
                 expected: TokenKind::Integer(0),
                 but: self.first().clone(),
-            }
-            .into()),
+            }),
         }
     }
 
-    pub fn ident(&mut self) -> anyhow::Result<String> {
+    pub fn ident(&mut self) -> ParseResult<String> {
         let is_ident = matches!(self.first(), TokenKind::Ident(_));
 
         if is_ident {
@@ -69,7 +71,6 @@ impl<T: Iterator<Item = TokenKind>> Parser<T> {
         Err(ParseError::ExpectedError {
             expected: TokenKind::Ident("".to_string()),
             but: self.first().clone(),
-        }
-        .into())
+        })
     }
 }
