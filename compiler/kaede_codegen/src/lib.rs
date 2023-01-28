@@ -1,6 +1,11 @@
 use inkwell::{builder::Builder, context::Context, module::Module};
+use kaede_ast::TranslationUnit;
 
-use crate::ast::ast::TranslationUnit;
+mod expr;
+mod top;
+
+#[cfg(test)]
+mod tests;
 
 pub fn codegen<'ctx, 'module>(
     context: &'ctx Context,

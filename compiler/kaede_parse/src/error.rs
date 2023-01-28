@@ -1,6 +1,5 @@
+use kaede_lex::token::TokenKind;
 use thiserror::Error;
-
-use crate::lex::token::TokenKind;
 
 #[derive(Error, Debug)]
 pub enum ParseError {

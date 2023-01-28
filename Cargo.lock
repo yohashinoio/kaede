@@ -71,13 +71,46 @@ dependencies = [
 ]
 
 [[package]]
-name = "kaede"
+name = "kaede_ast"
+version = "0.1.0"
+
+[[package]]
+name = "kaede_codegen"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "inkwell",
- "thiserror",
+ "kaede_ast",
+ "kaede_lex",
+ "kaede_parse",
+]
+
+[[package]]
+name = "kaede_compiler"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "inkwell",
+ "kaede_ast",
+ "kaede_codegen",
+ "kaede_lex",
+ "kaede_parse",
+]
+
+[[package]]
+name = "kaede_lex"
+version = "0.1.0"
+dependencies = [
  "unicode-xid",
+]
+
+[[package]]
+name = "kaede_parse"
+version = "0.1.0"
+dependencies = [
+ "kaede_ast",
+ "kaede_lex",
+ "thiserror",
 ]
 
 [[package]]

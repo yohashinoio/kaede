@@ -1,6 +1,6 @@
-use crate::ast::ast::{Expr, Top};
+use kaede_ast::{Expr, Top};
 
-use super::codegen::CodeGen;
+use crate::CodeGen;
 
 impl CodeGen<'_, '_> {
     pub fn top(&self, top_ast: &Top) {

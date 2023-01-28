@@ -1,8 +1,7 @@
 use inkwell::values::{BasicValue, BasicValueEnum, IntValue};
+use kaede_ast::{BinOpKind, Expr};
 
-use crate::ast::ast::{BinOpKind, Expr};
-
-use super::codegen::CodeGen;
+use crate::CodeGen;
 
 impl CodeGen<'_, '_> {
     pub fn expr(&self, expr_ast: &Expr) -> BasicValueEnum {

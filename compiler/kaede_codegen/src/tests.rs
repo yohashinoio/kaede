@@ -1,6 +1,7 @@
 use inkwell::{context::Context, module::Module, OptimizationLevel};
 
-use crate::{lex, parse};
+use kaede_lex::lex;
+use kaede_parse::parse;
 
 use super::*;
 

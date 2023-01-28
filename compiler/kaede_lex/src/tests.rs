@@ -1,4 +1,4 @@
-use crate::lex::token::TokenKind::*;
+use crate::TokenKind::*;
 
 use super::*;
 

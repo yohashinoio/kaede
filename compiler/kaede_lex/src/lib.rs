@@ -1,4 +1,11 @@
-use super::{cursor::Cursor, token::TokenKind};
+use cursor::Cursor;
+use token::TokenKind;
+
+mod cursor;
+pub mod token;
+
+#[cfg(test)]
+mod tests;
 
 pub fn lex(input: &str) -> impl Iterator<Item = TokenKind> + '_ {
     let mut cursor = Cursor::new(input);

@@ -1,6 +1,7 @@
-use crate::{ast::ast::Top, lex::token::TokenKind};
+use kaede_ast::Top;
+use kaede_lex::token::TokenKind;
 
-use super::{error::ParseResult, parser::Parser};
+use crate::{error::ParseResult, Parser};
 
 impl<T: Iterator<Item = TokenKind>> Parser<T> {
     /// None if end of tokens

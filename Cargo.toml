@@ -1,12 +1,4 @@
-[package]
-name = "kaede"
-version = "0.1.0"
-edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-anyhow = "1.0.68"
-thiserror = "1.0.38"
-unicode-xid = "0.2.4"
-inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm14-0"] }
+[workspace]
+members = [
+  "compiler/kaede_compiler",
+]

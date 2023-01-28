@@ -1,11 +1,9 @@
-use crate::{
-    ast::ast::{BinOpKind, Expr},
-    lex::token::TokenKind,
-};
+use kaede_ast::{BinOpKind, Expr};
+use kaede_lex::token::TokenKind;
 
-use super::{
+use crate::{
     error::{ParseError, ParseResult},
-    parser::Parser,
+    Parser,
 };
 
 impl<T: Iterator<Item = TokenKind>> Parser<T> {
