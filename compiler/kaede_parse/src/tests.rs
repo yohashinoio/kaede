@@ -112,6 +112,21 @@ fn four_arithmetic_precedence() -> anyhow::Result<()> {
 }
 
 #[test]
+fn unary_plus_and_minus() -> anyhow::Result<()> {
+    let create_unary_minus =
+        |n| Expr::BinOp(Box::new(Expr::Integer(0)), BinOpKind::Sub, Box::new(n));
+
+    assert_eq!(
+        parse(lex("fn test() { +(-(-58)) }"))?,
+        TranslationUnit::from([create_test_fn(create_unary_minus(create_unary_minus(
+            Expr::Integer(58)
+        )))])
+    );
+
+    Ok(())
+}
+
+#[test]
 fn function() -> anyhow::Result<()> {
     assert_eq!(
         parse(lex("fn test() { 4810 }"))?,

@@ -4,7 +4,7 @@ use kaede_lex::lex;
 use kaede_parse::parse;
 
 fn main() -> anyhow::Result<()> {
-    let tokens = lex(r" fn f() { 48 +10 * 2}");
+    let tokens = lex(r" fn f() { -((+48 +10) * -2)}");
 
     let ast = parse(tokens)?;
 
