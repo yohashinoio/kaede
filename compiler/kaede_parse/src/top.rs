@@ -1,9 +1,9 @@
 use kaede_ast::Top;
-use kaede_lex::token::TokenKind;
+use kaede_lex::token::{Token, TokenKind};
 
 use crate::{error::ParseResult, Parser};
 
-impl<T: Iterator<Item = TokenKind>> Parser<T> {
+impl<T: Iterator<Item = Token>> Parser<T> {
     /// None if end of tokens
     pub fn top(&mut self) -> ParseResult<Option<Top>> {
         let token = match self.bump() {
@@ -11,7 +11,7 @@ impl<T: Iterator<Item = TokenKind>> Parser<T> {
             None => return Ok(None),
         };
 
-        match token {
+        match token.kind {
             TokenKind::Function => Ok(Some(self.func()?)),
 
             t => unreachable!("{:?}", t),

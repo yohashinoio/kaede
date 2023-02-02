@@ -1,19 +1,21 @@
 use cursor::Cursor;
-use token::TokenKind;
+use kaede_location::{Location, Span};
+use token::{Token, TokenKind};
 
 mod cursor;
+mod location;
 pub mod token;
 
 #[cfg(test)]
 mod tests;
 
-pub fn lex(input: &str) -> impl Iterator<Item = TokenKind> + '_ {
+pub fn lex(input: &str) -> impl Iterator<Item = Token> + '_ {
     let mut cursor = Cursor::new(input);
 
     std::iter::from_fn(move || {
         let token = cursor.advance_token();
 
-        match token {
+        match token.kind {
             TokenKind::Eof => None,
             _ => Some(token),
         }
@@ -55,10 +57,17 @@ fn is_id_continue(c: char) -> bool {
 }
 
 impl Cursor<'_> {
-    fn advance_token(&mut self) -> TokenKind {
+    fn advance_token(&mut self) -> Token {
+        let start = self.get_loc().clone();
+
+        let with_span = |t: TokenKind, finish: &Location| Token {
+            kind: t,
+            span: Span::new(start, finish.clone()),
+        };
+
         let first_char = match self.bump() {
             Some(c) => c,
-            None => return TokenKind::Eof,
+            None => return with_span(TokenKind::Eof, self.get_loc()),
         };
 
         match first_char {
@@ -69,30 +78,30 @@ impl Cursor<'_> {
             }
 
             // Number
-            c @ '0'..='9' => TokenKind::Integer(self.number(c)),
+            c @ '0'..='9' => with_span(TokenKind::Integer(self.number(c)), self.get_loc()),
 
             // Identifier or reserved words
             c if is_id_start(c) => {
                 let ident = self.ident(c);
 
                 match ident.as_str() {
-                    "fn" => TokenKind::Function,
-                    _ => TokenKind::Ident(ident),
+                    "fn" => with_span(TokenKind::Function, self.get_loc()),
+                    _ => with_span(TokenKind::Ident(ident), self.get_loc()),
                 }
             }
 
             // Punctuators
-            '(' => TokenKind::OpenParen,
-            ')' => TokenKind::CloseParen,
-            '{' => TokenKind::OpenBrace,
-            '}' => TokenKind::CloseBrace,
-            ',' => TokenKind::Comma,
+            '(' => with_span(TokenKind::OpenParen, self.get_loc()),
+            ')' => with_span(TokenKind::CloseParen, self.get_loc()),
+            '{' => with_span(TokenKind::OpenBrace, self.get_loc()),
+            '}' => with_span(TokenKind::CloseBrace, self.get_loc()),
+            ',' => with_span(TokenKind::Comma, self.get_loc()),
 
             // Operators
-            '+' => TokenKind::Add,
-            '-' => TokenKind::Sub,
-            '*' => TokenKind::Mul,
-            '/' => TokenKind::Div,
+            '+' => with_span(TokenKind::Add, self.get_loc()),
+            '-' => with_span(TokenKind::Sub, self.get_loc()),
+            '*' => with_span(TokenKind::Mul, self.get_loc()),
+            '/' => with_span(TokenKind::Div, self.get_loc()),
 
             _ => unreachable!(),
         }

@@ -1,3 +1,11 @@
+use kaede_location::Span;
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Token {
+    pub kind: TokenKind,
+    pub span: Span,
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TokenKind {
     Integer(u64),

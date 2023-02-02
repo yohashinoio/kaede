@@ -7,7 +7,7 @@ mod tests;
 
 pub fn parse<T>(tokens: T) -> ParseResult<TranslationUnit>
 where
-    T: Iterator<Item = TokenKind>,
+    T: Iterator<Item = Token>,
 {
     let mut parser = Parser::new(tokens.peekable());
 
@@ -29,40 +29,41 @@ use std::iter::Peekable;
 
 use error::{ParseError, ParseResult};
 use kaede_ast::TranslationUnit;
-use kaede_lex::token::TokenKind;
+use kaede_lex::token::{Token, TokenKind};
 
-pub struct Parser<T: Iterator<Item = TokenKind>> {
+pub struct Parser<T: Iterator<Item = Token>> {
     tokens: Peekable<T>,
 }
 
-impl<T: Iterator<Item = TokenKind>> Parser<T> {
+impl<T: Iterator<Item = Token>> Parser<T> {
     pub fn new(tokens: Peekable<T>) -> Self {
         Self { tokens }
     }
 
-    pub fn first(&mut self) -> &TokenKind {
-        self.tokens.peek().unwrap_or(&TokenKind::Eof)
+    pub fn first(&mut self) -> &Token {
+        self.tokens.peek().unwrap()
     }
 
-    pub fn bump(&mut self) -> Option<TokenKind> {
+    pub fn bump(&mut self) -> Option<Token> {
         self.tokens.next()
     }
 
     pub fn consume(&mut self, tok: TokenKind) -> ParseResult<()> {
-        if self.first() == &tok {
+        if self.first().kind == tok {
             self.bump();
             return Ok(());
         }
 
         Err(ParseError::ExpectedError {
             expected: tok,
-            but: self.first().clone(),
+            but: self.first().kind.clone(),
+            span: self.first().span.clone(),
         })
     }
 
     /// _b because it returns a bool type.
     pub fn consume_b(&mut self, tok: TokenKind) -> bool {
-        if self.first() == &tok {
+        if self.first().kind == tok {
             self.bump();
             return true;
         }

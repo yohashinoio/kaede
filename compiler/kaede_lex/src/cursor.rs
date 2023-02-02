@@ -1,15 +1,19 @@
 use std::str::Chars;
 
+use kaede_location::Location;
+
 pub const EOF_CHAR: char = '\0';
 
 pub struct Cursor<'a> {
     chars: Chars<'a>,
+    loc: Location,
 }
 
 impl<'a> Cursor<'a> {
     pub fn new(input: &'a str) -> Self {
         Self {
             chars: input.chars(),
+            loc: Location::new(),
         }
     }
 
@@ -26,12 +30,42 @@ impl<'a> Cursor<'a> {
     }
 
     pub fn bump(&mut self) -> Option<char> {
-        self.chars.next()
+        let c = match self.chars.next() {
+            Some(c) => c,
+            r @ None => return r,
+        };
+
+        match c {
+            // Unix (LF)
+            '\n' => {
+                self.loc.increme_line();
+            }
+
+            // Windows (CRLF), Mac (CR)
+            '\r' => {
+                // Windows
+                if self.first() == '\n' {
+                    self.chars.next();
+                }
+
+                self.loc.increme_line();
+            }
+
+            _ => {
+                self.loc.increme_column();
+            }
+        }
+
+        Some(c)
     }
 
     pub fn eat_while(&mut self, mut predicate: impl FnMut(char) -> bool) {
         while predicate(self.first()) && !self.is_eof() {
             self.bump();
         }
+    }
+
+    pub fn get_loc(&self) -> &Location {
+        &self.loc
     }
 }

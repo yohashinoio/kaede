@@ -1,12 +1,12 @@
 use kaede_ast::{BinOpKind, Expr};
-use kaede_lex::token::TokenKind;
+use kaede_lex::token::{Token, TokenKind};
 
 use crate::{
     error::{ParseError, ParseResult},
     Parser,
 };
 
-impl<T: Iterator<Item = TokenKind>> Parser<T> {
+impl<T: Iterator<Item = Token>> Parser<T> {
     pub fn expr(&mut self) -> ParseResult<Expr> {
         self.add()
     }
@@ -70,28 +70,30 @@ impl<T: Iterator<Item = TokenKind>> Parser<T> {
     }
 
     pub fn integer(&mut self) -> ParseResult<u64> {
-        match self.bump().unwrap() {
+        match self.bump().unwrap().kind {
             TokenKind::Integer(int) => Ok(int),
 
             _ => Err(ParseError::ExpectedError {
                 expected: TokenKind::Integer(0),
-                but: self.first().clone(),
+                but: self.first().kind.clone(),
+                span: self.first().span.clone(),
             }),
         }
     }
 
     pub fn ident(&mut self) -> ParseResult<String> {
-        let is_ident = matches!(self.first(), TokenKind::Ident(_));
+        let is_ident = matches!(self.first().kind, TokenKind::Ident(_));
 
         if is_ident {
-            if let TokenKind::Ident(ident) = self.bump().unwrap() {
+            if let TokenKind::Ident(ident) = self.bump().unwrap().kind {
                 return Ok(ident);
             }
         }
 
         Err(ParseError::ExpectedError {
             expected: TokenKind::Ident("".to_string()),
-            but: self.first().clone(),
+            but: self.first().kind.clone(),
+            span: self.first().span.clone(),
         })
     }
 }

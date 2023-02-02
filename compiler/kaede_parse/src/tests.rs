@@ -1,5 +1,6 @@
 use kaede_ast::{BinOpKind, Expr, Top};
 use kaede_lex::lex;
+use kaede_location::{Location, Span};
 
 use super::*;
 
@@ -134,4 +135,25 @@ fn function() -> anyhow::Result<()> {
     );
 
     Ok(())
+}
+
+#[test]
+fn error_span() {
+    let r = parse(lex("fn () { 4810 }")).expect_err("Expected Err, but it was OK.");
+
+    match r {
+        ParseError::ExpectedError {
+            expected: _,
+            but: _,
+            span,
+        } => {
+            assert_eq!(
+                span,
+                Span::new(
+                    Location { line: 1, column: 4 },
+                    Location { line: 1, column: 5 }
+                )
+            )
+        }
+    }
 }
