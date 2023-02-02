@@ -101,8 +101,13 @@ dependencies = [
 name = "kaede_lex"
 version = "0.1.0"
 dependencies = [
+ "kaede_location",
  "unicode-xid",
 ]
+
+[[package]]
+name = "kaede_location"
+version = "0.1.0"
 
 [[package]]
 name = "kaede_parse"
@@ -111,6 +116,7 @@ dependencies = [
  "anyhow",
  "kaede_ast",
  "kaede_lex",
+ "kaede_location",
  "thiserror",
 ]
 
