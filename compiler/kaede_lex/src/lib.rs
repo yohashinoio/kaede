@@ -3,7 +3,6 @@ use kaede_location::{Location, Span};
 use token::{Token, TokenKind};
 
 mod cursor;
-mod location;
 pub mod token;
 
 #[cfg(test)]
