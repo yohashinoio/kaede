@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm14-0"] }
 anyhow = "1.0.68"
+clap = { version = "4.1.4", features = ["derive"] }
 
 kaede_ast = { path = "../kaede_ast" }
 kaede_codegen = { path = "../kaede_codegen" }
