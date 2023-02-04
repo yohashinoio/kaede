@@ -21,7 +21,7 @@ struct Args {
     program: Option<String>,
 }
 
-fn compile_to_module(module_name: &str, program: &str) -> anyhow::Result<()> {
+fn compile(module_name: &str, program: &str) -> anyhow::Result<()> {
     let ast = parse(lex(program))?;
 
     let context = Context::create();
@@ -39,7 +39,7 @@ fn main() -> anyhow::Result<()> {
     let files = args.files;
 
     if let Some(prog) = args.program.as_deref() {
-        compile_to_module("commandline", prog)?;
+        compile("commandline", prog)?;
         return Ok(());
     }
 
@@ -48,7 +48,7 @@ fn main() -> anyhow::Result<()> {
     }
 
     for file in files {
-        compile_to_module(file.to_str().unwrap(), &fs::read_to_string(&file)?)?;
+        compile(file.to_str().unwrap(), &fs::read_to_string(&file)?)?;
     }
 
     Ok(())
