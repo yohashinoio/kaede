@@ -39,7 +39,7 @@ fn main() -> anyhow::Result<()> {
     let files = args.files;
 
     if let Some(prog) = args.program.as_deref() {
-        compile_to_module("commandline", &prog)?;
+        compile_to_module("commandline", prog)?;
         return Ok(());
     }
 
