@@ -11,7 +11,7 @@ fn create_simple_binop(lhs: u64, kind: BinOpKind, rhs: u64) -> Expr {
 }
 
 /// Function name is fixed to "test"
-fn create_test_fn(body: Expr) -> Top {
+fn create_test_fn(body: Option<Expr>) -> Top {
     Top::Function {
         name: "test".to_string(),
         body,
@@ -22,7 +22,11 @@ fn create_test_fn(body: Expr) -> Top {
 fn add() -> anyhow::Result<()> {
     assert_eq!(
         parse(lex("fn test() { 48 + 10 }"))?,
-        TranslationUnit::from([create_test_fn(create_simple_binop(48, BinOpKind::Add, 10))])
+        TranslationUnit::from([create_test_fn(Some(create_simple_binop(
+            48,
+            BinOpKind::Add,
+            10
+        )))])
     );
 
     Ok(())
@@ -32,7 +36,11 @@ fn add() -> anyhow::Result<()> {
 fn sub() -> anyhow::Result<()> {
     assert_eq!(
         parse(lex("fn test() { 48 - 10 }"))?,
-        TranslationUnit::from([create_test_fn(create_simple_binop(48, BinOpKind::Sub, 10))])
+        TranslationUnit::from([create_test_fn(Some(create_simple_binop(
+            48,
+            BinOpKind::Sub,
+            10
+        )))])
     );
 
     Ok(())
@@ -42,7 +50,11 @@ fn sub() -> anyhow::Result<()> {
 fn mul() -> anyhow::Result<()> {
     assert_eq!(
         parse(lex("fn test() { 48 * 10 }"))?,
-        TranslationUnit::from([create_test_fn(create_simple_binop(48, BinOpKind::Mul, 10))])
+        TranslationUnit::from([create_test_fn(Some(create_simple_binop(
+            48,
+            BinOpKind::Mul,
+            10
+        )))])
     );
 
     Ok(())
@@ -52,7 +64,11 @@ fn mul() -> anyhow::Result<()> {
 fn div() -> anyhow::Result<()> {
     assert_eq!(
         parse(lex("fn test() { 48 / 10 }"))?,
-        TranslationUnit::from([create_test_fn(create_simple_binop(48, BinOpKind::Div, 10))])
+        TranslationUnit::from([create_test_fn(Some(create_simple_binop(
+            48,
+            BinOpKind::Div,
+            10
+        )))])
     );
 
     Ok(())
@@ -62,11 +78,11 @@ fn div() -> anyhow::Result<()> {
 fn mul_precedence() -> anyhow::Result<()> {
     assert_eq!(
         parse(lex("fn test() { 48 + 10 * 5 }"))?,
-        TranslationUnit::from([create_test_fn(Expr::BinOp(
+        TranslationUnit::from([create_test_fn(Some(Expr::BinOp(
             Box::new(Expr::Integer(48)),
             BinOpKind::Add,
             Box::new(create_simple_binop(10, BinOpKind::Mul, 5))
-        ))])
+        )))])
     );
 
     Ok(())
@@ -76,11 +92,11 @@ fn mul_precedence() -> anyhow::Result<()> {
 fn div_precedence() -> anyhow::Result<()> {
     assert_eq!(
         parse(lex("fn test() { 48 - 10 / 5 }"))?,
-        TranslationUnit::from([create_test_fn(Expr::BinOp(
+        TranslationUnit::from([create_test_fn(Some(Expr::BinOp(
             Box::new(Expr::Integer(48)),
             BinOpKind::Sub,
             Box::new(create_simple_binop(10, BinOpKind::Div, 5))
-        ))])
+        )))])
     );
 
     Ok(())
@@ -102,11 +118,11 @@ fn four_arithmetic_precedence() -> anyhow::Result<()> {
 
     assert_eq!(
         parse(lex(r" fn test() { (48 +10/ 5) - 58 * 2}"))?,
-        TranslationUnit::from([create_test_fn(Expr::BinOp(
+        TranslationUnit::from([create_test_fn(Some(Expr::BinOp(
             Box::new(tmp1),
             BinOpKind::Sub,
             Box::new(tmp2)
-        ))])
+        )))])
     );
 
     Ok(())
@@ -119,8 +135,8 @@ fn unary_plus_and_minus() -> anyhow::Result<()> {
 
     assert_eq!(
         parse(lex("fn test() { +(-(-58)) }"))?,
-        TranslationUnit::from([create_test_fn(create_unary_minus(create_unary_minus(
-            Expr::Integer(58)
+        TranslationUnit::from([create_test_fn(Some(create_unary_minus(
+            create_unary_minus(Expr::Integer(58))
         )))])
     );
 
@@ -131,7 +147,17 @@ fn unary_plus_and_minus() -> anyhow::Result<()> {
 fn function() -> anyhow::Result<()> {
     assert_eq!(
         parse(lex("fn test() { 4810 }"))?,
-        TranslationUnit::from([create_test_fn(Expr::Integer(4810))])
+        TranslationUnit::from([create_test_fn(Some(Expr::Integer(4810)))])
+    );
+
+    Ok(())
+}
+
+#[test]
+fn empty_function() -> anyhow::Result<()> {
+    assert_eq!(
+        parse(lex("fn test() {}"))?,
+        TranslationUnit::from([create_test_fn(None)])
     );
 
     Ok(())

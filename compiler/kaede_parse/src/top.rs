@@ -6,6 +6,8 @@ use crate::{error::ParseResult, Parser};
 impl<T: Iterator<Item = Token>> Parser<T> {
     /// None if end of tokens
     pub fn top(&mut self) -> ParseResult<Option<Top>> {
+        println!("in");
+
         let token = match self.bump() {
             Some(x) => x,
             None => return Ok(None),
@@ -26,10 +28,18 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         self.consume(TokenKind::OpenBrace)?;
 
+        if self.consume_b(TokenKind::CloseBrace) {
+            // Empty body
+            return Ok(Top::Function { name, body: None });
+        }
+
         let expr = self.expr()?;
 
         self.consume(TokenKind::CloseBrace)?;
 
-        Ok(Top::Function { name, body: expr })
+        Ok(Top::Function {
+            name,
+            body: Some(expr),
+        })
     }
 }
