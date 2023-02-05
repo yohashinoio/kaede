@@ -1,5 +1,4 @@
 use cursor::Cursor;
-use kaede_location::{Location, Span};
 use token::{Token, TokenKind};
 
 mod cursor;
@@ -56,17 +55,20 @@ fn is_id_continue(c: char) -> bool {
 }
 
 impl Cursor<'_> {
-    fn advance_token(&mut self) -> Token {
-        let start = self.get_loc().clone();
-
-        let with_span = |t: TokenKind, finish: &Location| Token {
+    /// Add span
+    fn create_token(&self, t: TokenKind) -> Token {
+        Token {
             kind: t,
-            span: Span::new(start, finish.clone()),
-        };
+            span: self.span_builder.build(),
+        }
+    }
+
+    fn advance_token(&mut self) -> Token {
+        self.span_builder.start();
 
         let first_char = match self.bump() {
             Some(c) => c,
-            None => return with_span(TokenKind::Eof, self.get_loc()),
+            None => return self.create_token(TokenKind::Eof),
         };
 
         match first_char {
@@ -77,30 +79,33 @@ impl Cursor<'_> {
             }
 
             // Number
-            c @ '0'..='9' => with_span(TokenKind::Integer(self.number(c)), self.get_loc()),
+            c @ '0'..='9' => {
+                let n = self.number(c);
+                self.create_token(TokenKind::Integer(n))
+            }
 
             // Identifier or reserved words
             c if is_id_start(c) => {
                 let ident = self.ident(c);
 
                 match ident.as_str() {
-                    "fn" => with_span(TokenKind::Function, self.get_loc()),
-                    _ => with_span(TokenKind::Ident(ident), self.get_loc()),
+                    "fn" => self.create_token(TokenKind::Function),
+                    _ => self.create_token(TokenKind::Ident(ident)),
                 }
             }
 
             // Punctuators
-            '(' => with_span(TokenKind::OpenParen, self.get_loc()),
-            ')' => with_span(TokenKind::CloseParen, self.get_loc()),
-            '{' => with_span(TokenKind::OpenBrace, self.get_loc()),
-            '}' => with_span(TokenKind::CloseBrace, self.get_loc()),
-            ',' => with_span(TokenKind::Comma, self.get_loc()),
+            '(' => self.create_token(TokenKind::OpenParen),
+            ')' => self.create_token(TokenKind::CloseParen),
+            '{' => self.create_token(TokenKind::OpenBrace),
+            '}' => self.create_token(TokenKind::CloseBrace),
+            ',' => self.create_token(TokenKind::Comma),
 
             // Operators
-            '+' => with_span(TokenKind::Add, self.get_loc()),
-            '-' => with_span(TokenKind::Sub, self.get_loc()),
-            '*' => with_span(TokenKind::Mul, self.get_loc()),
-            '/' => with_span(TokenKind::Div, self.get_loc()),
+            '+' => self.create_token(TokenKind::Add),
+            '-' => self.create_token(TokenKind::Sub),
+            '*' => self.create_token(TokenKind::Mul),
+            '/' => self.create_token(TokenKind::Div),
 
             _ => unreachable!(),
         }

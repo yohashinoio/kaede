@@ -1,3 +1,5 @@
+use kaede_location::{Location, Span};
+
 use crate::TokenKind::*;
 
 use super::*;

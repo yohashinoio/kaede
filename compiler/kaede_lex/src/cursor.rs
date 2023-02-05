@@ -1,19 +1,19 @@
 use std::str::Chars;
 
-use kaede_location::Location;
+use kaede_location::SpanBuilder;
 
 pub const EOF_CHAR: char = '\0';
 
 pub struct Cursor<'a> {
     chars: Chars<'a>,
-    loc: Location,
+    pub span_builder: SpanBuilder,
 }
 
 impl<'a> Cursor<'a> {
     pub fn new(input: &'a str) -> Self {
         Self {
             chars: input.chars(),
-            loc: Location::new(),
+            span_builder: SpanBuilder::new(),
         }
     }
 
@@ -38,7 +38,7 @@ impl<'a> Cursor<'a> {
         match c {
             // Unix (LF)
             '\n' => {
-                self.loc.increme_line();
+                self.span_builder.increme_line();
             }
 
             // Windows (CRLF), Mac (CR)
@@ -48,11 +48,11 @@ impl<'a> Cursor<'a> {
                     self.chars.next();
                 }
 
-                self.loc.increme_line();
+                self.span_builder.increme_line();
             }
 
             _ => {
-                self.loc.increme_column();
+                self.span_builder.increme_column();
             }
         }
 
@@ -63,9 +63,5 @@ impl<'a> Cursor<'a> {
         while predicate(self.first()) && !self.is_eof() {
             self.bump();
         }
-    }
-
-    pub fn get_loc(&self) -> &Location {
-        &self.loc
     }
 }
