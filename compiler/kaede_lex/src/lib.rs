@@ -90,6 +90,7 @@ impl Cursor<'_> {
 
                 match ident.as_str() {
                     "fn" => self.create_token(TokenKind::Function),
+                    "return" => self.create_token(TokenKind::Return),
                     _ => self.create_token(TokenKind::Ident(ident)),
                 }
             }

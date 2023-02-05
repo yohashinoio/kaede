@@ -31,6 +31,8 @@ pub enum TokenKind {
 
     // Reserved words
     Function,
+    /// "return"
+    Return,
 
     /// End of file
     Eof,
@@ -56,6 +58,7 @@ impl std::fmt::Display for TokenKind {
             Div => write!(f, "'/'"),
 
             Function => write!(f, "function"),
+            Return => write!(f, "return"),
 
             Eof => write!(f, "EOF"),
         }

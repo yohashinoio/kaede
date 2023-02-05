@@ -58,3 +58,10 @@ fn span() {
         )
     );
 }
+
+#[test]
+fn return_() {
+    assert_eq!(without_span(lex(" return\n")), vec![Return]);
+
+    assert_ne!(without_span(lex("ret urn")), vec![Return]);
+}
