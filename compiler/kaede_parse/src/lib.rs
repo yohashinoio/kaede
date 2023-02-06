@@ -1,12 +1,12 @@
 mod error;
 mod expr;
+mod stmt;
 mod top;
 
 #[cfg(test)]
 mod tests;
 
-pub fn parse(tokens: impl Iterator<Item = Token>) -> ParseResult<TranslationUnit>
-{
+pub fn parse(tokens: impl Iterator<Item = Token>) -> ParseResult<TranslationUnit> {
     let mut parser = Parser::new(tokens.peekable());
 
     let mut result = Vec::new();
@@ -53,7 +53,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
 
         Err(ParseError::ExpectedError {
-            expected: tok,
+            expected: tok.to_string(),
             but: self.first().kind.clone(),
             span: self.first().span.clone(),
         })

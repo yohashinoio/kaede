@@ -1,4 +1,4 @@
-use kaede_ast::{Expr, Top};
+use kaede_ast::{Stmt, Top};
 
 use crate::CodeGen;
 
@@ -9,7 +9,7 @@ impl CodeGen<'_, '_> {
         }
     }
 
-    fn func(&self, name: &str, body: &Option<Expr>) {
+    fn func(&self, name: &str, body: &Option<Stmt>) {
         let fn_type = self.context.i32_type().fn_type(&[], false);
 
         let fn_value = self.module.add_function(name, fn_type, None);
@@ -18,7 +18,7 @@ impl CodeGen<'_, '_> {
         self.builder.position_at_end(basic_block);
 
         if let Some(body) = body {
-            self.builder.build_return(Some(&self.expr(body)));
+            self.stmt(body);
         }
     }
 }

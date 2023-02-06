@@ -3,6 +3,7 @@ use kaede_ast::TranslationUnit;
 
 mod expr;
 mod top;
+mod stmt;
 
 #[cfg(test)]
 mod tests;

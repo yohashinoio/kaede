@@ -6,7 +6,7 @@ use thiserror::Error;
 pub enum ParseError {
     #[error("{}:{} Expected {} but {} found.", span.start.line, span.start.column,  .expected, .but)]
     ExpectedError {
-        expected: TokenKind,
+        expected: String,
         but: TokenKind,
         span: Span,
     },

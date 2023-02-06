@@ -70,28 +70,28 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     }
 
     pub fn integer(&mut self) -> ParseResult<u64> {
-        match self.bump().unwrap().kind {
+        let token = self.bump().unwrap();
+
+        match token.kind {
             TokenKind::Integer(int) => Ok(int),
 
             _ => Err(ParseError::ExpectedError {
-                expected: TokenKind::Integer(0),
-                but: self.first().kind.clone(),
-                span: self.first().span.clone(),
+                expected: "integer".to_string(),
+                but: token.kind,
+                span: token.span,
             }),
         }
     }
 
     pub fn ident(&mut self) -> ParseResult<String> {
-        let is_ident = matches!(self.first().kind, TokenKind::Ident(_));
-
-        if is_ident {
+        if matches!(self.first().kind, TokenKind::Ident(_)) {
             if let TokenKind::Ident(ident) = self.bump().unwrap().kind {
                 return Ok(ident);
             }
         }
 
         Err(ParseError::ExpectedError {
-            expected: TokenKind::Ident("".to_string()),
+            expected: "identifier".to_string(),
             but: self.first().kind.clone(),
             span: self.first().span.clone(),
         })

@@ -1,4 +1,4 @@
-use kaede_ast::{BinOpKind, Expr, Top};
+use kaede_ast::{BinOpKind, Expr, Return, Stmt, Top};
 use kaede_lex::lex;
 use kaede_location::{Location, Span};
 
@@ -11,7 +11,7 @@ fn create_simple_binop(lhs: u64, kind: BinOpKind, rhs: u64) -> Expr {
 }
 
 /// Function name is fixed to "test"
-fn create_test_fn(body: Option<Expr>) -> Top {
+fn create_test_fn(body: Option<Stmt>) -> Top {
     Top::Function {
         name: "test".to_string(),
         body,
@@ -21,12 +21,12 @@ fn create_test_fn(body: Option<Expr>) -> Top {
 #[test]
 fn add() -> anyhow::Result<()> {
     assert_eq!(
-        parse(lex("fn test() { 48 + 10 }"))?,
-        TranslationUnit::from([create_test_fn(Some(create_simple_binop(
+        parse(lex("fn test() { 48 + 10; }"))?,
+        TranslationUnit::from([create_test_fn(Some(Stmt::Expr(create_simple_binop(
             48,
             BinOpKind::Add,
             10
-        )))])
+        ))))])
     );
 
     Ok(())
@@ -35,12 +35,12 @@ fn add() -> anyhow::Result<()> {
 #[test]
 fn sub() -> anyhow::Result<()> {
     assert_eq!(
-        parse(lex("fn test() { 48 - 10 }"))?,
-        TranslationUnit::from([create_test_fn(Some(create_simple_binop(
+        parse(lex("fn test() { 48 - 10; }"))?,
+        TranslationUnit::from([create_test_fn(Some(Stmt::Expr(create_simple_binop(
             48,
             BinOpKind::Sub,
             10
-        )))])
+        ))))])
     );
 
     Ok(())
@@ -49,12 +49,12 @@ fn sub() -> anyhow::Result<()> {
 #[test]
 fn mul() -> anyhow::Result<()> {
     assert_eq!(
-        parse(lex("fn test() { 48 * 10 }"))?,
-        TranslationUnit::from([create_test_fn(Some(create_simple_binop(
+        parse(lex("fn test() { 48 * 10; }"))?,
+        TranslationUnit::from([create_test_fn(Some(Stmt::Expr(create_simple_binop(
             48,
             BinOpKind::Mul,
             10
-        )))])
+        ))))])
     );
 
     Ok(())
@@ -63,12 +63,12 @@ fn mul() -> anyhow::Result<()> {
 #[test]
 fn div() -> anyhow::Result<()> {
     assert_eq!(
-        parse(lex("fn test() { 48 / 10 }"))?,
-        TranslationUnit::from([create_test_fn(Some(create_simple_binop(
+        parse(lex("fn test() { 48 / 10 ;}"))?,
+        TranslationUnit::from([create_test_fn(Some(Stmt::Expr(create_simple_binop(
             48,
             BinOpKind::Div,
             10
-        )))])
+        ))))])
     );
 
     Ok(())
@@ -77,12 +77,12 @@ fn div() -> anyhow::Result<()> {
 #[test]
 fn mul_precedence() -> anyhow::Result<()> {
     assert_eq!(
-        parse(lex("fn test() { 48 + 10 * 5 }"))?,
-        TranslationUnit::from([create_test_fn(Some(Expr::BinOp(
+        parse(lex("fn test() { 48 + 10 * 5 \n; }"))?,
+        TranslationUnit::from([create_test_fn(Some(Stmt::Expr(Expr::BinOp(
             Box::new(Expr::Integer(48)),
             BinOpKind::Add,
             Box::new(create_simple_binop(10, BinOpKind::Mul, 5))
-        )))])
+        ))))])
     );
 
     Ok(())
@@ -91,12 +91,12 @@ fn mul_precedence() -> anyhow::Result<()> {
 #[test]
 fn div_precedence() -> anyhow::Result<()> {
     assert_eq!(
-        parse(lex("fn test() { 48 - 10 / 5 }"))?,
-        TranslationUnit::from([create_test_fn(Some(Expr::BinOp(
+        parse(lex("fn test() { 48 - 10 / 5; }"))?,
+        TranslationUnit::from([create_test_fn(Some(Stmt::Expr(Expr::BinOp(
             Box::new(Expr::Integer(48)),
             BinOpKind::Sub,
             Box::new(create_simple_binop(10, BinOpKind::Div, 5))
-        )))])
+        ))))])
     );
 
     Ok(())
@@ -117,12 +117,12 @@ fn four_arithmetic_precedence() -> anyhow::Result<()> {
     );
 
     assert_eq!(
-        parse(lex(r" fn test() { (48 +10/ 5) - 58 * 2}"))?,
-        TranslationUnit::from([create_test_fn(Some(Expr::BinOp(
+        parse(lex(r" fn test() { (48 +10/ 5) - 58 * 2;}"))?,
+        TranslationUnit::from([create_test_fn(Some(Stmt::Expr(Expr::BinOp(
             Box::new(tmp1),
             BinOpKind::Sub,
             Box::new(tmp2)
-        )))])
+        ))))])
     );
 
     Ok(())
@@ -134,10 +134,10 @@ fn unary_plus_and_minus() -> anyhow::Result<()> {
         |n| Expr::BinOp(Box::new(Expr::Integer(0)), BinOpKind::Sub, Box::new(n));
 
     assert_eq!(
-        parse(lex("fn test() { +(-(-58)) }"))?,
-        TranslationUnit::from([create_test_fn(Some(create_unary_minus(
+        parse(lex("fn test() { +(-(-58)); }"))?,
+        TranslationUnit::from([create_test_fn(Some(Stmt::Expr(create_unary_minus(
             create_unary_minus(Expr::Integer(58))
-        )))])
+        ))))])
     );
 
     Ok(())
@@ -146,8 +146,8 @@ fn unary_plus_and_minus() -> anyhow::Result<()> {
 #[test]
 fn function() -> anyhow::Result<()> {
     assert_eq!(
-        parse(lex("fn test() { 4810 }"))?,
-        TranslationUnit::from([create_test_fn(Some(Expr::Integer(4810)))])
+        parse(lex("fn test() { 4810; }"))?,
+        TranslationUnit::from([create_test_fn(Some(Stmt::Expr(Expr::Integer(4810))))])
     );
 
     Ok(())
@@ -164,8 +164,30 @@ fn empty_function() -> anyhow::Result<()> {
 }
 
 #[test]
+fn return_stmt() -> anyhow::Result<()> {
+    let tmp = Stmt::Return(Return(Some(Expr::Integer(4810))));
+
+    assert_eq!(
+        parse(lex("fn test() { return 4810; }"))?,
+        TranslationUnit::from([create_test_fn(Some(tmp))])
+    );
+
+    Ok(())
+}
+
+#[test]
+fn return_stmt_with_no_value() -> anyhow::Result<()> {
+    assert_eq!(
+        parse(lex("fn test() { return; }"))?,
+        TranslationUnit::from([create_test_fn(Some(Stmt::Return(Return(None))))])
+    );
+
+    Ok(())
+}
+
+#[test]
 fn error_span() {
-    let r = parse(lex("fn () { 4810 }")).expect_err("Expected Err, but it was OK.");
+    let r = parse(lex("fn () { 4810; }")).expect_err("Expected Err, but it was OK.");
 
     match r {
         ParseError::ExpectedError {

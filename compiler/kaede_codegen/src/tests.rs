@@ -17,14 +17,14 @@ fn jit_compile_test(module: &Module) -> u64 {
 }
 
 #[test]
-fn simple() -> anyhow::Result<()> {
+fn return_stmt() -> anyhow::Result<()> {
     let context = Context::create();
     let module = context.create_module("test");
 
     codegen(
         &context,
         &module,
-        &parse(lex(r" fn test() { (48*2 +10 * 2) / 2}"))?,
+        &parse(lex(r" fn test() { return (48*2 +10 * 2) / 2;}"))?,
     );
 
     assert_eq!(jit_compile_test(&module), 58);
