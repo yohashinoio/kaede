@@ -24,12 +24,17 @@ pub enum TokenKind {
     Comma,
 
     // Operators
+    /// '+'
     Add,
+    /// '-'
     Sub,
+    /// '*'
     Mul,
+    /// '/'
     Div,
 
     // Reserved words
+    /// "fn"
     Function,
     /// "return"
     Return,
