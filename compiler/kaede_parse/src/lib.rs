@@ -5,9 +5,7 @@ mod top;
 #[cfg(test)]
 mod tests;
 
-pub fn parse<T>(tokens: T) -> ParseResult<TranslationUnit>
-where
-    T: Iterator<Item = Token>,
+pub fn parse(tokens: impl Iterator<Item = Token>) -> ParseResult<TranslationUnit>
 {
     let mut parser = Parser::new(tokens.peekable());
 
