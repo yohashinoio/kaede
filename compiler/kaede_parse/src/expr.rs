@@ -16,9 +16,9 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         let mut node = self.mul()?;
 
         loop {
-            if self.consume_b(TokenKind::Add) {
+            if self.consume_b(&TokenKind::Add) {
                 node = Expr::BinOp(Box::new(node), BinOpKind::Add, Box::new(self.mul()?));
-            } else if self.consume_b(TokenKind::Sub) {
+            } else if self.consume_b(&TokenKind::Sub) {
                 node = Expr::BinOp(Box::new(node), BinOpKind::Sub, Box::new(self.mul()?));
             } else {
                 return Ok(node);
@@ -31,9 +31,9 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         let mut node = self.unary()?;
 
         loop {
-            if self.consume_b(TokenKind::Mul) {
+            if self.consume_b(&TokenKind::Mul) {
                 node = Expr::BinOp(Box::new(node), BinOpKind::Mul, Box::new(self.unary()?));
-            } else if self.consume_b(TokenKind::Div) {
+            } else if self.consume_b(&TokenKind::Div) {
                 node = Expr::BinOp(Box::new(node), BinOpKind::Div, Box::new(self.unary()?));
             } else {
                 return Ok(node);
@@ -43,11 +43,11 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
     /// Unary operators
     fn unary(&mut self) -> ParseResult<Expr> {
-        if self.consume_b(TokenKind::Add) {
+        if self.consume_b(&TokenKind::Add) {
             return self.primary();
         }
 
-        if self.consume_b(TokenKind::Sub) {
+        if self.consume_b(&TokenKind::Sub) {
             return Ok(Expr::BinOp(
                 Box::new(Expr::Integer(0)),
                 BinOpKind::Sub,
@@ -59,10 +59,10 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     }
 
     fn primary(&mut self) -> ParseResult<Expr> {
-        if self.consume_b(TokenKind::OpenParen) {
+        if self.consume_b(&TokenKind::OpenParen) {
             // '(' expr ')'
             let node = self.expr()?;
-            self.consume(TokenKind::CloseParen)?;
+            self.consume(&TokenKind::CloseParen)?;
             return Ok(node);
         }
 

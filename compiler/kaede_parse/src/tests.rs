@@ -77,7 +77,7 @@ fn div() -> anyhow::Result<()> {
 #[test]
 fn mul_precedence() -> anyhow::Result<()> {
     assert_eq!(
-        parse(lex("fn test() { 48 + 10 * 5 \n; }"))?,
+        parse(lex("fn test() { 48 + 10 * 5 ; }"))?,
         TranslationUnit::from([create_test_fn(Some(Stmt::Expr(Expr::BinOp(
             Box::new(Expr::Integer(48)),
             BinOpKind::Add,
@@ -168,7 +168,7 @@ fn return_stmt() -> anyhow::Result<()> {
     let tmp = Stmt::Return(Return(Some(Expr::Integer(4810))));
 
     assert_eq!(
-        parse(lex("fn test() { return 4810; }"))?,
+        parse(lex("fn test() { return 4810 }"))?,
         TranslationUnit::from([create_test_fn(Some(tmp))])
     );
 
@@ -178,7 +178,7 @@ fn return_stmt() -> anyhow::Result<()> {
 #[test]
 fn return_stmt_with_no_value() -> anyhow::Result<()> {
     assert_eq!(
-        parse(lex("fn test() { return; }"))?,
+        parse(lex("fn test() { return }"))?,
         TranslationUnit::from([create_test_fn(Some(Stmt::Return(Return(None))))])
     );
 

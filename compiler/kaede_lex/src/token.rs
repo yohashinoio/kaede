@@ -41,8 +41,10 @@ pub enum TokenKind {
     /// "return"
     Return,
 
-    /// End of file
-    Eof,
+    /// End of input
+    Eoi,
+
+    NewLine,
 }
 
 impl std::fmt::Display for TokenKind {
@@ -68,7 +70,9 @@ impl std::fmt::Display for TokenKind {
             Function => write!(f, "function"),
             Return => write!(f, "return"),
 
-            Eof => write!(f, "EOF"),
+            Eoi => write!(f, "end of input"),
+
+            NewLine => write!(f, "newline"),
         }
     }
 }

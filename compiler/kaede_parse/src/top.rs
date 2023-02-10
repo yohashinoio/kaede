@@ -21,19 +21,21 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     fn func(&mut self) -> ParseResult<Top> {
         let name = self.ident()?;
 
-        self.consume(TokenKind::OpenParen)?;
-        self.consume(TokenKind::CloseParen)?;
+        self.consume(&TokenKind::OpenParen)?;
+        self.consume(&TokenKind::CloseParen)?;
 
-        self.consume(TokenKind::OpenBrace)?;
+        self.consume(&TokenKind::OpenBrace)?;
 
-        if self.consume_b(TokenKind::CloseBrace) {
+        if self.consume_b(&TokenKind::CloseBrace) {
+            self.consume_semi()?;
             // Empty body
             return Ok(Top::Function { name, body: None });
         }
 
         let stmt = self.stmt()?;
 
-        self.consume(TokenKind::CloseBrace)?;
+        self.consume(&TokenKind::CloseBrace)?;
+        self.consume_semi()?;
 
         Ok(Top::Function {
             name,

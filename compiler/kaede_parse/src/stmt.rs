@@ -8,35 +8,41 @@ use crate::{
 
 impl<T: Iterator<Item = Token>> Parser<T> {
     pub fn stmt(&mut self) -> ParseResult<Stmt> {
-        if self.consume_b(TokenKind::Return) {
-            return Ok(Stmt::Return(self.return_()?));
+        let result;
+
+        if self.consume_b(&TokenKind::Return) {
+            result = Stmt::Return(self.return_()?);
+        } else {
+            match self.expr() {
+                Ok(e) => result = self.expr_stmt(e)?,
+
+                Err(_) => {
+                    return Err(ParseError::ExpectedError {
+                        expected: "statement".to_string(),
+                        but: self.first().kind.clone(),
+                        span: self.first().span.clone(),
+                    })
+                }
+            }
         }
 
-        match self.expr() {
-            Ok(e) => self.expr_stmt(e),
+        self.consume_semi()?;
 
-            Err(_) => Err(ParseError::ExpectedError {
-                expected: "statement".to_string(),
-                but: self.first().kind.clone(),
-                span: self.first().span.clone(),
-            }),
-        }
+        Ok(result)
     }
 
     fn expr_stmt(&mut self, e: Expr) -> ParseResult<Stmt> {
-        self.consume(TokenKind::Semi)?;
-
         Ok(Stmt::Expr(e))
     }
 
     fn return_(&mut self) -> ParseResult<Return> {
-        if self.consume_b(TokenKind::Semi) {
+        if self.consume_semi_b() {
             return Ok(Return(None));
         }
 
         let val = self.expr()?;
 
-        self.consume(TokenKind::Semi)?;
+        self.consume_semi()?;
 
         Ok(Return(Some(val)))
     }

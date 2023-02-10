@@ -24,7 +24,7 @@ fn return_stmt() -> anyhow::Result<()> {
     codegen(
         &context,
         &module,
-        &parse(lex(r" fn test() { return (48*2 +10 * 2) / 2;}"))?,
+        &parse(lex(" fn test() { return (48*2 +10 * 2) / 2}"))?,
     );
 
     assert_eq!(jit_compile_test(&module), 58);

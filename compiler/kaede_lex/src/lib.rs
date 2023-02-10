@@ -1,4 +1,5 @@
 use cursor::Cursor;
+use kaede_location::Span;
 use token::{Token, TokenKind};
 
 mod cursor;
@@ -8,16 +9,70 @@ pub mod token;
 mod tests;
 
 pub fn lex(input: &str) -> impl Iterator<Item = Token> + '_ {
+    insert_semicolons(lex_internal(input)).into_iter()
+}
+
+fn lex_internal(input: &str) -> impl Iterator<Item = Token> + '_ {
     let mut cursor = Cursor::new(input);
 
-    std::iter::from_fn(move || {
+    let mut result = Vec::new();
+
+    loop {
         let token = cursor.advance_token();
 
         match token.kind {
-            TokenKind::Eof => None,
-            _ => Some(token),
+            TokenKind::Eoi => {
+                result.push(token);
+                break;
+            }
+
+            _ => result.push(token),
         }
-    })
+    }
+
+    result.into_iter()
+}
+
+/// Rules similar to Go language.
+/// 'NewLine' token will be removed.
+fn insert_semicolons(tokens: impl Iterator<Item = Token>) -> Vec<Token> {
+    let mut result = Vec::<Token>::new();
+
+    for tok in tokens {
+        match tok.kind {
+            TokenKind::NewLine | TokenKind::Eoi => {
+                let last = match result.last() {
+                    Some(last) => last,
+                    None => continue,
+                };
+
+                if can_insert_semicolon(&last.kind) {
+                    let start = last.span.finish.clone();
+                    let mut finish = start.clone();
+                    finish.increme_column();
+
+                    result.push(Token {
+                        kind: TokenKind::Semi,
+                        span: Span::new(start, finish),
+                    });
+                }
+            }
+
+            _ => result.push(tok),
+        }
+    }
+
+    result
+}
+
+/// True if a semicolon can be inserted after the token.
+fn can_insert_semicolon(token: &TokenKind) -> bool {
+    use TokenKind::*;
+
+    matches!(
+        token,
+        Integer(_) | Ident(_) | CloseParen | CloseBrace | Return
+    )
 }
 
 fn is_whitespace(c: char) -> bool {
@@ -25,7 +80,6 @@ fn is_whitespace(c: char) -> bool {
         c,
         // Usual ASCII suspects
         '\u{0009}'   // \t
-        | '\u{000A}' // \n
         | '\u{000B}' // vertical tab
         | '\u{000C}' // form feed
         | '\u{000D}' // \r
@@ -68,10 +122,12 @@ impl Cursor<'_> {
 
         let first_char = match self.bump() {
             Some(c) => c,
-            None => return self.create_token(TokenKind::Eof),
+            None => return self.create_token(TokenKind::Eoi),
         };
 
         match first_char {
+            '\n' => self.create_token(TokenKind::NewLine),
+
             // Skipper
             c if is_whitespace(c) => {
                 self.eat_whitespace();
@@ -109,7 +165,7 @@ impl Cursor<'_> {
             '*' => self.create_token(TokenKind::Mul),
             '/' => self.create_token(TokenKind::Div),
 
-            _ => unreachable!(),
+            c => unreachable!("{}", c),
         }
     }
 
