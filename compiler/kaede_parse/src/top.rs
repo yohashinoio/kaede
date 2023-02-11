@@ -28,6 +28,6 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         self.consume_semi()?;
 
-        Ok(Top::Function { name, body: body })
+        Ok(Top::Function { name, body })
     }
 }

@@ -50,13 +50,13 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     }
 
     pub fn bump(&mut self) -> Option<Token> {
-        self.tokens.next().and_then(|t| match t.kind {
+        self.tokens.next().map(|t| match t.kind {
             TokenKind::Eoi => {
                 self.end_token = Some(t.clone());
-                Some(t)
+                t
             }
 
-            _ => Some(t),
+            _ => t,
         })
     }
 
@@ -111,6 +111,6 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             return true;
         }
 
-        return false;
+        false
     }
 }
