@@ -1,4 +1,4 @@
-use kaede_ast::{BinOpKind, Expr, Return, Stmt, Top};
+use kaede_ast::{BinOpKind, Expr, Return, Stmt, StmtList, Top};
 use kaede_lex::lex;
 use kaede_location::{Location, Span};
 
@@ -11,10 +11,10 @@ fn create_simple_binop(lhs: u64, kind: BinOpKind, rhs: u64) -> Expr {
 }
 
 /// Function name is fixed to "test"
-fn create_test_fn(body: Option<Stmt>) -> Top {
+fn create_test_fn(body: StmtList) -> Top {
     Top::Function {
         name: "test".to_string(),
-        body,
+        body: body,
     }
 }
 
@@ -22,11 +22,11 @@ fn create_test_fn(body: Option<Stmt>) -> Top {
 fn add() -> anyhow::Result<()> {
     assert_eq!(
         parse(lex("fn test() { 48 + 10; }"))?,
-        TranslationUnit::from([create_test_fn(Some(Stmt::Expr(create_simple_binop(
+        TranslationUnit::from([create_test_fn(vec![Stmt::Expr(create_simple_binop(
             48,
             BinOpKind::Add,
             10
-        ))))])
+        ))])])
     );
 
     Ok(())
@@ -36,11 +36,11 @@ fn add() -> anyhow::Result<()> {
 fn sub() -> anyhow::Result<()> {
     assert_eq!(
         parse(lex("fn test() { 48 - 10; }"))?,
-        TranslationUnit::from([create_test_fn(Some(Stmt::Expr(create_simple_binop(
+        TranslationUnit::from([create_test_fn(vec![Stmt::Expr(create_simple_binop(
             48,
             BinOpKind::Sub,
             10
-        ))))])
+        ))])])
     );
 
     Ok(())
@@ -50,11 +50,11 @@ fn sub() -> anyhow::Result<()> {
 fn mul() -> anyhow::Result<()> {
     assert_eq!(
         parse(lex("fn test() { 48 * 10; }"))?,
-        TranslationUnit::from([create_test_fn(Some(Stmt::Expr(create_simple_binop(
+        TranslationUnit::from([create_test_fn(vec![Stmt::Expr(create_simple_binop(
             48,
             BinOpKind::Mul,
             10
-        ))))])
+        ))])])
     );
 
     Ok(())
@@ -64,11 +64,11 @@ fn mul() -> anyhow::Result<()> {
 fn div() -> anyhow::Result<()> {
     assert_eq!(
         parse(lex("fn test() { 48 / 10 ;}"))?,
-        TranslationUnit::from([create_test_fn(Some(Stmt::Expr(create_simple_binop(
+        TranslationUnit::from([create_test_fn(vec![Stmt::Expr(create_simple_binop(
             48,
             BinOpKind::Div,
             10
-        ))))])
+        ))])])
     );
 
     Ok(())
@@ -78,11 +78,11 @@ fn div() -> anyhow::Result<()> {
 fn mul_precedence() -> anyhow::Result<()> {
     assert_eq!(
         parse(lex("fn test() { 48 + 10 * 5 ; }"))?,
-        TranslationUnit::from([create_test_fn(Some(Stmt::Expr(Expr::BinOp(
+        TranslationUnit::from([create_test_fn(vec![Stmt::Expr(Expr::BinOp(
             Box::new(Expr::Integer(48)),
             BinOpKind::Add,
             Box::new(create_simple_binop(10, BinOpKind::Mul, 5))
-        ))))])
+        ))])])
     );
 
     Ok(())
@@ -92,11 +92,11 @@ fn mul_precedence() -> anyhow::Result<()> {
 fn div_precedence() -> anyhow::Result<()> {
     assert_eq!(
         parse(lex("fn test() { 48 - 10 / 5; }"))?,
-        TranslationUnit::from([create_test_fn(Some(Stmt::Expr(Expr::BinOp(
+        TranslationUnit::from([create_test_fn(vec![Stmt::Expr(Expr::BinOp(
             Box::new(Expr::Integer(48)),
             BinOpKind::Sub,
             Box::new(create_simple_binop(10, BinOpKind::Div, 5))
-        ))))])
+        ))])])
     );
 
     Ok(())
@@ -118,11 +118,11 @@ fn four_arithmetic_precedence() -> anyhow::Result<()> {
 
     assert_eq!(
         parse(lex(r" fn test() { (48 +10/ 5) - 58 * 2;}"))?,
-        TranslationUnit::from([create_test_fn(Some(Stmt::Expr(Expr::BinOp(
+        TranslationUnit::from([create_test_fn(vec![Stmt::Expr(Expr::BinOp(
             Box::new(tmp1),
             BinOpKind::Sub,
             Box::new(tmp2)
-        ))))])
+        ))])])
     );
 
     Ok(())
@@ -135,9 +135,9 @@ fn unary_plus_and_minus() -> anyhow::Result<()> {
 
     assert_eq!(
         parse(lex("fn test() { +(-(-58)); }"))?,
-        TranslationUnit::from([create_test_fn(Some(Stmt::Expr(create_unary_minus(
+        TranslationUnit::from([create_test_fn(vec![Stmt::Expr(create_unary_minus(
             create_unary_minus(Expr::Integer(58))
-        ))))])
+        ))])])
     );
 
     Ok(())
@@ -147,7 +147,7 @@ fn unary_plus_and_minus() -> anyhow::Result<()> {
 fn function() -> anyhow::Result<()> {
     assert_eq!(
         parse(lex("fn test() { 4810; }"))?,
-        TranslationUnit::from([create_test_fn(Some(Stmt::Expr(Expr::Integer(4810))))])
+        TranslationUnit::from([create_test_fn(vec![Stmt::Expr(Expr::Integer(4810))])])
     );
 
     Ok(())
@@ -157,7 +157,10 @@ fn function() -> anyhow::Result<()> {
 fn empty_function() -> anyhow::Result<()> {
     assert_eq!(
         parse(lex("fn test() {}"))?,
-        TranslationUnit::from([create_test_fn(None)])
+        TranslationUnit::from([Top::Function {
+            name: "test".to_string(),
+            body: vec![],
+        }])
     );
 
     Ok(())
@@ -165,11 +168,11 @@ fn empty_function() -> anyhow::Result<()> {
 
 #[test]
 fn return_stmt() -> anyhow::Result<()> {
-    let tmp = Stmt::Return(Return(Some(Expr::Integer(4810))));
+    let tmp = vec![Stmt::Return(Return(Some(Expr::Integer(4810))))];
 
     assert_eq!(
         parse(lex("fn test() { return 4810 }"))?,
-        TranslationUnit::from([create_test_fn(Some(tmp))])
+        TranslationUnit::from([create_test_fn(tmp)])
     );
 
     Ok(())
@@ -179,7 +182,7 @@ fn return_stmt() -> anyhow::Result<()> {
 fn return_stmt_with_no_value() -> anyhow::Result<()> {
     assert_eq!(
         parse(lex("fn test() { return }"))?,
-        TranslationUnit::from([create_test_fn(Some(Stmt::Return(Return(None))))])
+        TranslationUnit::from([create_test_fn(vec![Stmt::Return(Return(None))])])
     );
 
     Ok(())
@@ -204,4 +207,18 @@ fn error_span() {
             )
         }
     }
+}
+
+#[test]
+fn statement_list() -> anyhow::Result<()> {
+    assert_eq!(
+        parse(lex("fn test() { 48\n 10\n return }"))?,
+        TranslationUnit::from([create_test_fn(vec![
+            Stmt::Expr(Expr::Integer(48)),
+            Stmt::Expr(Expr::Integer(10)),
+            Stmt::Return(Return(None))
+        ])])
+    );
+
+    Ok(())
 }

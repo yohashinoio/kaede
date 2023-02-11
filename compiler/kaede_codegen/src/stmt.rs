@@ -1,8 +1,14 @@
-use kaede_ast::{Return, Stmt};
+use kaede_ast::{Return, Stmt, StmtList};
 
 use crate::CodeGen;
 
 impl CodeGen<'_, '_> {
+    pub fn stmt_list(&self, stmt_list: &StmtList) {
+        for stmt in stmt_list {
+            self.stmt(stmt);
+        }
+    }
+
     pub fn stmt(&self, stmt: &Stmt) {
         match stmt {
             Stmt::Return(r) => self.return_(r),

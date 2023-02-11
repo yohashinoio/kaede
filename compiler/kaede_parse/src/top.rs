@@ -24,22 +24,10 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         self.consume(&TokenKind::OpenParen)?;
         self.consume(&TokenKind::CloseParen)?;
 
-        self.consume(&TokenKind::OpenBrace)?;
+        let body = self.stmt_list()?;
 
-        if self.consume_b(&TokenKind::CloseBrace) {
-            self.consume_semi()?;
-            // Empty body
-            return Ok(Top::Function { name, body: None });
-        }
-
-        let stmt = self.stmt()?;
-
-        self.consume(&TokenKind::CloseBrace)?;
         self.consume_semi()?;
 
-        Ok(Top::Function {
-            name,
-            body: Some(stmt),
-        })
+        Ok(Top::Function { name, body: body })
     }
 }

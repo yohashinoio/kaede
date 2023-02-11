@@ -1,4 +1,4 @@
-use kaede_ast::{Expr, Return, Stmt};
+use kaede_ast::{Expr, Return, Stmt, StmtList};
 use kaede_lex::token::{Token, TokenKind};
 
 use crate::{
@@ -7,6 +7,26 @@ use crate::{
 };
 
 impl<T: Iterator<Item = Token>> Parser<T> {
+    pub fn stmt_list(&mut self) -> ParseResult<StmtList> {
+        let mut result = StmtList::new();
+
+        self.consume(&TokenKind::OpenBrace)?;
+
+        loop {
+            if self.consume_b(&TokenKind::CloseBrace) {
+                return Ok(result);
+            } else if self.check(&TokenKind::Eoi) {
+                return Err(ParseError::ExpectedError {
+                    expected: TokenKind::CloseBrace.to_string(),
+                    but: self.first().kind.clone(),
+                    span: self.first().span.clone(),
+                });
+            }
+
+            result.push(self.stmt()?);
+        }
+    }
+
     pub fn stmt(&mut self) -> ParseResult<Stmt> {
         let result;
 

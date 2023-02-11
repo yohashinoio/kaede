@@ -21,9 +21,11 @@ pub enum Stmt {
     Expr(Expr),
 }
 
+pub type StmtList = Vec<Stmt>;
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Top {
-    Function { name: String, body: Option<Stmt> },
+    Function { name: String, body: StmtList },
 }
 
 pub type TranslationUnit = Vec<Top>;
