@@ -1,4 +1,4 @@
-use kaede_ast::{Expr, Return, Stmt, StmtList};
+use kaede_ast::{Expr, Let, Return, Stmt, StmtList};
 use kaede_lex::token::{Token, TokenKind};
 
 use crate::{
@@ -32,6 +32,8 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         if self.consume_b(&TokenKind::Return) {
             result = Stmt::Return(self.return_()?);
+        } else if self.consume_b(&TokenKind::Let) {
+            result = Stmt::Let(self.let_()?);
         } else {
             match self.expr() {
                 Ok(e) => result = self.expr_stmt(e)?,
@@ -65,5 +67,11 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         self.consume_semi()?;
 
         Ok(Return(Some(val)))
+    }
+
+    fn let_(&mut self) -> ParseResult<Let> {
+        Ok(Let {
+            name: self.ident()?,
+        })
     }
 }

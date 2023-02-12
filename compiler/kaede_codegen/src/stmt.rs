@@ -1,4 +1,4 @@
-use kaede_ast::{Return, Stmt, StmtList};
+use kaede_ast::{Let, Return, Stmt, StmtList};
 
 use crate::CodeGen;
 
@@ -11,10 +11,13 @@ impl CodeGen<'_, '_> {
 
     pub fn stmt(&self, stmt: &Stmt) {
         match stmt {
-            Stmt::Return(r) => self.return_(r),
             Stmt::Expr(e) => {
                 self.expr(e);
             }
+
+            Stmt::Return(node) => self.return_(node),
+
+            Stmt::Let(node) => self.let_(node),
         }
     }
 
@@ -23,5 +26,10 @@ impl CodeGen<'_, '_> {
             Some(val) => self.builder.build_return(Some(&self.expr(val))),
             None => self.builder.build_return(None),
         };
+    }
+
+    fn let_(&self, node: &Let) {
+        self.builder
+            .build_alloca(self.context.i32_type(), &node.name);
     }
 }

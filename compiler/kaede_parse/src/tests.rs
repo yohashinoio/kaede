@@ -1,4 +1,4 @@
-use kaede_ast::{BinOpKind, Expr, Return, Stmt, StmtList, Top};
+use kaede_ast::{BinOpKind, Expr, Let, Return, Stmt, StmtList, Top};
 use kaede_lex::lex;
 use kaede_location::{Location, Span};
 
@@ -216,6 +216,24 @@ fn statement_list() -> anyhow::Result<()> {
         TranslationUnit::from([create_test_fn(vec![
             Stmt::Expr(Expr::Integer(48)),
             Stmt::Expr(Expr::Integer(10)),
+            Stmt::Return(Return(None))
+        ])])
+    );
+
+    Ok(())
+}
+
+#[test]
+fn let_statement_without_init() -> anyhow::Result<()> {
+    assert_eq!(
+        parse(lex("fn test() { let yoha\n let io\n return }"))?,
+        TranslationUnit::from([create_test_fn(vec![
+            Stmt::Let(Let {
+                name: "yoha".to_string()
+            }),
+            Stmt::Let(Let {
+                name: "io".to_string()
+            }),
             Stmt::Return(Return(None))
         ])])
     );

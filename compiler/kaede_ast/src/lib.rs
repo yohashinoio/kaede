@@ -16,9 +16,15 @@ pub enum Expr {
 pub struct Return(pub Option<Expr>);
 
 #[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Let {
+    pub name: String,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Stmt {
-    Return(Return),
     Expr(Expr),
+    Return(Return),
+    Let(Let),
 }
 
 pub type StmtList = Vec<Stmt>;
