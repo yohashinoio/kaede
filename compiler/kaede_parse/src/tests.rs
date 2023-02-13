@@ -224,17 +224,38 @@ fn statement_list() -> anyhow::Result<()> {
 }
 
 #[test]
-fn let_statement_without_init() -> anyhow::Result<()> {
+fn variable() -> anyhow::Result<()> {
     assert_eq!(
         parse(lex("fn test() { let yoha\n let io\n return }"))?,
         TranslationUnit::from([create_test_fn(vec![
             Stmt::Let(Let {
-                name: "yoha".to_string()
+                name: "yoha".to_string(),
+                init: None
             }),
             Stmt::Let(Let {
-                name: "io".to_string()
+                name: "io".to_string(),
+                init: None
             }),
             Stmt::Return(Return(None))
+        ])])
+    );
+
+    Ok(())
+}
+
+#[test]
+fn variable_initialization() -> anyhow::Result<()> {
+    assert_eq!(
+        parse(lex("fn test() { let yoha = 48\n let io = 10\n }"))?,
+        TranslationUnit::from([create_test_fn(vec![
+            Stmt::Let(Let {
+                name: "yoha".to_string(),
+                init: Some(Expr::Integer(48))
+            }),
+            Stmt::Let(Let {
+                name: "io".to_string(),
+                init: Some(Expr::Integer(10))
+            }),
         ])])
     );
 

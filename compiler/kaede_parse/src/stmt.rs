@@ -70,8 +70,14 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     }
 
     fn let_(&mut self) -> ParseResult<Let> {
-        Ok(Let {
-            name: self.ident()?,
-        })
+        let name = self.ident()?;
+
+        if self.consume_b(&TokenKind::Eq) {
+            let init = Some(self.expr()?);
+
+            return Ok(Let { name, init });
+        }
+
+        Ok(Let { name, init: None })
     }
 }

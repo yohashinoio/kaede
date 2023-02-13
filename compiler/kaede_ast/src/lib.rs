@@ -18,6 +18,7 @@ pub struct Return(pub Option<Expr>);
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Let {
     pub name: String,
+    pub init: Option<Expr>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]

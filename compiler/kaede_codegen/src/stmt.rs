@@ -29,7 +29,13 @@ impl CodeGen<'_, '_> {
     }
 
     fn let_(&self, node: &Let) {
-        self.builder
+        let alloca = self
+            .builder
             .build_alloca(self.context.i32_type(), &node.name);
+
+        if let Some(init) = node.init.as_ref() {
+            // Initialization
+            self.builder.build_store(alloca, self.expr(init));
+        }
     }
 }
