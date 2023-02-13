@@ -1,9 +1,10 @@
 use inkwell::{builder::Builder, context::Context, module::Module};
 use kaede_ast::TranslationUnit;
+use top::build_top;
 
 mod expr;
-mod top;
 mod stmt;
+mod top;
 
 #[cfg(test)]
 mod tests;
@@ -35,7 +36,7 @@ impl<'ctx, 'module> CodeGen<'ctx, 'module> {
 
     pub fn gen(&self, ast: &TranslationUnit) {
         for top in ast {
-            self.top(top);
+            build_top(self, top);
         }
     }
 }

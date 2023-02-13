@@ -1,18 +1,32 @@
 use kaede_ast::{Let, Return, Stmt, StmtList};
 
-use crate::CodeGen;
+use crate::{expr::build_expression, CodeGen};
 
-impl CodeGen<'_, '_> {
-    pub fn stmt_list(&self, stmt_list: &StmtList) {
-        for stmt in stmt_list {
-            self.stmt(stmt);
-        }
+pub fn build_statement_list(ctx: &CodeGen, list: &StmtList) {
+    for stmt in list {
+        build_statement(ctx, stmt);
+    }
+}
+
+pub fn build_statement(ctx: &CodeGen, node: &Stmt) {
+    let builder = StmtBuilder::new(ctx);
+
+    builder.build(node);
+}
+
+struct StmtBuilder<'a, 'b, 'c> {
+    ctx: &'a CodeGen<'b, 'c>,
+}
+
+impl<'a, 'b, 'c> StmtBuilder<'a, 'b, 'c> {
+    fn new(ctx: &'a CodeGen<'b, 'c>) -> Self {
+        Self { ctx }
     }
 
-    pub fn stmt(&self, stmt: &Stmt) {
+    fn build(&self, stmt: &Stmt) {
         match stmt {
             Stmt::Expr(e) => {
-                self.expr(e);
+                build_expression(self.ctx, e);
             }
 
             Stmt::Return(node) => self.return_(node),
@@ -23,19 +37,26 @@ impl CodeGen<'_, '_> {
 
     fn return_(&self, node: &Return) {
         match &node.0 {
-            Some(val) => self.builder.build_return(Some(&self.expr(val))),
-            None => self.builder.build_return(None),
+            Some(val) => self
+                .ctx
+                .builder
+                .build_return(Some(&build_expression(self.ctx, val))),
+
+            None => self.ctx.builder.build_return(None),
         };
     }
 
     fn let_(&self, node: &Let) {
         let alloca = self
+            .ctx
             .builder
-            .build_alloca(self.context.i32_type(), &node.name);
+            .build_alloca(self.ctx.context.i32_type(), &node.name);
 
         if let Some(init) = node.init.as_ref() {
             // Initialization
-            self.builder.build_store(alloca, self.expr(init));
+            self.ctx
+                .builder
+                .build_store(alloca, build_expression(self.ctx, init));
         }
     }
 }
