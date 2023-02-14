@@ -109,7 +109,7 @@ fn is_id_continue(c: char) -> bool {
 }
 
 impl Cursor<'_> {
-    /// Add span
+    /// Insert span.
     fn create_token(&self, t: TokenKind) -> Token {
         Token {
             kind: t,

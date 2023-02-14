@@ -1,4 +1,6 @@
-use inkwell::{builder::Builder, context::Context, module::Module};
+use std::collections::HashMap;
+
+use inkwell::{builder::Builder, context::Context, module::Module, values::PointerValue};
 use kaede_ast::TranslationUnit;
 use top::build_top;
 
@@ -9,10 +11,12 @@ mod top;
 #[cfg(test)]
 mod tests;
 
+pub type Symbols<'ctx> = HashMap<String, PointerValue<'ctx>>;
+
 pub fn codegen<'ctx, 'module>(
     context: &'ctx Context,
     module: &'module Module<'ctx>,
-    ast: &TranslationUnit,
+    ast: TranslationUnit,
 ) {
     CodeGen::new(context, module).gen(ast);
 }
@@ -34,7 +38,7 @@ impl<'ctx, 'module> CodeGen<'ctx, 'module> {
         }
     }
 
-    pub fn gen(&self, ast: &TranslationUnit) {
+    pub fn gen(&self, ast: TranslationUnit) {
         for top in ast {
             build_top(self, top);
         }

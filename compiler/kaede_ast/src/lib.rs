@@ -10,6 +10,7 @@ pub enum BinOpKind {
 pub enum Expr {
     Integer(u64),
     BinOp(Box<Expr>, BinOpKind, Box<Expr>),
+    Ident(String),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]

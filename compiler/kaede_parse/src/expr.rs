@@ -66,6 +66,10 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             return Ok(node);
         }
 
+        if let Ok(ident) = self.ident() {
+            return Ok(Expr::Ident(ident));
+        }
+
         Ok(Expr::Integer(self.integer()?))
     }
 

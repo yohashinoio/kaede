@@ -1,21 +1,26 @@
 use inkwell::values::{BasicValue, BasicValueEnum, IntValue};
 use kaede_ast::{BinOpKind, Expr};
 
-use crate::CodeGen;
+use crate::{CodeGen, Symbols};
 
-pub fn build_expression<'a>(ctx: &'a CodeGen, node: &'a Expr) -> BasicValueEnum<'a> {
-    let builder = ExprBuilder::new(ctx);
+pub fn build_expression<'a, 'ctx, 'c>(
+    ctx: &'a CodeGen<'ctx, 'c>,
+    node: &'a Expr,
+    scope: &'a Symbols<'ctx>,
+) -> BasicValueEnum<'a> {
+    let builder = ExprBuilder::new(ctx, scope);
 
     builder.build(node)
 }
 
 struct ExprBuilder<'a, 'ctx, 'c> {
     ctx: &'a CodeGen<'ctx, 'c>,
+    scope: &'a Symbols<'ctx>,
 }
 
 impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
-    fn new(ctx: &'a CodeGen<'ctx, 'c>) -> Self {
-        Self { ctx }
+    fn new(ctx: &'a CodeGen<'ctx, 'c>, scope: &'a Symbols<'ctx>) -> Self {
+        Self { ctx, scope }
     }
 
     fn build(&self, node: &Expr) -> BasicValueEnum<'ctx> {
@@ -26,6 +31,11 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
                 .i32_type()
                 .const_int(*int, false)
                 .as_basic_value_enum(),
+
+            Expr::Ident(ident) => {
+                println!("{:?}", self.scope);
+                self.ctx.builder.build_load(self.scope[ident], "")
+            }
 
             Expr::BinOp(lhs, op, rhs) => self.binary_op(lhs, op, rhs).as_basic_value_enum(),
         }

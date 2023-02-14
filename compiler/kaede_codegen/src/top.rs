@@ -2,7 +2,7 @@ use kaede_ast::{StmtList, Top};
 
 use crate::{stmt::build_statement_list, CodeGen};
 
-pub fn build_top(ctx: &CodeGen, node: &Top) {
+pub fn build_top(ctx: &CodeGen, node: Top) {
     let builder = TopBuilder::new(ctx);
 
     builder.build(node);
@@ -17,13 +17,13 @@ impl<'a, 'b, 'c> TopBuilder<'a, 'b, 'c> {
         Self { ctx }
     }
 
-    fn build(&self, node: &Top) {
+    fn build(&self, node: Top) {
         match node {
-            Top::Function { name, body } => self.func(name, body),
+            Top::Function { name, body } => self.func(&name, body),
         }
     }
 
-    fn func(&self, name: &str, body: &StmtList) {
+    fn func(&self, name: &str, body: StmtList) {
         let fn_type = self.ctx.context.i32_type().fn_type(&[], false);
 
         let fn_value = self.ctx.module.add_function(name, fn_type, None);
