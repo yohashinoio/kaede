@@ -24,8 +24,6 @@ pub enum TokenKind {
     Comma,
     /// ';'
     Semi,
-    /// '='
-    Eq,
 
     // Operators
     /// '+'
@@ -36,6 +34,8 @@ pub enum TokenKind {
     Mul,
     /// '/'
     Div,
+    /// '='
+    Eq,
 
     // Reserved words
     /// "fn"

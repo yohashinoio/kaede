@@ -10,94 +10,77 @@ fn create_simple_binop(lhs: u64, kind: BinOpKind, rhs: u64) -> Expr {
     BinOp(Box::new(Integer(lhs)), kind, Box::new(Integer(rhs)))
 }
 
-/// Function name is fixed to "test"
-fn create_test_fn(body: StmtList) -> Top {
-    Top::Function {
-        name: "test".to_string(),
-        body: body,
-    }
+/// Function name is fixed to "test".
+fn parse_test(program: &str, fn_body: StmtList) -> anyhow::Result<()> {
+    assert_eq!(
+        parse(lex(program))?,
+        TranslationUnit::from([Top::Function {
+            name: "test".to_string(),
+            body: fn_body,
+        }])
+    );
+
+    Ok(())
 }
 
 #[test]
 fn add() -> anyhow::Result<()> {
-    assert_eq!(
-        parse(lex("fn test() { 48 + 10; }"))?,
-        TranslationUnit::from([create_test_fn(vec![Stmt::Expr(create_simple_binop(
-            48,
-            BinOpKind::Add,
-            10
-        ))])])
-    );
+    let body = StmtList::from([Stmt::Expr(create_simple_binop(48, BinOpKind::Add, 10))]);
+
+    parse_test("fn test() { 48 + 10; }", body)?;
 
     Ok(())
 }
 
 #[test]
 fn sub() -> anyhow::Result<()> {
-    assert_eq!(
-        parse(lex("fn test() { 48 - 10; }"))?,
-        TranslationUnit::from([create_test_fn(vec![Stmt::Expr(create_simple_binop(
-            48,
-            BinOpKind::Sub,
-            10
-        ))])])
-    );
+    let body = StmtList::from([Stmt::Expr(create_simple_binop(48, BinOpKind::Sub, 10))]);
+
+    parse_test("fn test() { 48 - 10 }", body)?;
 
     Ok(())
 }
 
 #[test]
 fn mul() -> anyhow::Result<()> {
-    assert_eq!(
-        parse(lex("fn test() { 48 * 10; }"))?,
-        TranslationUnit::from([create_test_fn(vec![Stmt::Expr(create_simple_binop(
-            48,
-            BinOpKind::Mul,
-            10
-        ))])])
-    );
+    let body = StmtList::from([Stmt::Expr(create_simple_binop(48, BinOpKind::Mul, 10))]);
+
+    parse_test("fn test() { 48 * 10 }", body)?;
 
     Ok(())
 }
 
 #[test]
 fn div() -> anyhow::Result<()> {
-    assert_eq!(
-        parse(lex("fn test() { 48 / 10 ;}"))?,
-        TranslationUnit::from([create_test_fn(vec![Stmt::Expr(create_simple_binop(
-            48,
-            BinOpKind::Div,
-            10
-        ))])])
-    );
+    let body = StmtList::from([Stmt::Expr(create_simple_binop(48, BinOpKind::Div, 10))]);
+
+    parse_test("fn test() { 48 / 10 }", body)?;
 
     Ok(())
 }
 
 #[test]
 fn mul_precedence() -> anyhow::Result<()> {
-    assert_eq!(
-        parse(lex("fn test() { 48 + 10 * 5 ; }"))?,
-        TranslationUnit::from([create_test_fn(vec![Stmt::Expr(Expr::BinOp(
-            Box::new(Expr::Integer(48)),
-            BinOpKind::Add,
-            Box::new(create_simple_binop(10, BinOpKind::Mul, 5))
-        ))])])
-    );
+    let body = StmtList::from([Stmt::Expr(Expr::BinOp(
+        Box::new(Expr::Integer(48)),
+        BinOpKind::Add,
+        Box::new(create_simple_binop(10, BinOpKind::Mul, 5)),
+    ))]);
+
+    parse_test("fn test() { 48 + 10 * 5 }", body)?;
 
     Ok(())
 }
 
 #[test]
 fn div_precedence() -> anyhow::Result<()> {
-    assert_eq!(
-        parse(lex("fn test() { 48 - 10 / 5; }"))?,
-        TranslationUnit::from([create_test_fn(vec![Stmt::Expr(Expr::BinOp(
-            Box::new(Expr::Integer(48)),
-            BinOpKind::Sub,
-            Box::new(create_simple_binop(10, BinOpKind::Div, 5))
-        ))])])
-    );
+    let body = StmtList::from([Stmt::Expr(Expr::BinOp(
+        Box::new(Expr::Integer(48)),
+        BinOpKind::Sub,
+        Box::new(create_simple_binop(10, BinOpKind::Div, 5)),
+    ))]);
+
+    parse_test("fn test() { 48 - 10 / 5 }", body)?;
 
     Ok(())
 }
@@ -116,14 +99,13 @@ fn four_arithmetic_precedence() -> anyhow::Result<()> {
         Box::new(Expr::Integer(2)),
     );
 
-    assert_eq!(
-        parse(lex(r" fn test() { (48 +10/ 5) - 58 * 2;}"))?,
-        TranslationUnit::from([create_test_fn(vec![Stmt::Expr(Expr::BinOp(
-            Box::new(tmp1),
-            BinOpKind::Sub,
-            Box::new(tmp2)
-        ))])])
-    );
+    let body = StmtList::from([Stmt::Expr(Expr::BinOp(
+        Box::new(tmp1),
+        BinOpKind::Sub,
+        Box::new(tmp2),
+    ))]);
+
+    parse_test("fn test() { (48 +10/ 5) - 58 * 2;}", body)?;
 
     Ok(())
 }
@@ -133,57 +115,49 @@ fn unary_plus_and_minus() -> anyhow::Result<()> {
     let create_unary_minus =
         |n| Expr::BinOp(Box::new(Expr::Integer(0)), BinOpKind::Sub, Box::new(n));
 
-    assert_eq!(
-        parse(lex("fn test() { +(-(-58)); }"))?,
-        TranslationUnit::from([create_test_fn(vec![Stmt::Expr(create_unary_minus(
-            create_unary_minus(Expr::Integer(58))
-        ))])])
-    );
+    parse_test(
+        "fn test() { +(-(-58)) }",
+        StmtList::from([Stmt::Expr(create_unary_minus(create_unary_minus(
+            Expr::Integer(58),
+        )))]),
+    )?;
 
     Ok(())
 }
 
 #[test]
 fn function() -> anyhow::Result<()> {
-    assert_eq!(
-        parse(lex("fn test() { 4810; }"))?,
-        TranslationUnit::from([create_test_fn(vec![Stmt::Expr(Expr::Integer(4810))])])
-    );
+    parse_test(
+        "fn test() { 4810 }",
+        StmtList::from([Stmt::Expr(Expr::Integer(4810))]),
+    )?;
 
     Ok(())
 }
 
 #[test]
 fn empty_function() -> anyhow::Result<()> {
-    assert_eq!(
-        parse(lex("fn test() {}"))?,
-        TranslationUnit::from([Top::Function {
-            name: "test".to_string(),
-            body: vec![],
-        }])
-    );
+    parse_test("fn test() {}", StmtList::new())?;
 
     Ok(())
 }
 
 #[test]
 fn return_stmt() -> anyhow::Result<()> {
-    let tmp = vec![Stmt::Return(Return(Some(Expr::Integer(4810))))];
-
-    assert_eq!(
-        parse(lex("fn test() { return 4810 }"))?,
-        TranslationUnit::from([create_test_fn(tmp)])
-    );
+    parse_test(
+        "fn test() { return 4810 }",
+        StmtList::from([Stmt::Return(Return(Some(Expr::Integer(4810))))]),
+    )?;
 
     Ok(())
 }
 
 #[test]
 fn return_stmt_with_no_value() -> anyhow::Result<()> {
-    assert_eq!(
-        parse(lex("fn test() { return }"))?,
-        TranslationUnit::from([create_test_fn(vec![Stmt::Return(Return(None))])])
-    );
+    parse_test(
+        "fn test() { return }",
+        StmtList::from([Stmt::Return(Return(None))]),
+    )?;
 
     Ok(())
 }
@@ -211,53 +185,53 @@ fn error_span() {
 
 #[test]
 fn statement_list() -> anyhow::Result<()> {
-    assert_eq!(
-        parse(lex("fn test() { 48\n 10\n return }"))?,
-        TranslationUnit::from([create_test_fn(vec![
+    parse_test(
+        "fn test() { 48\n 10\n return }",
+        StmtList::from([
             Stmt::Expr(Expr::Integer(48)),
             Stmt::Expr(Expr::Integer(10)),
-            Stmt::Return(Return(None))
-        ])])
-    );
+            Stmt::Return(Return(None)),
+        ]),
+    )?;
 
     Ok(())
 }
 
 #[test]
 fn variable() -> anyhow::Result<()> {
-    assert_eq!(
-        parse(lex("fn test() { let yoha\n let io\n return }"))?,
-        TranslationUnit::from([create_test_fn(vec![
+    parse_test(
+        "fn test() { let yoha\n let io\n return }",
+        StmtList::from([
             Stmt::Let(Let {
                 name: "yoha".to_string(),
-                init: None
+                init: None,
             }),
             Stmt::Let(Let {
                 name: "io".to_string(),
-                init: None
+                init: None,
             }),
-            Stmt::Return(Return(None))
-        ])])
-    );
+            Stmt::Return(Return(None)),
+        ]),
+    )?;
 
     Ok(())
 }
 
 #[test]
 fn variable_initialization() -> anyhow::Result<()> {
-    assert_eq!(
-        parse(lex("fn test() { let yoha = 48\n let io = 10\n }"))?,
-        TranslationUnit::from([create_test_fn(vec![
+    parse_test(
+        "fn test() { let yoha = 48\n let io = 10\n }",
+        StmtList::from([
             Stmt::Let(Let {
                 name: "yoha".to_string(),
-                init: Some(Expr::Integer(48))
+                init: Some(Expr::Integer(48)),
             }),
             Stmt::Let(Let {
                 name: "io".to_string(),
-                init: Some(Expr::Integer(10))
+                init: Some(Expr::Integer(10)),
             }),
-        ])])
-    );
+        ]),
+    )?;
 
     Ok(())
 }
