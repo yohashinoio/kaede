@@ -1,5 +1,5 @@
 use inkwell::values::{BasicValue, BasicValueEnum, IntValue};
-use kaede_ast::{BinOpKind, Expr};
+use kaede_ast::{BinOpKind, Expr, FuncCall};
 
 use crate::{CodeGen, Symbols};
 
@@ -32,9 +32,14 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
                 .const_int(*int, false)
                 .as_basic_value_enum(),
 
-            Expr::Ident(ident) => self.ctx.builder.build_load(self.scope[ident], ""),
+            Expr::Ident(ident) => {
+                // TODO: 変数が見つからなかった時の処理
+                self.ctx.builder.build_load(self.scope[ident], "")
+            }
 
             Expr::BinOp(lhs, op, rhs) => self.binary_op(lhs, op, rhs).as_basic_value_enum(),
+
+            Expr::FuncCall(fcall) => self.call_func(fcall),
         }
     }
 
@@ -50,5 +55,18 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
             Mul => self.ctx.builder.build_int_mul(lhs, rhs, ""),
             Div => self.ctx.builder.build_int_signed_div(lhs, rhs, ""), // TODO: unsigned
         }
+    }
+
+    fn call_func(&self, node: &FuncCall) -> BasicValueEnum<'ctx> {
+        let func = self.ctx.module.get_function(&node.name);
+
+        // TODO: 関数が見つからなかった時の処理
+
+        self.ctx
+            .builder
+            .build_call(func.unwrap(), &[], "")
+            .try_as_basic_value()
+            .left()
+            .unwrap()
     }
 }

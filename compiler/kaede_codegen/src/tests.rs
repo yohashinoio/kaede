@@ -44,3 +44,22 @@ fn variable() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn call_func() -> anyhow::Result<()> {
+    let program = r"fn f1() {
+        return 48
+    }
+
+    fn f2() {
+        return 10
+    }
+
+    fn test() {
+        return f1() + f2()
+    }";
+
+    assert_eq!(cg_test(program)?, 58);
+
+    Ok(())
+}

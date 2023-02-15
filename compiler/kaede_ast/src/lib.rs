@@ -7,10 +7,16 @@ pub enum BinOpKind {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
+pub struct FuncCall {
+    pub name: String,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Expr {
     Integer(u64),
     BinOp(Box<Expr>, BinOpKind, Box<Expr>),
     Ident(String),
+    FuncCall(FuncCall),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]

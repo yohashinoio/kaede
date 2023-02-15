@@ -1,4 +1,4 @@
-use kaede_ast::{BinOpKind, Expr};
+use kaede_ast::{BinOpKind, Expr, FuncCall};
 use kaede_lex::token::{Token, TokenKind};
 
 use crate::{
@@ -67,6 +67,13 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
 
         if let Ok(ident) = self.ident() {
+            // Function call
+            if self.consume_b(&TokenKind::OpenParen) {
+                self.consume(&TokenKind::CloseParen)?;
+
+                return Ok(Expr::FuncCall(FuncCall { name: ident }));
+            }
+
             return Ok(Expr::Ident(ident));
         }
 
