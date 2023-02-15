@@ -68,6 +68,5 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
         }
 
         self.scope.insert(node.name, alloca);
-        println!("{:?}", self.scope);
     }
 }

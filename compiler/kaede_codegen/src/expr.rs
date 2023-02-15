@@ -32,10 +32,7 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
                 .const_int(*int, false)
                 .as_basic_value_enum(),
 
-            Expr::Ident(ident) => {
-                println!("{:?}", self.scope);
-                self.ctx.builder.build_load(self.scope[ident], "")
-            }
+            Expr::Ident(ident) => self.ctx.builder.build_load(self.scope[ident], ""),
 
             Expr::BinOp(lhs, op, rhs) => self.binary_op(lhs, op, rhs).as_basic_value_enum(),
         }
