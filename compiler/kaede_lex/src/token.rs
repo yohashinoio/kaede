@@ -8,7 +8,7 @@ pub struct Token {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TokenKind {
-    Integer(String),
+    Int(String),
     Ident(String),
 
     // Punctuators
@@ -56,7 +56,7 @@ impl std::fmt::Display for TokenKind {
         use TokenKind::*;
 
         match self {
-            Integer(_) => write!(f, "integer"),
+            Int(_) => write!(f, "integer"),
             Ident(_) => write!(f, "identifier"),
 
             OpenParen => write!(f, "'('"),

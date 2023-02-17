@@ -1,4 +1,4 @@
-use kaede_ast::{BinOpKind, Expr, FuncCall, Int};
+use kaede_ast::expr::{BinOpKind, Expr, FuncCall, Int};
 use kaede_lex::token::{Token, TokenKind};
 
 use crate::{
@@ -17,9 +17,9 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         loop {
             if self.consume_b(&TokenKind::Add) {
-                node = Expr::BinOp(Box::new(node), BinOpKind::Add, Box::new(self.mul()?));
+                node = Expr::new_binop(Box::new(node), BinOpKind::Add, Box::new(self.mul()?));
             } else if self.consume_b(&TokenKind::Sub) {
-                node = Expr::BinOp(Box::new(node), BinOpKind::Sub, Box::new(self.mul()?));
+                node = Expr::new_binop(Box::new(node), BinOpKind::Sub, Box::new(self.mul()?));
             } else {
                 return Ok(node);
             }
@@ -32,9 +32,9 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         loop {
             if self.consume_b(&TokenKind::Mul) {
-                node = Expr::BinOp(Box::new(node), BinOpKind::Mul, Box::new(self.unary()?));
+                node = Expr::new_binop(Box::new(node), BinOpKind::Mul, Box::new(self.unary()?));
             } else if self.consume_b(&TokenKind::Div) {
-                node = Expr::BinOp(Box::new(node), BinOpKind::Div, Box::new(self.unary()?));
+                node = Expr::new_binop(Box::new(node), BinOpKind::Div, Box::new(self.unary()?));
             } else {
                 return Ok(node);
             }
@@ -48,8 +48,8 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
 
         if self.consume_b(&TokenKind::Sub) {
-            return Ok(Expr::BinOp(
-                Box::new(Expr::Int(Int::I32(0))),
+            return Ok(Expr::new_binop(
+                Box::new(Expr::new_i32(0)),
                 BinOpKind::Sub,
                 Box::new(self.primary()?),
             ));
@@ -84,9 +84,9 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         let token = self.bump().unwrap();
 
         match token.kind {
-            TokenKind::Integer(int_s) => {
+            TokenKind::Int(int_s) => {
                 // Try to convert to i32.
-                match int_s.parse::<i32>() {
+                match int_s.parse() {
                     Ok(n) => Ok(Int::I32(n)),
                     Err(_) => Err(ParseError::OutOfRangeForI32(token.span)),
                 }

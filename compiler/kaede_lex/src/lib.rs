@@ -69,10 +69,7 @@ fn insert_semicolons(tokens: impl Iterator<Item = Token>) -> Vec<Token> {
 fn can_insert_semicolon(token: &TokenKind) -> bool {
     use TokenKind::*;
 
-    matches!(
-        token,
-        Integer(_) | Ident(_) | CloseParen | CloseBrace | Return
-    )
+    matches!(token, Int(_) | Ident(_) | CloseParen | CloseBrace | Return)
 }
 
 fn is_whitespace(c: char) -> bool {
@@ -137,7 +134,7 @@ impl Cursor<'_> {
             // Number
             c @ '0'..='9' => {
                 let n = self.number(c);
-                self.create_token(TokenKind::Integer(n))
+                self.create_token(TokenKind::Int(n))
             }
 
             // Identifier or reserved words

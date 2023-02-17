@@ -1,5 +1,5 @@
 use inkwell::values::{BasicValue, BasicValueEnum, IntValue};
-use kaede_ast::{BinOpKind, Expr, FuncCall};
+use kaede_ast::expr::{BinOp, BinOpKind, Expr, FuncCall};
 
 use crate::{CodeGen, Symbols};
 
@@ -25,27 +25,26 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
 
     fn build(&self, node: &Expr) -> BasicValueEnum<'ctx> {
         match node {
-            Expr::Int(int) => int.as_llvm_int(self.ctx.context)
-                .as_basic_value_enum(),
+            Expr::Int(int) => int.as_llvm_int(self.ctx.context).as_basic_value_enum(),
 
             Expr::Ident(ident) => {
                 // TODO: 変数が見つからなかった時の処理
                 self.ctx.builder.build_load(self.scope[ident], "")
             }
 
-            Expr::BinOp(lhs, op, rhs) => self.binary_op(lhs, op, rhs).as_basic_value_enum(),
+            Expr::BinOp(binop) => self.binary_op(binop).as_basic_value_enum(),
 
             Expr::FuncCall(fcall) => self.call_func(fcall),
         }
     }
 
-    fn binary_op(&self, lhs: &Expr, op: &BinOpKind, rhs: &Expr) -> IntValue<'ctx> {
+    fn binary_op(&self, node: &BinOp) -> IntValue<'ctx> {
         use BinOpKind::*;
 
-        let lhs = self.build(lhs).into_int_value();
-        let rhs = self.build(rhs).into_int_value();
+        let lhs = self.build(&node.lhs).into_int_value();
+        let rhs = self.build(&node.rhs).into_int_value();
 
-        match op {
+        match node.op {
             Add => self.ctx.builder.build_int_add(lhs, rhs, ""),
             Sub => self.ctx.builder.build_int_sub(lhs, rhs, ""),
             Mul => self.ctx.builder.build_int_mul(lhs, rhs, ""),

@@ -1,4 +1,4 @@
-use kaede_ast::{Let, Return, Stmt, StmtList};
+use kaede_ast::stmt::{Let, Return, Stmt, StmtList};
 
 use crate::{expr::build_expression, CodeGen, Symbols};
 

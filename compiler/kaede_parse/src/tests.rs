@@ -1,4 +1,6 @@
-use kaede_ast::{BinOpKind, Expr, Int, Let, Return, Stmt, StmtList, Top};
+use kaede_ast::expr::{BinOpKind, Expr};
+use kaede_ast::stmt::{Let, Return, Stmt, StmtList};
+use kaede_ast::Top;
 use kaede_lex::lex;
 use kaede_location::{Location, Span};
 use kaede_type::{FundamentalTypeKind, TypeEnum};
@@ -6,10 +8,10 @@ use kaede_type::{FundamentalTypeKind, TypeEnum};
 use super::*;
 
 fn create_simple_binop(lhs: i32, kind: BinOpKind, rhs: i32) -> Expr {
-    Expr::BinOp(
-        Box::new(Expr::Int(Int::I32(lhs))),
+    Expr::new_binop(
+        Box::new(Expr::new_i32(lhs)),
         kind,
-        Box::new(Expr::Int(Int::I32(rhs))),
+        Box::new(Expr::new_i32(rhs)),
     )
 }
 
@@ -64,8 +66,8 @@ fn div() -> anyhow::Result<()> {
 
 #[test]
 fn mul_precedence() -> anyhow::Result<()> {
-    let body = StmtList::from([Stmt::Expr(Expr::BinOp(
-        Box::new(Expr::Int(Int::I32(48))),
+    let body = StmtList::from([Stmt::Expr(Expr::new_binop(
+        Box::new(Expr::new_i32(48)),
         BinOpKind::Add,
         Box::new(create_simple_binop(10, BinOpKind::Mul, 5)),
     ))]);
@@ -77,8 +79,8 @@ fn mul_precedence() -> anyhow::Result<()> {
 
 #[test]
 fn div_precedence() -> anyhow::Result<()> {
-    let body = StmtList::from([Stmt::Expr(Expr::BinOp(
-        Box::new(Expr::Int(Int::I32(48))),
+    let body = StmtList::from([Stmt::Expr(Expr::new_binop(
+        Box::new(Expr::new_i32(48)),
         BinOpKind::Sub,
         Box::new(create_simple_binop(10, BinOpKind::Div, 5)),
     ))]);
@@ -90,19 +92,19 @@ fn div_precedence() -> anyhow::Result<()> {
 
 #[test]
 fn four_arithmetic_precedence() -> anyhow::Result<()> {
-    let tmp1 = Expr::BinOp(
-        Box::new(Expr::Int(Int::I32(48))),
+    let tmp1 = Expr::new_binop(
+        Box::new(Expr::new_i32(48)),
         BinOpKind::Add,
         Box::new(create_simple_binop(10, BinOpKind::Div, 5)),
     );
 
-    let tmp2 = Expr::BinOp(
-        Box::new(Expr::Int(Int::I32(58))),
+    let tmp2 = Expr::new_binop(
+        Box::new(Expr::new_i32(58)),
         BinOpKind::Mul,
-        Box::new(Expr::Int(Int::I32(2))),
+        Box::new(Expr::new_i32(2)),
     );
 
-    let body = StmtList::from([Stmt::Expr(Expr::BinOp(
+    let body = StmtList::from([Stmt::Expr(Expr::new_binop(
         Box::new(tmp1),
         BinOpKind::Sub,
         Box::new(tmp2),
@@ -115,18 +117,13 @@ fn four_arithmetic_precedence() -> anyhow::Result<()> {
 
 #[test]
 fn unary_plus_and_minus() -> anyhow::Result<()> {
-    let create_unary_minus = |n| {
-        Expr::BinOp(
-            Box::new(Expr::Int(Int::I32(0))),
-            BinOpKind::Sub,
-            Box::new(n),
-        )
-    };
+    let create_unary_minus =
+        |n| Expr::new_binop(Box::new(Expr::new_i32(0)), BinOpKind::Sub, Box::new(n));
 
     parse_test(
         "fn test() { +(-(-58)) }",
         StmtList::from([Stmt::Expr(create_unary_minus(create_unary_minus(
-            Expr::Int(Int::I32(58)),
+            Expr::new_i32(58),
         )))]),
     )?;
 
@@ -137,7 +134,7 @@ fn unary_plus_and_minus() -> anyhow::Result<()> {
 fn function() -> anyhow::Result<()> {
     parse_test(
         "fn test() { 4810 }",
-        StmtList::from([Stmt::Expr(Expr::Int(Int::I32(4810)))]),
+        StmtList::from([Stmt::Expr(Expr::new_i32(4810))]),
     )?;
 
     Ok(())
@@ -154,7 +151,7 @@ fn empty_function() -> anyhow::Result<()> {
 fn return_stmt() -> anyhow::Result<()> {
     parse_test(
         "fn test() { return 4810 }",
-        StmtList::from([Stmt::Return(Return(Some(Expr::Int(Int::I32(4810)))))]),
+        StmtList::from([Stmt::Return(Return(Some(Expr::new_i32(4810))))]),
     )?;
 
     Ok(())
@@ -198,8 +195,8 @@ fn statement_list() -> anyhow::Result<()> {
     parse_test(
         "fn test() { 48\n 10\n return }",
         StmtList::from([
-            Stmt::Expr(Expr::Int(Int::I32(48))),
-            Stmt::Expr(Expr::Int(Int::I32(10))),
+            Stmt::Expr(Expr::new_i32(48)),
+            Stmt::Expr(Expr::new_i32(10)),
             Stmt::Return(Return(None)),
         ]),
     )?;
@@ -236,12 +233,12 @@ fn variable_initialization() -> anyhow::Result<()> {
         StmtList::from([
             Stmt::Let(Let {
                 name: "yoha".to_string(),
-                init: Some(Expr::Int(Int::I32(48))),
+                init: Some(Expr::new_i32(48)),
                 ty: TypeEnum::new_fundamental_type(FundamentalTypeKind::I32),
             }),
             Stmt::Let(Let {
                 name: "io".to_string(),
-                init: Some(Expr::Int(Int::I32(10))),
+                init: Some(Expr::new_i32(10)),
                 ty: TypeEnum::new_fundamental_type(FundamentalTypeKind::I32),
             }),
         ]),

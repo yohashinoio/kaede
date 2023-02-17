@@ -1,4 +1,4 @@
-use kaede_ast::{StmtList, Top};
+use kaede_ast::{stmt::StmtList, Top};
 
 use crate::{stmt::build_statement_list, CodeGen};
 

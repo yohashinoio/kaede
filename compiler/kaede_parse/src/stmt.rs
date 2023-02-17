@@ -1,4 +1,5 @@
-use kaede_ast::{Expr, Let, Return, Stmt, StmtList};
+use kaede_ast::expr::Expr;
+use kaede_ast::stmt::{Let, Return, Stmt, StmtList};
 use kaede_lex::token::{Token, TokenKind};
 use kaede_type::{FundamentalTypeKind, TypeEnum};
 
