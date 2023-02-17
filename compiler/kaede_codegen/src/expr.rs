@@ -25,11 +25,7 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
 
     fn build(&self, node: &Expr) -> BasicValueEnum<'ctx> {
         match node {
-            Expr::Integer(int) => self
-                .ctx
-                .context
-                .i32_type()
-                .const_int(*int, false)
+            Expr::Int(int) => int.as_llvm_int(self.ctx.context)
                 .as_basic_value_enum(),
 
             Expr::Ident(ident) => {

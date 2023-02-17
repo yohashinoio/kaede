@@ -8,7 +8,7 @@ pub struct Token {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TokenKind {
-    Integer(u64),
+    Integer(String),
     Ident(String),
 
     // Punctuators

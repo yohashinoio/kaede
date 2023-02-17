@@ -175,20 +175,20 @@ impl Cursor<'_> {
         self.eat_while(is_whitespace);
     }
 
-    fn number(&mut self, first_digit: char) -> u64 {
-        let mut result = first_digit
-            .to_digit(10)
-            .expect("The caller should have passed a digit.") as u64;
+    fn number(&mut self, first_digit: char) -> String {
+        assert!(first_digit.is_ascii_digit());
+
+        let mut result = first_digit.to_string();
 
         loop {
             let c = self.first();
 
-            match c.to_digit(10) {
-                Some(digit) => result = result * 10 + (digit as u64),
-                None => break,
+            if c.is_ascii_digit() {
+                result.push(c);
+                self.bump();
+            } else {
+                break;
             }
-
-            self.bump();
         }
 
         result

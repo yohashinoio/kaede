@@ -169,6 +169,7 @@ dependencies = [
 name = "kaede_ast"
 version = "0.1.0"
 dependencies = [
+ "inkwell",
  "kaede_type",
 ]
 

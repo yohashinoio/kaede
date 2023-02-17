@@ -1,4 +1,4 @@
-use kaede_ast::{BinOpKind, Expr, FuncCall};
+use kaede_ast::{BinOpKind, Expr, FuncCall, Int};
 use kaede_lex::token::{Token, TokenKind};
 
 use crate::{
@@ -49,7 +49,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         if self.consume_b(&TokenKind::Sub) {
             return Ok(Expr::BinOp(
-                Box::new(Expr::Integer(0)),
+                Box::new(Expr::Int(Int::I32(0))),
                 BinOpKind::Sub,
                 Box::new(self.primary()?),
             ));
@@ -77,14 +77,20 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             return Ok(Expr::Ident(ident));
         }
 
-        Ok(Expr::Integer(self.integer()?))
+        Ok(Expr::Int(self.integer()?))
     }
 
-    pub fn integer(&mut self) -> ParseResult<u64> {
+    pub fn integer(&mut self) -> ParseResult<Int> {
         let token = self.bump().unwrap();
 
         match token.kind {
-            TokenKind::Integer(int) => Ok(int),
+            TokenKind::Integer(int_s) => {
+                // Try to convert to i32.
+                match int_s.parse::<i32>() {
+                    Ok(n) => Ok(Int::I32(n)),
+                    Err(_) => Err(ParseError::OutOfRangeForI32(token.span)),
+                }
+            }
 
             _ => Err(ParseError::ExpectedError {
                 expected: "integer".to_string(),

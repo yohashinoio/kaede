@@ -14,7 +14,7 @@ fn lex_test(program: &str, expect: Vec<TokenKind>) {
 
 #[test]
 fn number() {
-    lex_test("4810", vec![Integer(4810), Semi]);
+    lex_test("4810", vec![Integer(4810.to_string()), Semi]);
 }
 
 #[test]
@@ -28,7 +28,13 @@ fn skip_whitespaces() {
 fn multi_numbers() {
     lex_test(
         "48 10 5 8",
-        vec![Integer(48), Integer(10), Integer(5), Integer(8), Semi],
+        vec![
+            Integer(48.to_string()),
+            Integer(10.to_string()),
+            Integer(5.to_string()),
+            Integer(8.to_string()),
+            Semi,
+        ],
     );
 }
 
@@ -68,7 +74,10 @@ fn span() {
 
 #[test]
 fn auto_insert_semi() {
-    lex_test("48 +\n 10\n", vec![Integer(48), Add, Integer(10), Semi]);
+    lex_test(
+        "48 +\n 10\n",
+        vec![Integer(48.to_string()), Add, Integer(10.to_string()), Semi],
+    );
 
     lex_test("return", vec![Return, Semi]);
 }

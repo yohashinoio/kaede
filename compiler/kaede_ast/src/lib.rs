@@ -1,3 +1,4 @@
+use inkwell::{context::Context, values::IntValue};
 use kaede_type::TypeEnum;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -14,8 +15,23 @@ pub struct FuncCall {
 }
 
 #[derive(Debug, PartialEq, Eq)]
+pub enum Int {
+    I32(i32),
+}
+
+impl Int {
+    pub fn as_llvm_int<'ctx>(&self, context: &'ctx Context) -> IntValue<'ctx> {
+        use Int::*;
+
+        match self {
+            I32(n) => context.i32_type().const_int(*n as u64, false),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub enum Expr {
-    Integer(u64),
+    Int(Int),
     BinOp(Box<Expr>, BinOpKind, Box<Expr>),
     Ident(String),
     FuncCall(FuncCall),
