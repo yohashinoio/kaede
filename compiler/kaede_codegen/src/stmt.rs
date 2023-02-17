@@ -33,7 +33,7 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
     fn build(&mut self, stmt: Stmt) {
         match stmt {
             Stmt::Expr(e) => {
-                build_expression(self.ctx, &e, &self.scope);
+                build_expression(self.ctx, &e, self.scope);
             }
 
             Stmt::Return(node) => self.return_(node),
@@ -44,11 +44,10 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
 
     fn return_(&mut self, node: Return) {
         match &node.0 {
-            Some(val) => {
-                self.ctx
-                    .builder
-                    .build_return(Some(&build_expression(self.ctx, val, &self.scope)))
-            }
+            Some(val) => self
+                .ctx
+                .builder
+                .build_return(Some(&build_expression(self.ctx, val, self.scope))),
 
             None => self.ctx.builder.build_return(None),
         };
@@ -64,7 +63,7 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
             // Initialization
             self.ctx
                 .builder
-                .build_store(alloca, build_expression(self.ctx, init, &self.scope));
+                .build_store(alloca, build_expression(self.ctx, init, self.scope));
         }
 
         self.scope.insert(node.name, alloca);
