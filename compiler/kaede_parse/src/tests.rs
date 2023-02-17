@@ -1,6 +1,7 @@
 use kaede_ast::{BinOpKind, Expr, Let, Return, Stmt, StmtList, Top};
 use kaede_lex::lex;
 use kaede_location::{Location, Span};
+use kaede_type::{FundamentalTypeKind, TypeEnum};
 
 use super::*;
 
@@ -205,10 +206,12 @@ fn variable() -> anyhow::Result<()> {
             Stmt::Let(Let {
                 name: "yoha".to_string(),
                 init: None,
+                ty: TypeEnum::new_fundamental_type(FundamentalTypeKind::I32),
             }),
             Stmt::Let(Let {
                 name: "io".to_string(),
                 init: None,
+                ty: TypeEnum::new_fundamental_type(FundamentalTypeKind::I32),
             }),
             Stmt::Return(Return(None)),
         ]),
@@ -225,10 +228,12 @@ fn variable_initialization() -> anyhow::Result<()> {
             Stmt::Let(Let {
                 name: "yoha".to_string(),
                 init: Some(Expr::Integer(48)),
+                ty: TypeEnum::new_fundamental_type(FundamentalTypeKind::I32),
             }),
             Stmt::Let(Let {
                 name: "io".to_string(),
                 init: Some(Expr::Integer(10)),
+                ty: TypeEnum::new_fundamental_type(FundamentalTypeKind::I32),
             }),
         ]),
     )?;

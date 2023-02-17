@@ -1,5 +1,6 @@
 use kaede_ast::{Expr, Let, Return, Stmt, StmtList};
 use kaede_lex::token::{Token, TokenKind};
+use kaede_type::{FundamentalTypeKind, TypeEnum};
 
 use crate::{
     error::{ParseError, ParseResult},
@@ -75,9 +76,17 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         if self.consume_b(&TokenKind::Eq) {
             let init = Some(self.expr()?);
 
-            return Ok(Let { name, init });
+            return Ok(Let {
+                name,
+                init,
+                ty: TypeEnum::new_fundamental_type(FundamentalTypeKind::I32),
+            });
         }
 
-        Ok(Let { name, init: None })
+        Ok(Let {
+            name,
+            init: None,
+            ty: TypeEnum::new_fundamental_type(FundamentalTypeKind::I32),
+        })
     }
 }

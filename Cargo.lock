@@ -168,6 +168,9 @@ dependencies = [
 [[package]]
 name = "kaede_ast"
 version = "0.1.0"
+dependencies = [
+ "kaede_type",
+]
 
 [[package]]
 name = "kaede_codegen"
@@ -213,7 +216,15 @@ dependencies = [
  "kaede_ast",
  "kaede_lex",
  "kaede_location",
+ "kaede_type",
  "thiserror",
+]
+
+[[package]]
+name = "kaede_type"
+version = "0.1.0"
+dependencies = [
+ "inkwell",
 ]
 
 [[package]]

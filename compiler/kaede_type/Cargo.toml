@@ -1,9 +1,9 @@
 [package]
-name = "kaede_ast"
+name = "kaede_type"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-kaede_type = { path = "../kaede_type" }
+inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm14-0"] }

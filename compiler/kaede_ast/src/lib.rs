@@ -1,4 +1,6 @@
-#[derive(Debug, PartialEq, Eq, Clone)]
+use kaede_type::TypeEnum;
+
+#[derive(Debug, PartialEq, Eq)]
 pub enum BinOpKind {
     Add,
     Sub,
@@ -6,12 +8,12 @@ pub enum BinOpKind {
     Div,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct FuncCall {
     pub name: String,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Expr {
     Integer(u64),
     BinOp(Box<Expr>, BinOpKind, Box<Expr>),
@@ -19,16 +21,17 @@ pub enum Expr {
     FuncCall(FuncCall),
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Return(pub Option<Expr>);
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Let {
     pub name: String,
     pub init: Option<Expr>,
+    pub ty: TypeEnum,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Stmt {
     Expr(Expr),
     Return(Return),
@@ -37,7 +40,7 @@ pub enum Stmt {
 
 pub type StmtList = Vec<Stmt>;
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Top {
     Function { name: String, body: StmtList },
 }

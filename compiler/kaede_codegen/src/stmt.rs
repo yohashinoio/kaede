@@ -58,7 +58,7 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
         let alloca = self
             .ctx
             .builder
-            .build_alloca(self.ctx.context.i32_type(), &node.name);
+            .build_alloca(node.ty.as_llvm_type(self.ctx.context), &node.name);
 
         if let Some(init) = node.init.as_ref() {
             // Initialization
