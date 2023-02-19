@@ -89,13 +89,9 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
                     .left();
 
                 Ok(match return_value {
-                    Some(val) => Value::new(
-                        val,
-                        self.ctx.return_ty_table[&node.name]
-                            .as_ref()
-                            .unwrap()
-                            .clone(),
-                    ),
+                    Some(val) => {
+                        Value::new(val, self.ctx.return_ty_table[&node.name].clone().unwrap())
+                    }
                     None => Value::new_void(),
                 })
             }
