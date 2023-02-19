@@ -1,5 +1,8 @@
-use kaede_ast::expr::{BinOpKind, Expr, FuncCall, Int};
+use kaede_ast::expr::{
+    new_binop, new_func_call, new_i32, new_ident, BinOpKind, Expr, ExprEnum, Int,
+};
 use kaede_lex::token::{Token, TokenKind};
+use kaede_location::{spanned, Spanned};
 
 use crate::{
     error::{ParseError, ParseResult},
@@ -16,10 +19,10 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         let mut node = self.mul()?;
 
         loop {
-            if self.consume_b(&TokenKind::Add) {
-                node = Expr::new_binop(Box::new(node), BinOpKind::Add, Box::new(self.mul()?));
-            } else if self.consume_b(&TokenKind::Sub) {
-                node = Expr::new_binop(Box::new(node), BinOpKind::Sub, Box::new(self.mul()?));
+            if let Some(s) = self.consume_s(&TokenKind::Add) {
+                node = new_binop(Box::new(node), BinOpKind::Add, Box::new(self.mul()?), s);
+            } else if let Some(s) = self.consume_s(&TokenKind::Sub) {
+                node = new_binop(Box::new(node), BinOpKind::Sub, Box::new(self.mul()?), s);
             } else {
                 return Ok(node);
             }
@@ -31,10 +34,10 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         let mut node = self.unary()?;
 
         loop {
-            if self.consume_b(&TokenKind::Mul) {
-                node = Expr::new_binop(Box::new(node), BinOpKind::Mul, Box::new(self.unary()?));
-            } else if self.consume_b(&TokenKind::Div) {
-                node = Expr::new_binop(Box::new(node), BinOpKind::Div, Box::new(self.unary()?));
+            if let Some(s) = self.consume_s(&TokenKind::Mul) {
+                node = new_binop(Box::new(node), BinOpKind::Mul, Box::new(self.unary()?), s);
+            } else if let Some(s) = self.consume_s(&TokenKind::Div) {
+                node = new_binop(Box::new(node), BinOpKind::Div, Box::new(self.unary()?), s);
             } else {
                 return Ok(node);
             }
@@ -47,11 +50,12 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             return self.primary();
         }
 
-        if self.consume_b(&TokenKind::Sub) {
-            return Ok(Expr::new_binop(
-                Box::new(Expr::new_i32(0)),
+        if let Some(s) = self.consume_s(&TokenKind::Sub) {
+            return Ok(new_binop(
+                Box::new(new_i32(0, s.clone())),
                 BinOpKind::Sub,
                 Box::new(self.primary()?),
+                s,
             ));
         }
 
@@ -71,23 +75,24 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             if self.consume_b(&TokenKind::OpenParen) {
                 self.consume(&TokenKind::CloseParen)?;
 
-                return Ok(Expr::FuncCall(FuncCall { name: ident }));
+                return Ok(new_func_call(ident.val, ident.span));
             }
 
-            return Ok(Expr::Ident(ident));
+            return Ok(new_ident(ident.val, ident.span));
         }
 
-        Ok(Expr::Int(self.integer()?))
+        let int = self.integer()?;
+        Ok(spanned(ExprEnum::Int(int.val), int.span))
     }
 
-    pub fn integer(&mut self) -> ParseResult<Int> {
+    pub fn integer(&mut self) -> ParseResult<Spanned<Int>> {
         let token = self.bump().unwrap();
 
         match token.kind {
             TokenKind::Int(int_s) => {
                 // Try to convert to i32.
                 match int_s.parse() {
-                    Ok(n) => Ok(Int::I32(n)),
+                    Ok(n) => Ok(spanned(Int::I32(n), token.span)),
                     Err(_) => Err(ParseError::OutOfRangeForI32(token.span)),
                 }
             }
@@ -100,10 +105,12 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
     }
 
-    pub fn ident(&mut self) -> ParseResult<String> {
+    pub fn ident(&mut self) -> ParseResult<Spanned<String>> {
+        let start_span = self.first().span.clone();
+
         if matches!(self.first().kind, TokenKind::Ident(_)) {
             if let TokenKind::Ident(ident) = self.bump().unwrap().kind {
-                return Ok(ident);
+                return Ok(spanned(ident, start_span));
             }
         }
 

@@ -1,6 +1,7 @@
 use kaede_ast::expr::Expr;
-use kaede_ast::stmt::{Let, Return, Stmt, StmtList};
+use kaede_ast::stmt::{Let, Return, Stmt, StmtEnum, StmtList};
 use kaede_lex::token::{Token, TokenKind};
+use kaede_location::{spanned, Span, Spanned};
 use kaede_type::{FundamentalTypeKind, TypeEnum};
 
 use crate::{
@@ -32,10 +33,12 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     pub fn stmt(&mut self) -> ParseResult<Stmt> {
         let result;
 
-        if self.consume_b(&TokenKind::Return) {
-            result = Stmt::Return(self.return_()?);
-        } else if self.consume_b(&TokenKind::Let) {
-            result = Stmt::Let(self.let_()?);
+        if self.check(&TokenKind::Return) {
+            let r = self.return_()?;
+            result = spanned(StmtEnum::Return(r.val), r.span);
+        } else if self.check(&TokenKind::Let) {
+            let l = self.let_()?;
+            result = spanned(StmtEnum::Let(l.val), l.span);
         } else {
             match self.expr() {
                 Ok(e) => result = self.expr_stmt(e)?,
@@ -56,38 +59,56 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     }
 
     fn expr_stmt(&mut self, e: Expr) -> ParseResult<Stmt> {
-        Ok(Stmt::Expr(e))
+        let span = e.span.clone();
+
+        Ok(spanned(StmtEnum::Expr(e), span))
     }
 
-    fn return_(&mut self) -> ParseResult<Return> {
+    fn return_(&mut self) -> ParseResult<Spanned<Return>> {
+        let span = self.consume_s(&TokenKind::Return).unwrap();
+
         if self.consume_semi_b() {
-            return Ok(Return(None));
+            return Ok(spanned(Return(None), span));
         }
 
-        let val = self.expr()?;
+        // let (val, val_span) = self.expr()?;
+        let expr = self.expr()?;
 
         self.consume_semi()?;
 
-        Ok(Return(Some(val)))
+        Ok(spanned(
+            Return(Some(spanned(expr.val, expr.span.clone()))),
+            Span::new(span.start, expr.span.finish),
+        ))
     }
 
-    fn let_(&mut self) -> ParseResult<Let> {
-        let name = self.ident()?;
+    fn let_(&mut self) -> ParseResult<Spanned<Let>> {
+        let span = self.consume_s(&TokenKind::Let).unwrap();
+
+        let ident = self.ident()?;
 
         if self.consume_b(&TokenKind::Eq) {
-            let init = Some(self.expr()?);
+            let init = self.expr()?;
 
-            return Ok(Let {
-                name,
-                init,
-                ty: TypeEnum::new_fundamental_type(FundamentalTypeKind::I32),
-            });
+            let finish_loc = init.span.finish.clone();
+
+            return Ok(spanned(
+                Let {
+                    name: ident.val,
+                    init: Some(init),
+                    ty: TypeEnum::new_fundamental_type(FundamentalTypeKind::I32),
+                },
+                Span::new(span.start, finish_loc),
+            ));
         }
 
-        Ok(Let {
-            name,
-            init: None,
-            ty: TypeEnum::new_fundamental_type(FundamentalTypeKind::I32),
-        })
+        Ok(spanned(
+            Let {
+                name: ident.val,
+                init: None,
+                ty: TypeEnum::new_fundamental_type(FundamentalTypeKind::I32),
+            },
+            Span::new(span.start, ident.span.finish),
+        ))
     }
 }

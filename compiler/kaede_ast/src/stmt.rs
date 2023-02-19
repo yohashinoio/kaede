@@ -1,3 +1,4 @@
+use kaede_location::Spanned;
 use kaede_type::TypeEnum;
 
 use crate::expr::Expr;
@@ -13,10 +14,12 @@ pub struct Let {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum Stmt {
+pub enum StmtEnum {
     Expr(Expr),
     Return(Return),
     Let(Let),
 }
+
+pub type Stmt = Spanned<StmtEnum>;
 
 pub type StmtList = Vec<Stmt>;

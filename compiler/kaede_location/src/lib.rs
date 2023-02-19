@@ -1,4 +1,12 @@
-pub type Spanned<T> = (T, Span);
+#[derive(Debug, PartialEq, Eq)]
+pub struct Spanned<T> {
+    pub val: T,
+    pub span: Span,
+}
+
+pub fn spanned<T>(val: T, span: Span) -> Spanned<T> {
+    Spanned { val, span }
+}
 
 #[derive(Debug, Clone)]
 pub struct SpanBuilder {

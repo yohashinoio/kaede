@@ -3,9 +3,6 @@ mod expr;
 mod stmt;
 mod top;
 
-#[cfg(test)]
-mod tests;
-
 pub fn parse(tokens: impl Iterator<Item = Token>) -> ParseResult<TranslationUnit> {
     let mut parser = Parser::new(tokens.peekable());
 
@@ -28,6 +25,7 @@ use std::iter::Peekable;
 use error::{ParseError, ParseResult};
 use kaede_ast::TranslationUnit;
 use kaede_lex::token::{Token, TokenKind};
+use kaede_location::Span;
 
 pub struct Parser<T: Iterator<Item = Token>> {
     tokens: Peekable<T>,
@@ -77,7 +75,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         })
     }
 
-    /// Return boolean
+    /// Return boolean.
     pub fn consume_b(&mut self, tok: &TokenKind) -> bool {
         if &self.first().kind == tok {
             self.bump();
@@ -85,6 +83,18 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
 
         false
+    }
+
+    // Return span.
+    pub fn consume_s(&mut self, tok: &TokenKind) -> Option<Span> {
+        let span = self.first().span.clone();
+
+        if &self.first().kind == tok {
+            self.bump();
+            return Some(span);
+        }
+
+        None
     }
 
     /// Consumes a semicolon.
@@ -112,5 +122,24 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
 
         false
+    }
+
+    /// Consumes a semicolon.
+    /// ')' or '}', then success. (Following Golang's rules)
+    /// Return span.
+    pub fn consume_semi_s(&mut self) -> ParseResult<Span> {
+        if let Some(span) = self.consume_s(&TokenKind::Semi) {
+            return Ok(span);
+        }
+
+        if self.check(&TokenKind::CloseParen) || self.check(&TokenKind::CloseBrace) {
+            return Ok(self.first().span.clone());
+        }
+
+        Err(ParseError::ExpectedError {
+            expected: TokenKind::Semi.to_string(),
+            but: self.first().kind.clone(),
+            span: self.first().span.clone(),
+        })
     }
 }

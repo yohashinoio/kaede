@@ -1,5 +1,6 @@
-use kaede_ast::Top;
+use kaede_ast::{Top, TopEnum};
 use kaede_lex::token::{Token, TokenKind};
+use kaede_location::{spanned, Location, Span};
 
 use crate::{error::ParseResult, Parser};
 
@@ -12,13 +13,13 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         };
 
         match token.kind {
-            TokenKind::Function => Ok(Some(self.func()?)),
+            TokenKind::Function => Ok(Some(self.func(token.span.start)?)),
 
             t => unreachable!("{:?}", t),
         }
     }
 
-    fn func(&mut self) -> ParseResult<Top> {
+    fn func(&mut self, start: Location) -> ParseResult<Top> {
         let name = self.ident()?;
 
         self.consume(&TokenKind::OpenParen)?;
@@ -26,8 +27,14 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         let body = self.stmt_list()?;
 
-        self.consume_semi()?;
+        let finish_span = self.consume_semi_s()?;
 
-        Ok(Top::Function { name, body })
+        Ok(spanned(
+            TopEnum::Function {
+                name: name.val,
+                body,
+            },
+            Span::new(start, finish_span.finish),
+        ))
     }
 }

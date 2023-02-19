@@ -1,4 +1,5 @@
 use inkwell::{context::Context, values::IntValue};
+use kaede_location::{spanned, Span, Spanned};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum BinOpKind {
@@ -36,19 +37,27 @@ pub struct BinOp {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum Expr {
+pub enum ExprEnum {
     Int(Int),
     BinOp(BinOp),
     Ident(String),
     FuncCall(FuncCall),
 }
 
-impl Expr {
-    pub fn new_i32(n: i32) -> Self {
-        Expr::Int(Int::I32(n))
-    }
-
-    pub fn new_binop(lhs: Box<Expr>, op: BinOpKind, rhs: Box<Expr>) -> Self {
-        Expr::BinOp(BinOp { lhs, op, rhs })
-    }
+pub fn new_i32(n: i32, span: Span) -> Expr {
+    spanned(ExprEnum::Int(Int::I32(n)), span)
 }
+
+pub fn new_ident(name: String, span: Span) -> Expr {
+    spanned(ExprEnum::Ident(name), span)
+}
+
+pub fn new_func_call(name: String, span: Span) -> Expr {
+    spanned(ExprEnum::FuncCall(FuncCall { name }), span)
+}
+
+pub fn new_binop(lhs: Box<Expr>, op: BinOpKind, rhs: Box<Expr>, span: Span) -> Expr {
+    spanned(ExprEnum::BinOp(BinOp { lhs, op, rhs }), span)
+}
+
+pub type Expr = Spanned<ExprEnum>;

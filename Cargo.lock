@@ -170,6 +170,7 @@ name = "kaede_ast"
 version = "0.1.0"
 dependencies = [
  "inkwell",
+ "kaede_location",
  "kaede_type",
 ]
 
@@ -181,7 +182,9 @@ dependencies = [
  "inkwell",
  "kaede_ast",
  "kaede_lex",
+ "kaede_location",
  "kaede_parse",
+ "thiserror",
 ]
 
 [[package]]
