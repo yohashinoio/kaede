@@ -14,3 +14,4 @@ kaede_ast = { path = "../kaede_ast" }
 kaede_lex = { path = "../kaede_lex" }
 kaede_location = { path = "../kaede_location" }
 kaede_parse = { path = "../kaede_parse" }
+kaede_type = { path = "../kaede_type" }

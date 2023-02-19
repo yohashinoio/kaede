@@ -1,3 +1,4 @@
+use inkwell::types::BasicTypeEnum;
 use kaede_ast::stmt::{Let, Return, Stmt, StmtEnum, StmtList};
 
 use crate::{error::CodegenResult, expr::build_expression, CodeGen, Symbols};
@@ -50,10 +51,9 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
 
     fn return_(&mut self, node: Return) -> CodegenResult<()> {
         match node.0 {
-            Some(val) => self
-                .ctx
-                .builder
-                .build_return(Some(&build_expression(self.ctx, val, self.scope)?)),
+            Some(val) => self.ctx.builder.build_return(Some(
+                &build_expression(self.ctx, val, self.scope)?.get_value(),
+            )),
 
             None => self.ctx.builder.build_return(None),
         };
@@ -62,20 +62,21 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
     }
 
     fn let_(&mut self, node: Let) -> CodegenResult<()> {
-        let alloca = self
-            .ctx
-            .builder
-            .build_alloca(node.ty.as_llvm_type(self.ctx.context), &node.name);
+        let ty: BasicTypeEnum<'ctx> = node.ty.as_llvm_type(self.ctx.context);
+
+        let alloca = self.ctx.builder.build_alloca(ty, &node.name);
 
         if let Some(init) = node.init {
+            let init = build_expression(self.ctx, init, self.scope)?;
+
             // Initialization
-            self.ctx
-                .builder
-                .build_store(alloca, build_expression(self.ctx, init, self.scope)?);
+            self.ctx.builder.build_store(alloca, init.get_value());
+
+            self.scope.insert(node.name, (alloca, init.get_type()));
+
+            return Ok(());
         }
 
-        self.scope.insert(node.name, alloca);
-
-        Ok(())
+        unreachable!();
     }
 }

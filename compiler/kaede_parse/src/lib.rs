@@ -2,6 +2,7 @@ mod error;
 mod expr;
 mod stmt;
 mod top;
+mod ty;
 
 pub fn parse(tokens: impl Iterator<Item = Token>) -> ParseResult<TranslationUnit> {
     let mut parser = Parser::new(tokens.peekable());

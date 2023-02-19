@@ -1,19 +1,23 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc};
 
 use error::{CodegenError, CodegenResult};
 use inkwell::{builder::Builder, context::Context, module::Module, values::PointerValue};
 use kaede_ast::TranslationUnit;
+use kaede_type::TypeEnum;
 use top::build_top;
 
 mod error;
 mod expr;
 mod stmt;
 mod top;
+mod value;
 
 #[cfg(test)]
 mod tests;
 
-pub type Symbols<'ctx> = HashMap<String, PointerValue<'ctx>>;
+pub type Symbols<'ctx> = HashMap<String, (PointerValue<'ctx>, Rc<TypeEnum>)>;
+
+pub type ReturnTypeTable = HashMap<String, Option<Rc<TypeEnum>>>;
 
 pub fn codegen<'ctx, 'module>(
     context: &'ctx Context,
@@ -31,6 +35,8 @@ pub struct CodeGen<'ctx, 'module> {
 
     pub module: &'module Module<'ctx>,
     pub builder: Builder<'ctx>,
+
+    pub return_ty_table: ReturnTypeTable,
 }
 
 impl<'ctx, 'module> CodeGen<'ctx, 'module> {
@@ -39,10 +45,11 @@ impl<'ctx, 'module> CodeGen<'ctx, 'module> {
             context,
             module,
             builder: context.create_builder(),
+            return_ty_table: ReturnTypeTable::new(),
         }
     }
 
-    pub fn generate(&self, ast: TranslationUnit) -> CodegenResult<()> {
+    pub fn generate(&mut self, ast: TranslationUnit) -> CodegenResult<()> {
         for top in ast {
             build_top(self, top)?;
         }

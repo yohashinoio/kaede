@@ -1,5 +1,6 @@
 use inkwell::{context::Context, values::IntValue};
 use kaede_location::{spanned, Span, Spanned};
+use kaede_type::{FundamentalTypeKind, TypeEnum};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum BinOpKind {
@@ -25,6 +26,12 @@ impl Int {
 
         match self {
             I32(n) => context.i32_type().const_int(*n as u64, false),
+        }
+    }
+
+    pub fn get_type(&self) -> TypeEnum {
+        match self {
+            Int::I32(_) => TypeEnum::new_fundamental_type(FundamentalTypeKind::I32),
         }
     }
 }

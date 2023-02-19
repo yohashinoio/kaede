@@ -5,10 +5,10 @@ use kaede_parse::parse;
 
 use super::*;
 
-type TestFunc = unsafe extern "C" fn() -> u64;
+type TestFunc = unsafe extern "C" fn() -> i32;
 
 // Expects that a test function of type TestFunc is defined in the module.
-fn jit_compile_test(module: &Module) -> u64 {
+fn jit_compile_test(module: &Module) -> i32 {
     let ee = module
         .create_jit_execution_engine(OptimizationLevel::Default)
         .unwrap();
@@ -16,7 +16,7 @@ fn jit_compile_test(module: &Module) -> u64 {
     unsafe { ee.get_function::<TestFunc>("test").unwrap().call() }
 }
 
-fn cg_test(program: &str) -> anyhow::Result<u64> {
+fn cg_test(program: &str) -> anyhow::Result<i32> {
     let context = Context::create();
     let module = context.create_module("test");
 
@@ -27,81 +27,88 @@ fn cg_test(program: &str) -> anyhow::Result<u64> {
 
 #[test]
 fn add() -> anyhow::Result<()> {
-    assert_eq!(cg_test("fn test() { return 48 + 10 }")?, 58);
+    assert_eq!(cg_test("fn test() i32 { return 48 + 10 }")?, 58);
 
     Ok(())
 }
 
 #[test]
 fn sub() -> anyhow::Result<()> {
-    assert_eq!(cg_test("fn test() { return 68 - 10 }")?, 58);
+    assert_eq!(cg_test("fn test() i32 { return 68 - 10 }")?, 58);
 
     Ok(())
 }
 
 #[test]
 fn mul() -> anyhow::Result<()> {
-    assert_eq!(cg_test("fn test() { return 48 * 10 }")?, 480);
+    assert_eq!(cg_test("fn test() i32 { return 48 * 10 }")?, 480);
 
     Ok(())
 }
 
 #[test]
 fn div() -> anyhow::Result<()> {
-    assert_eq!(cg_test("fn test() { return 580 / 10 }")?, 58);
+    assert_eq!(cg_test("fn test() i32 { return 580 / 10 }")?, 58);
 
     Ok(())
 }
 
 #[test]
 fn mul_precedence() -> anyhow::Result<()> {
-    assert_eq!(cg_test("fn test() { return 48 + 10 * 2 }")?, 68);
+    assert_eq!(cg_test("fn test() i32 { return 48 + 10 * 2 }")?, 68);
 
     Ok(())
 }
 
 #[test]
 fn div_precedence() -> anyhow::Result<()> {
-    assert_eq!(cg_test("fn test() { return 48 + 20 / 2 }")?, 58);
+    assert_eq!(cg_test("fn test() i32 { return 48 + 20 / 2 }")?, 58);
 
     Ok(())
 }
 
 #[test]
 fn four_arithmetic_precedence() -> anyhow::Result<()> {
-    assert_eq!(cg_test("fn test() { return (48 -10/ 2) + 58 * 2 }")?, 159);
+    assert_eq!(
+        cg_test("fn test() i32 { return (48 -10/ 2) + 58 * 2 }")?,
+        159
+    );
 
     Ok(())
 }
 
 #[test]
 fn unary_plus_and_minus() -> anyhow::Result<()> {
-    assert_eq!(cg_test("fn test() { return +(-(-58)) }")?, 58);
+    assert_eq!(cg_test("fn test() i32 { return +(-(-58)) }")?, 58);
 
     Ok(())
 }
 
-// TODO
-// #[test]
-// fn empty_function() -> anyhow::Result<()> {
-//     let program = r"fn f() {}
-//     fn test() { return 58 }";
+#[test]
+fn empty_function() -> anyhow::Result<()> {
+    let program = r"fn f() {
+    }
 
-//     assert_eq!(cg_test(program)?, 58);
+    fn test() i32 {
+        f()
+        return 58
+    }";
 
-//     Ok(())
-// }
+    assert_eq!(cg_test(program)?, 58);
+
+    Ok(())
+}
 
 #[test]
 fn return_stmt() -> anyhow::Result<()> {
-    assert_eq!(cg_test("fn test() { return (48*2 +10 * 2) / 2}")?, 58);
+    assert_eq!(cg_test("fn test() i32 { return (48*2 +10 * 2) / 2}")?, 58);
 
     Ok(())
 }
 
 #[test]
 fn variable() -> anyhow::Result<()> {
-    let program = r"fn test() {
+    let program = r"fn test() i32 {
         let yoha = 48
         let io = 10
         return yoha + io
@@ -114,15 +121,15 @@ fn variable() -> anyhow::Result<()> {
 
 #[test]
 fn call_func() -> anyhow::Result<()> {
-    let program = r"fn f1() {
+    let program = r"fn f1() i32 {
         return 48
     }
 
-    fn f2() {
+    fn f2() i32 {
         return 10
     }
 
-    fn test() {
+    fn test() i32 {
         return f1() + f2()
     }";
 

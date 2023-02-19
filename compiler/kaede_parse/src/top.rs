@@ -1,4 +1,4 @@
-use kaede_ast::{Top, TopEnum};
+use kaede_ast::top::{Func, Top, TopEnum};
 use kaede_lex::token::{Token, TokenKind};
 use kaede_location::{spanned, Location, Span};
 
@@ -25,15 +25,24 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         self.consume(&TokenKind::OpenParen)?;
         self.consume(&TokenKind::CloseParen)?;
 
+        let return_ty = {
+            if self.check(&TokenKind::OpenBrace) {
+                None
+            } else {
+                Some(self.ty()?)
+            }
+        };
+
         let body = self.stmt_list()?;
 
         let finish_span = self.consume_semi_s()?;
 
         Ok(spanned(
-            TopEnum::Function {
+            TopEnum::Func(Func {
                 name: name.val,
                 body,
-            },
+                return_ty,
+            }),
             Span::new(start, finish_span.finish),
         ))
     }

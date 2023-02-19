@@ -184,6 +184,7 @@ dependencies = [
  "kaede_lex",
  "kaede_location",
  "kaede_parse",
+ "kaede_type",
  "thiserror",
 ]
 
