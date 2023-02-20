@@ -13,8 +13,8 @@ pub fn build_statement_list(ctx: &CodeGen, list: StmtList) -> CodegenResult<()> 
     Ok(())
 }
 
-pub fn build_statement<'a, 'ctx, 'c>(
-    ctx: &'a CodeGen<'ctx, 'c>,
+pub fn build_statement<'a, 'ctx>(
+    ctx: &'a CodeGen<'ctx, '_>,
     node: Stmt,
     scope: &'a mut Symbols<'ctx>,
 ) -> CodegenResult<()> {

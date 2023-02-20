@@ -19,9 +19,9 @@ pub type Symbols<'ctx> = HashMap<String, (PointerValue<'ctx>, Rc<TypeEnum>)>;
 
 pub type ReturnTypeTable = HashMap<String, Option<Rc<TypeEnum>>>;
 
-pub fn codegen<'ctx, 'module>(
+pub fn codegen<'ctx>(
     context: &'ctx Context,
-    module: &'module Module<'ctx>,
+    module: &Module<'ctx>,
     ast: TranslationUnit,
 ) -> CodegenResult<()> {
     CodeGen::new(context, module).generate(ast)?;

@@ -9,11 +9,11 @@ use inkwell::values::BasicValue;
 use kaede_ast::expr::{BinOp, BinOpKind, Expr, ExprEnum, FuncCall};
 use kaede_location::Span;
 
-pub fn build_expression<'a, 'ctx, 'c>(
-    ctx: &'a CodeGen<'ctx, 'c>,
+pub fn build_expression<'a, 'ctx>(
+    ctx: &'a CodeGen<'ctx, '_>,
     node: Expr,
     scope: &'a Symbols<'ctx>,
-) -> CodegenResult<Value<'a>> {
+) -> CodegenResult<Value<'ctx>> {
     let builder = ExprBuilder::new(ctx, scope);
 
     builder.build(node)
