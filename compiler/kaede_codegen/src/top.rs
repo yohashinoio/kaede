@@ -43,7 +43,7 @@ impl<'a, 'b, 'c> TopBuilder<'a, 'b, 'c> {
 
         self.ctx
             .return_ty_table
-            .insert(node.name, node.return_ty.map(Rc::new));
+            .insert(fn_value, node.return_ty.map(Rc::new));
 
         if node.body.is_empty() {
             self.ctx.builder.build_return(None);

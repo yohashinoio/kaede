@@ -3,6 +3,7 @@ use kaede_ast::stmt::{Let, Return, Stmt, StmtEnum, StmtList};
 
 use crate::{error::CodegenResult, expr::build_expression, CodeGen, Symbols};
 
+/// Create a new scope.
 pub fn build_statement_list(ctx: &CodeGen, list: StmtList) -> CodegenResult<()> {
     let mut scope = Symbols::new();
 
