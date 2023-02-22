@@ -1,5 +1,5 @@
 use kaede_ast::expr::{
-    new_binop, new_func_call, new_i32, new_ident, BinOpKind, Expr, ExprEnum, Int,
+    make_binop, make_func_call, make_i32, make_ident, BinOpKind, Expr, ExprEnum, Int,
 };
 use kaede_lex::token::{Token, TokenKind};
 use kaede_location::{spanned, Spanned};
@@ -20,9 +20,9 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         loop {
             if let Some(s) = self.consume_s(&TokenKind::Add) {
-                node = new_binop(Box::new(node), BinOpKind::Add, Box::new(self.mul()?), s);
+                node = make_binop(Box::new(node), BinOpKind::Add, Box::new(self.mul()?), s);
             } else if let Some(s) = self.consume_s(&TokenKind::Sub) {
-                node = new_binop(Box::new(node), BinOpKind::Sub, Box::new(self.mul()?), s);
+                node = make_binop(Box::new(node), BinOpKind::Sub, Box::new(self.mul()?), s);
             } else {
                 return Ok(node);
             }
@@ -35,9 +35,9 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         loop {
             if let Some(s) = self.consume_s(&TokenKind::Mul) {
-                node = new_binop(Box::new(node), BinOpKind::Mul, Box::new(self.unary()?), s);
+                node = make_binop(Box::new(node), BinOpKind::Mul, Box::new(self.unary()?), s);
             } else if let Some(s) = self.consume_s(&TokenKind::Div) {
-                node = new_binop(Box::new(node), BinOpKind::Div, Box::new(self.unary()?), s);
+                node = make_binop(Box::new(node), BinOpKind::Div, Box::new(self.unary()?), s);
             } else {
                 return Ok(node);
             }
@@ -51,8 +51,8 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
 
         if let Some(s) = self.consume_s(&TokenKind::Sub) {
-            return Ok(new_binop(
-                Box::new(new_i32(0, s.clone())),
+            return Ok(make_binop(
+                Box::new(make_i32(0, s.clone())),
                 BinOpKind::Sub,
                 Box::new(self.primary()?),
                 s,
@@ -75,10 +75,10 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             if self.consume_b(&TokenKind::OpenParen) {
                 self.consume(&TokenKind::CloseParen)?;
 
-                return Ok(new_func_call(ident.val, ident.span));
+                return Ok(make_func_call(ident.val, ident.span));
             }
 
-            return Ok(new_ident(ident.val, ident.span));
+            return Ok(make_ident(ident.val, ident.span));
         }
 
         let int = self.integer()?;

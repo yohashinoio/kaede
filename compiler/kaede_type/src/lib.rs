@@ -3,6 +3,10 @@ use inkwell::{
     types::{BasicType, BasicTypeEnum},
 };
 
+pub fn make_fundamental_type(kind: FundamentalTypeKind) -> TypeEnum {
+    TypeEnum::FundamentalType(FundamentalType { kind })
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum TypeEnum {
     FundamentalType(FundamentalType),
@@ -13,10 +17,6 @@ impl TypeEnum {
         match self {
             TypeEnum::FundamentalType(t) => t.as_llvm_type(context),
         }
-    }
-
-    pub fn new_fundamental_type(kind: FundamentalTypeKind) -> Self {
-        Self::FundamentalType(FundamentalType { kind })
     }
 }
 

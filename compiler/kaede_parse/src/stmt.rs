@@ -2,7 +2,7 @@ use kaede_ast::expr::Expr;
 use kaede_ast::stmt::{Let, Return, Stmt, StmtEnum, StmtList};
 use kaede_lex::token::{Token, TokenKind};
 use kaede_location::{spanned, Span, Spanned};
-use kaede_type::{FundamentalTypeKind, TypeEnum};
+use kaede_type::{make_fundamental_type, FundamentalTypeKind};
 
 use crate::{
     error::{ParseError, ParseResult},
@@ -71,7 +71,6 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             return Ok(spanned(Return(None), span));
         }
 
-        // let (val, val_span) = self.expr()?;
         let expr = self.expr()?;
 
         self.consume_semi()?;
@@ -96,7 +95,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                 Let {
                     name: ident.val,
                     init: Some(init),
-                    ty: TypeEnum::new_fundamental_type(FundamentalTypeKind::I32),
+                    ty: make_fundamental_type(FundamentalTypeKind::I32),
                 },
                 Span::new(span.start, finish_loc),
             ));
@@ -106,7 +105,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             Let {
                 name: ident.val,
                 init: None,
-                ty: TypeEnum::new_fundamental_type(FundamentalTypeKind::I32),
+                ty: make_fundamental_type(FundamentalTypeKind::I32),
             },
             Span::new(span.start, ident.span.finish),
         ))

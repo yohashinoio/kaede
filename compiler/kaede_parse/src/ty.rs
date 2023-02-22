@@ -1,5 +1,5 @@
 use kaede_lex::token::Token;
-use kaede_type::{FundamentalTypeKind, TypeEnum};
+use kaede_type::{make_fundamental_type, FundamentalTypeKind, TypeEnum};
 
 use crate::{
     error::{ParseError, ParseResult},
@@ -14,7 +14,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         let ty = self.ident()?;
 
         match ty.val.as_str() {
-            "i32" => Ok(TypeEnum::new_fundamental_type(I32)),
+            "i32" => Ok(make_fundamental_type(I32)),
 
             _ => Err(ParseError::ExpectedError {
                 expected: ty.val,
