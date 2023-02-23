@@ -1,17 +1,17 @@
 use std::rc::Rc;
 
 use inkwell::values::BasicValueEnum;
-use kaede_type::TypeEnum;
+use kaede_type::Ty;
 
 pub struct Value<'ctx> {
     /// None if void.
     val: Option<BasicValueEnum<'ctx>>,
     /// None if void type.
-    ty: Option<Rc<TypeEnum>>,
+    ty: Option<Rc<Ty>>,
 }
 
 impl<'ctx> Value<'ctx> {
-    pub fn new(val: BasicValueEnum<'ctx>, ty: Rc<TypeEnum>) -> Self {
+    pub fn new(val: BasicValueEnum<'ctx>, ty: Rc<Ty>) -> Self {
         Self {
             val: Some(val),
             ty: Some(ty),
@@ -29,7 +29,7 @@ impl<'ctx> Value<'ctx> {
         self.val.unwrap()
     }
 
-    pub fn get_type(&self) -> Rc<TypeEnum> {
+    pub fn get_type(&self) -> Rc<Ty> {
         self.ty.as_ref().unwrap().clone()
     }
 }

@@ -1,6 +1,6 @@
 use kaede_ast::top::{Func, Params, Top, TopEnum};
 use kaede_lex::token::{Token, TokenKind};
-use kaede_location::{spanned, Location, Span};
+use kaede_location::{Location, Span, Spanned};
 
 use crate::{error::ParseResult, Parser};
 
@@ -40,7 +40,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         let finish_span = self.consume_semi_s()?;
 
-        Ok(spanned(
+        Ok(Spanned::new(
             TopEnum::Func(Func {
                 name: name.val,
                 params,

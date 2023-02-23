@@ -1,8 +1,8 @@
 use kaede_ast::expr::Expr;
 use kaede_ast::stmt::{Let, Return, Stmt, StmtEnum, StmtList};
 use kaede_lex::token::{Token, TokenKind};
-use kaede_location::{spanned, Span, Spanned};
-use kaede_type::{make_fundamental_type, FundamentalTypeKind};
+use kaede_location::{Span, Spanned};
+use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability, Ty};
 
 use crate::{
     error::{ParseError, ParseResult},
@@ -35,10 +35,10 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         if self.check(&TokenKind::Return) {
             let r = self.return_()?;
-            result = spanned(StmtEnum::Return(r.val), r.span);
+            result = Spanned::new(StmtEnum::Return(r.val), r.span);
         } else if self.check(&TokenKind::Let) {
             let l = self.let_()?;
-            result = spanned(StmtEnum::Let(l.val), l.span);
+            result = Spanned::new(StmtEnum::Let(l.val), l.span);
         } else {
             match self.expr() {
                 Ok(e) => result = self.expr_stmt(e)?,
@@ -61,28 +61,34 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     fn expr_stmt(&mut self, e: Expr) -> ParseResult<Stmt> {
         let span = e.span.clone();
 
-        Ok(spanned(StmtEnum::Expr(e), span))
+        Ok(Spanned::new(StmtEnum::Expr(e), span))
     }
 
     fn return_(&mut self) -> ParseResult<Spanned<Return>> {
         let span = self.consume_s(&TokenKind::Return).unwrap();
 
         if self.consume_semi_b() {
-            return Ok(spanned(Return(None), span));
+            return Ok(Spanned::new(Return(None), span));
         }
 
         let expr = self.expr()?;
 
         self.consume_semi()?;
 
-        Ok(spanned(
-            Return(Some(spanned(expr.val, expr.span.clone()))),
+        Ok(Spanned::new(
+            Return(Some(Spanned::new(expr.val, expr.span.clone()))),
             Span::new(span.start, expr.span.finish),
         ))
     }
 
     fn let_(&mut self) -> ParseResult<Spanned<Let>> {
         let span = self.consume_s(&TokenKind::Let).unwrap();
+
+        let mutability = if self.consume_b(&TokenKind::Mut) {
+            Mutability::Mut
+        } else {
+            Mutability::Not
+        };
 
         let ident = self.ident()?;
 
@@ -91,21 +97,21 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
             let finish_loc = init.span.finish.clone();
 
-            return Ok(spanned(
+            return Ok(Spanned::new(
                 Let {
                     name: ident.val,
                     init: Some(init),
-                    ty: make_fundamental_type(FundamentalTypeKind::I32),
+                    ty: Ty::new(make_fundamental_type(FundamentalTypeKind::I32), mutability),
                 },
                 Span::new(span.start, finish_loc),
             ));
         }
 
-        Ok(spanned(
+        Ok(Spanned::new(
             Let {
                 name: ident.val,
                 init: None,
-                ty: make_fundamental_type(FundamentalTypeKind::I32),
+                ty: Ty::new(make_fundamental_type(FundamentalTypeKind::I32), mutability),
             },
             Span::new(span.start, ident.span.finish),
         ))

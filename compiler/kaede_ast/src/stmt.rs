@@ -1,5 +1,5 @@
 use kaede_location::Spanned;
-use kaede_type::TypeEnum;
+use kaede_type::Ty;
 
 use crate::expr::Expr;
 
@@ -10,7 +10,7 @@ pub struct Return(pub Option<Expr>);
 pub struct Let {
     pub name: String,
     pub init: Option<Expr>,
-    pub ty: TypeEnum,
+    pub ty: Ty,
 }
 
 #[derive(Debug, PartialEq, Eq)]

@@ -137,3 +137,18 @@ fn call_func() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn fn_params() -> anyhow::Result<()> {
+    let program = r"fn f(n i32) i32 {
+        return n
+    }
+
+    fn test() i32 {
+        return f(58)
+    }";
+
+    assert_eq!(cg_test(program)?, 58);
+
+    Ok(())
+}

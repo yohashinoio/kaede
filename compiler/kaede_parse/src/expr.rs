@@ -2,7 +2,7 @@ use kaede_ast::expr::{
     make_binop, make_func_call, make_i32, make_ident, BinOpKind, Expr, ExprEnum, Int,
 };
 use kaede_lex::token::{Token, TokenKind};
-use kaede_location::{spanned, Spanned};
+use kaede_location::Spanned;
 
 use crate::{
     error::{ParseError, ParseResult},
@@ -82,7 +82,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
 
         let int = self.integer()?;
-        Ok(spanned(ExprEnum::Int(int.val), int.span))
+        Ok(Spanned::new(ExprEnum::Int(int.val), int.span))
     }
 
     pub fn integer(&mut self) -> ParseResult<Spanned<Int>> {
@@ -92,7 +92,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             TokenKind::Int(int_s) => {
                 // Try to convert to i32.
                 match int_s.parse() {
-                    Ok(n) => Ok(spanned(Int::I32(n), token.span)),
+                    Ok(n) => Ok(Spanned::new(Int::I32(n), token.span)),
                     Err(_) => Err(ParseError::OutOfRangeForI32(token.span)),
                 }
             }
@@ -110,7 +110,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         if matches!(self.first().kind, TokenKind::Ident(_)) {
             if let TokenKind::Ident(ident) = self.bump().unwrap().kind {
-                return Ok(spanned(ident, start_span));
+                return Ok(Spanned::new(ident, start_span));
             }
         }
 

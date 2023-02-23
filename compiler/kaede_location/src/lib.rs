@@ -4,8 +4,10 @@ pub struct Spanned<T> {
     pub span: Span,
 }
 
-pub fn spanned<T>(val: T, span: Span) -> Spanned<T> {
-    Spanned { val, span }
+impl<T> Spanned<T> {
+    pub fn new(val: T, span: Span) -> Self {
+        Self { val, span }
+    }
 }
 
 #[derive(Debug, Clone)]

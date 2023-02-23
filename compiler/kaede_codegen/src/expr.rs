@@ -3,16 +3,16 @@ use std::rc::Rc;
 use crate::{
     error::{CodegenError, CodegenResult},
     value::Value,
-    CodeGen, Symbols,
+    CGCtx, SymbolTable,
 };
 use inkwell::values::BasicValue;
 use kaede_ast::expr::{BinOp, BinOpKind, Expr, ExprEnum, FuncCall};
 use kaede_location::Span;
 
 pub fn build_expression<'a, 'ctx>(
-    ctx: &'a CodeGen<'ctx, '_>,
+    ctx: &'a CGCtx<'ctx, '_>,
     node: Expr,
-    scope: &'a Symbols<'ctx>,
+    scope: &'a SymbolTable<'ctx>,
 ) -> CodegenResult<Value<'ctx>> {
     let builder = ExprBuilder::new(ctx, scope);
 
@@ -20,12 +20,12 @@ pub fn build_expression<'a, 'ctx>(
 }
 
 struct ExprBuilder<'a, 'ctx, 'c> {
-    ctx: &'a CodeGen<'ctx, 'c>,
-    scope: &'a Symbols<'ctx>,
+    ctx: &'a CGCtx<'ctx, 'c>,
+    scope: &'a SymbolTable<'ctx>,
 }
 
 impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
-    fn new(ctx: &'a CodeGen<'ctx, 'c>, scope: &'a Symbols<'ctx>) -> Self {
+    fn new(ctx: &'a CGCtx<'ctx, 'c>, scope: &'a SymbolTable<'ctx>) -> Self {
         Self { ctx, scope }
     }
 

@@ -1,6 +1,6 @@
 use inkwell::{context::Context, values::IntValue};
-use kaede_location::{spanned, Span, Spanned};
-use kaede_type::{make_fundamental_type, FundamentalTypeKind, TypeEnum};
+use kaede_location::{Span, Spanned};
+use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability, Ty};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct FuncCall {
@@ -21,14 +21,17 @@ impl Int {
         }
     }
 
-    pub fn get_type(&self) -> TypeEnum {
+    pub fn get_type(&self) -> Ty {
         match self {
-            Int::I32(_) => make_fundamental_type(FundamentalTypeKind::I32),
+            Int::I32(_) => Ty::new(
+                make_fundamental_type(FundamentalTypeKind::I32),
+                Mutability::Not,
+            ),
         }
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Copy)]
 pub enum BinOpKind {
     Add,
     Sub,
@@ -52,19 +55,19 @@ pub enum ExprEnum {
 }
 
 pub fn make_i32(n: i32, span: Span) -> Expr {
-    spanned(ExprEnum::Int(Int::I32(n)), span)
+    Spanned::new(ExprEnum::Int(Int::I32(n)), span)
 }
 
 pub fn make_ident(name: String, span: Span) -> Expr {
-    spanned(ExprEnum::Ident(name), span)
+    Spanned::new(ExprEnum::Ident(name), span)
 }
 
 pub fn make_func_call(name: String, span: Span) -> Expr {
-    spanned(ExprEnum::FuncCall(FuncCall { name }), span)
+    Spanned::new(ExprEnum::FuncCall(FuncCall { name }), span)
 }
 
 pub fn make_binop(lhs: Box<Expr>, op: BinOpKind, rhs: Box<Expr>, span: Span) -> Expr {
-    spanned(ExprEnum::BinOp(BinOp { lhs, op, rhs }), span)
+    Spanned::new(ExprEnum::BinOp(BinOp { lhs, op, rhs }), span)
 }
 
 pub type Expr = Spanned<ExprEnum>;

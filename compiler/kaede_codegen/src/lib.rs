@@ -8,7 +8,7 @@ use inkwell::{
     values::{FunctionValue, PointerValue},
 };
 use kaede_ast::TranslationUnit;
-use kaede_type::TypeEnum;
+use kaede_type::Ty;
 use top::build_top;
 
 mod error;
@@ -20,37 +20,42 @@ mod value;
 #[cfg(test)]
 mod tests;
 
-pub type Symbols<'ctx> = HashMap<String, (PointerValue<'ctx>, Rc<TypeEnum>)>;
+pub type SymbolTable<'ctx> = HashMap<String, (PointerValue<'ctx>, Rc<Ty>)>;
 
-pub type ReturnTypeTable<'ctx> = HashMap<FunctionValue<'ctx>, Option<Rc<TypeEnum>>>;
+pub type ReturnTypeTable<'ctx> = HashMap<FunctionValue<'ctx>, Option<Rc<Ty>>>;
+
+pub type ParamTable<'ctx> = HashMap<FunctionValue<'ctx>, Vec<Rc<Ty>>>;
 
 pub fn codegen<'ctx>(
     context: &'ctx Context,
     module: &Module<'ctx>,
     ast: TranslationUnit,
 ) -> CodegenResult<()> {
-    CodeGen::new(context, module).generate(ast)?;
+    CGCtx::new(context, module).generate(ast)?;
 
     Ok(())
 }
 
-// Instantiate per translation unit.
-pub struct CodeGen<'ctx, 'module> {
+/// Codegen context.
+/// Instantiate per translation unit.
+pub struct CGCtx<'ctx, 'module> {
     pub context: &'ctx Context,
 
     pub module: &'module Module<'ctx>,
     pub builder: Builder<'ctx>,
 
     pub return_ty_table: ReturnTypeTable<'ctx>,
+    pub param_table: ParamTable<'ctx>,
 }
 
-impl<'ctx, 'module> CodeGen<'ctx, 'module> {
+impl<'ctx, 'module> CGCtx<'ctx, 'module> {
     pub fn new(context: &'ctx Context, module: &'module Module<'ctx>) -> Self {
         Self {
             context,
             module,
             builder: context.create_builder(),
             return_ty_table: ReturnTypeTable::new(),
+            param_table: ParamTable::new(),
         }
     }
 

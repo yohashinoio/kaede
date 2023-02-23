@@ -1,23 +1,24 @@
 use inkwell::types::BasicTypeEnum;
 use kaede_ast::stmt::{Let, Return, Stmt, StmtEnum, StmtList};
 
-use crate::{error::CodegenResult, expr::build_expression, CodeGen, Symbols};
+use crate::{error::CodegenResult, expr::build_expression, CGCtx, SymbolTable};
 
-/// Create a new scope.
-pub fn build_statement_list(ctx: &CodeGen, list: StmtList) -> CodegenResult<()> {
-    let mut scope = Symbols::new();
-
+pub fn build_statement_list<'a, 'ctx>(
+    ctx: &'a CGCtx<'ctx, '_>,
+    list: StmtList,
+    scope: &'a mut SymbolTable<'ctx>,
+) -> CodegenResult<()> {
     for stmt in list {
-        build_statement(ctx, stmt, &mut scope)?;
+        build_statement(ctx, stmt, scope)?;
     }
 
     Ok(())
 }
 
 pub fn build_statement<'a, 'ctx>(
-    ctx: &'a CodeGen<'ctx, '_>,
+    ctx: &'a CGCtx<'ctx, '_>,
     node: Stmt,
-    scope: &'a mut Symbols<'ctx>,
+    scope: &'a mut SymbolTable<'ctx>,
 ) -> CodegenResult<()> {
     let mut builder = StmtBuilder::new(ctx, scope);
 
@@ -27,12 +28,12 @@ pub fn build_statement<'a, 'ctx>(
 }
 
 struct StmtBuilder<'a, 'ctx, 'c> {
-    ctx: &'a CodeGen<'ctx, 'c>,
-    scope: &'a mut Symbols<'ctx>,
+    ctx: &'a CGCtx<'ctx, 'c>,
+    scope: &'a mut SymbolTable<'ctx>,
 }
 
 impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
-    fn new(ctx: &'a CodeGen<'ctx, 'c>, scope: &'a mut Symbols<'ctx>) -> Self {
+    fn new(ctx: &'a CGCtx<'ctx, 'c>, scope: &'a mut SymbolTable<'ctx>) -> Self {
         Self { ctx, scope }
     }
 
