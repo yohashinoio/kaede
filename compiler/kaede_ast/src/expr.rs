@@ -1,20 +1,36 @@
 use inkwell::{context::Context, values::IntValue};
-use kaede_location::{Span, Spanned};
+use kaede_location::Span;
 use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability, Ty};
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct FuncCall {
+pub struct Ident {
     pub name: String,
+    pub span: Span,
+}
+
+pub type Args = Vec<Expr>;
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct FnCall {
+    pub name: Ident,
+    pub args: Args,
+    pub span: Span,
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum Int {
+pub struct Int {
+    pub kind: IntKind,
+    pub span: Span,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum IntKind {
     I32(i32),
 }
 
-impl Int {
+impl IntKind {
     pub fn as_llvm_int<'ctx>(&self, context: &'ctx Context) -> IntValue<'ctx> {
-        use Int::*;
+        use IntKind::*;
 
         match self {
             I32(n) => context.i32_type().const_int(*n as u64, false),
@@ -23,7 +39,7 @@ impl Int {
 
     pub fn get_type(&self) -> Ty {
         match self {
-            Int::I32(_) => Ty::new(
+            IntKind::I32(_) => Ty::new(
                 make_fundamental_type(FundamentalTypeKind::I32),
                 Mutability::Not,
             ),
@@ -46,28 +62,22 @@ pub struct BinOp {
     pub rhs: Box<Expr>,
 }
 
+impl BinOp {
+    pub fn new(lhs: Box<Expr>, op: BinOpKind, rhs: Box<Expr>) -> Self {
+        Self { lhs, op, rhs }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
-pub enum ExprEnum {
+pub struct Expr {
+    pub kind: ExprKind,
+    pub span: Span,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum ExprKind {
     Int(Int),
     BinOp(BinOp),
-    Ident(String),
-    FuncCall(FuncCall),
+    Ident(Ident),
+    FnCall(FnCall),
 }
-
-pub fn make_i32(n: i32, span: Span) -> Expr {
-    Spanned::new(ExprEnum::Int(Int::I32(n)), span)
-}
-
-pub fn make_ident(name: String, span: Span) -> Expr {
-    Spanned::new(ExprEnum::Ident(name), span)
-}
-
-pub fn make_func_call(name: String, span: Span) -> Expr {
-    Spanned::new(ExprEnum::FuncCall(FuncCall { name }), span)
-}
-
-pub fn make_binop(lhs: Box<Expr>, op: BinOpKind, rhs: Box<Expr>, span: Span) -> Expr {
-    Spanned::new(ExprEnum::BinOp(BinOp { lhs, op, rhs }), span)
-}
-
-pub type Expr = Spanned<ExprEnum>;

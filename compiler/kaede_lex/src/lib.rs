@@ -47,8 +47,8 @@ fn insert_semicolons(tokens: impl Iterator<Item = Token>) -> Vec<Token> {
                 };
 
                 if can_insert_semicolon(&last.kind) {
-                    let start = last.span.finish.clone();
-                    let mut finish = start.clone();
+                    let start = last.span.finish;
+                    let mut finish = start;
                     finish.increme_column();
 
                     result.push(Token {

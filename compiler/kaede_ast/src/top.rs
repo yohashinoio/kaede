@@ -1,4 +1,4 @@
-use kaede_location::Spanned;
+use kaede_location::Span;
 use kaede_type::Ty;
 
 use crate::stmt::StmtList;
@@ -6,16 +6,19 @@ use crate::stmt::StmtList;
 pub type Params = Vec<(String, Ty)>;
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Func {
+pub struct Fn {
     pub name: String,
     pub params: Params,
     pub body: StmtList,
     pub return_ty: Option<Ty>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum TopEnum {
-    Func(Func),
+pub struct Top {
+    pub kind: TopKind,
+    pub span: Span,
 }
 
-pub type Top = Spanned<TopEnum>;
+#[derive(Debug, PartialEq, Eq)]
+pub enum TopKind {
+    Fn(Fn),
+}

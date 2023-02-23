@@ -6,8 +6,7 @@ use crate::{
     CGCtx, SymbolTable,
 };
 use inkwell::values::BasicValue;
-use kaede_ast::expr::{BinOp, BinOpKind, Expr, ExprEnum, FuncCall};
-use kaede_location::Span;
+use kaede_ast::expr::{BinOp, BinOpKind, Expr, ExprKind, FnCall, Ident};
 
 pub fn build_expression<'a, 'ctx>(
     ctx: &'a CGCtx<'ctx, '_>,
@@ -30,28 +29,31 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
     }
 
     fn build(&self, node: Expr) -> CodegenResult<Value<'ctx>> {
-        Ok(match node.val {
-            ExprEnum::Int(int) => Value::new(
-                int.as_llvm_int(self.ctx.context).as_basic_value_enum(),
-                Rc::new(int.get_type()),
+        Ok(match node.kind {
+            ExprKind::Int(int) => Value::new(
+                int.kind.as_llvm_int(self.ctx.context).as_basic_value_enum(),
+                Rc::new(int.kind.get_type()),
             ),
 
-            ExprEnum::Ident(name) => self.expr_ident(name, node.span)?,
+            ExprKind::Ident(name) => self.expr_ident(name)?,
 
-            ExprEnum::BinOp(binop) => self.binary_op(binop)?,
+            ExprKind::BinOp(binop) => self.binary_op(binop)?,
 
-            ExprEnum::FuncCall(fcall) => self.call_func(fcall, node.span)?,
+            ExprKind::FnCall(fcall) => self.call_fn(fcall)?,
         })
     }
 
-    fn expr_ident(&self, name: String, span: Span) -> CodegenResult<Value<'ctx>> {
-        match self.scope.get(&name) {
+    fn expr_ident(&self, ident: Ident) -> CodegenResult<Value<'ctx>> {
+        match self.scope.get(&ident.name) {
             Some((ptr, ty)) => Ok(Value::new(
                 self.ctx.builder.build_load(*ptr, ""),
                 ty.clone(),
             )),
 
-            None => Err(CodegenError::Undeclared { name, span }),
+            None => Err(CodegenError::Undeclared {
+                name: ident.name,
+                span: ident.span,
+            }),
         }
     }
 
@@ -76,15 +78,32 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
         ))
     }
 
-    fn call_func(&self, node: FuncCall, span: Span) -> CodegenResult<Value<'ctx>> {
-        let func = self.ctx.module.get_function(&node.name);
+    fn call_fn(&self, node: FnCall) -> CodegenResult<Value<'ctx>> {
+        let func = self.ctx.module.get_function(&node.name.name);
+
+        let args = {
+            let mut args = Vec::new();
+
+            for arg in node.args {
+                args.push(self.build(arg)?);
+            }
+
+            args
+        };
 
         match func {
             Some(func) => {
                 let return_value = self
                     .ctx
                     .builder
-                    .build_call(func, &[], "")
+                    .build_call(
+                        func,
+                        args.iter()
+                            .map(|a| a.get_value().into())
+                            .collect::<Vec<_>>()
+                            .as_slice(),
+                        "",
+                    )
                     .try_as_basic_value()
                     .left();
 
@@ -95,8 +114,8 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
             }
 
             None => Err(CodegenError::Undeclared {
-                name: node.name,
-                span,
+                name: node.name.name,
+                span: node.span,
             }),
         }
     }

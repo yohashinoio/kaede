@@ -1,25 +1,33 @@
-use kaede_location::Spanned;
+use kaede_location::Span;
 use kaede_type::Ty;
 
 use crate::expr::Expr;
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Return(pub Option<Expr>);
+pub struct Return {
+    pub val: Option<Expr>,
+    pub span: Span,
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Let {
     pub name: String,
     pub init: Option<Expr>,
     pub ty: Ty,
+    pub span: Span,
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum StmtEnum {
+pub struct Stmt {
+    pub kind: StmtKind,
+    pub span: Span,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum StmtKind {
     Expr(Expr),
     Return(Return),
     Let(Let),
 }
-
-pub type Stmt = Spanned<StmtEnum>;
 
 pub type StmtList = Vec<Stmt>;

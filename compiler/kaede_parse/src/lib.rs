@@ -64,15 +64,18 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         &self.first().kind == tok
     }
 
-    pub fn consume(&mut self, tok: &TokenKind) -> ParseResult<()> {
-        if self.consume_b(tok) {
-            return Ok(());
+    pub fn consume(&mut self, tok: &TokenKind) -> ParseResult<Span> {
+        let span = self.first().span;
+
+        if &self.first().kind == tok {
+            self.bump();
+            return Ok(span);
         }
 
         Err(ParseError::ExpectedError {
             expected: tok.to_string(),
-            but: self.first().kind.clone(),
-            span: self.first().span.clone(),
+            but: self.first().kind.to_string(),
+            span: self.first().span,
         })
     }
 
@@ -86,29 +89,21 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         false
     }
 
-    // Return span.
-    pub fn consume_s(&mut self, tok: &TokenKind) -> Option<Span> {
-        let span = self.first().span.clone();
-
-        if &self.first().kind == tok {
-            self.bump();
-            return Some(span);
-        }
-
-        None
-    }
-
     /// Consumes a semicolon.
     /// ')' or '}', then success. (Following Golang's rules)
-    pub fn consume_semi(&mut self) -> ParseResult<()> {
-        if self.consume_semi_b() {
-            return Ok(());
+    pub fn consume_semi(&mut self) -> ParseResult<Span> {
+        if let Ok(span) = self.consume(&TokenKind::Semi) {
+            return Ok(span);
+        }
+
+        if self.check(&TokenKind::CloseParen) || self.check(&TokenKind::CloseBrace) {
+            return Ok(self.first().span);
         }
 
         Err(ParseError::ExpectedError {
             expected: TokenKind::Semi.to_string(),
-            but: self.first().kind.clone(),
-            span: self.first().span.clone(),
+            but: self.first().kind.to_string(),
+            span: self.first().span,
         })
     }
 
@@ -123,24 +118,5 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
 
         false
-    }
-
-    /// Consumes a semicolon.
-    /// ')' or '}', then success. (Following Golang's rules)
-    /// Return span.
-    pub fn consume_semi_s(&mut self) -> ParseResult<Span> {
-        if let Some(span) = self.consume_s(&TokenKind::Semi) {
-            return Ok(span);
-        }
-
-        if self.check(&TokenKind::CloseParen) || self.check(&TokenKind::CloseBrace) {
-            return Ok(self.first().span.clone());
-        }
-
-        Err(ParseError::ExpectedError {
-            expected: TokenKind::Semi.to_string(),
-            but: self.first().kind.clone(),
-            span: self.first().span.clone(),
-        })
     }
 }

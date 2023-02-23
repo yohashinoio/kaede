@@ -1,6 +1,6 @@
-use kaede_ast::top::{Func, Params, Top, TopEnum};
+use kaede_ast::top::{Fn, Params, Top, TopKind};
 use kaede_lex::token::{Token, TokenKind};
-use kaede_location::{Location, Span, Spanned};
+use kaede_location::{Location, Span};
 
 use crate::{error::ParseResult, Parser};
 
@@ -24,7 +24,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         self.consume(&TokenKind::OpenParen)?;
 
-        let params = self.func_params()?;
+        let params = self.fn_params()?;
 
         self.consume(&TokenKind::CloseParen)?;
 
@@ -38,34 +38,34 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         let body = self.stmt_list()?;
 
-        let finish_span = self.consume_semi_s()?;
+        let finish = self.consume_semi()?.finish;
 
-        Ok(Spanned::new(
-            TopEnum::Func(Func {
-                name: name.val,
+        Ok(Top {
+            kind: TopKind::Fn(Fn {
+                name: name.name,
                 params,
                 body,
                 return_ty,
             }),
-            Span::new(start, finish_span.finish),
-        ))
+            span: Span::new(start, finish),
+        })
     }
 
-    fn func_params(&mut self) -> ParseResult<Params> {
-        let mut result = Params::new();
+    fn fn_params(&mut self) -> ParseResult<Params> {
+        let mut params = Params::new();
+
+        if self.check(&TokenKind::CloseParen) {
+            return Ok(params);
+        }
 
         loop {
-            if self.check(&TokenKind::CloseParen) {
-                break;
-            }
+            params.push((self.ident()?.name, self.ty()?));
 
-            result.push((self.ident()?.val, self.ty()?));
-
-            if self.consume_b(&TokenKind::Comma) {
+            if !self.consume_b(&TokenKind::Comma) {
                 break;
             }
         }
 
-        Ok(result)
+        Ok(params)
     }
 }

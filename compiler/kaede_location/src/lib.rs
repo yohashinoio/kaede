@@ -1,15 +1,3 @@
-#[derive(Debug, PartialEq, Eq)]
-pub struct Spanned<T> {
-    pub val: T,
-    pub span: Span,
-}
-
-impl<T> Spanned<T> {
-    pub fn new(val: T, span: Span) -> Self {
-        Self { val, span }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct SpanBuilder {
     current: Location,
@@ -34,13 +22,13 @@ impl SpanBuilder {
     }
 
     pub fn start(&mut self) {
-        self.start = Some(self.current.clone());
+        self.start = Some(self.current);
     }
 
     pub fn build(&self) -> Span {
         assert!(self.start.is_some());
 
-        Span::new(self.start.clone().unwrap(), self.current.clone())
+        Span::new(self.start.unwrap(), self.current)
     }
 }
 
@@ -50,7 +38,7 @@ impl Default for SpanBuilder {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Span {
     pub start: Location,
     pub finish: Location,
@@ -62,7 +50,7 @@ impl Span {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Location {
     pub line: u32,
     pub column: u32,

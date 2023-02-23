@@ -145,7 +145,37 @@ fn fn_params() -> anyhow::Result<()> {
     }
 
     fn test() i32 {
+        return 58
+    }";
+
+    assert_eq!(cg_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn fn_call_one_arg() -> anyhow::Result<()> {
+    let program = r"fn f(n i32) i32 {
+        return n
+    }
+
+    fn test() i32 {
         return f(58)
+    }";
+
+    assert_eq!(cg_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn fn_call_multi_args() -> anyhow::Result<()> {
+    let program = r"fn f(x i32, y i32) i32 {
+        return x + y
+    }
+
+    fn test() i32 {
+        return f(48, 10)
     }";
 
     assert_eq!(cg_test(program)?, 58);

@@ -1,8 +1,6 @@
-use kaede_ast::expr::{
-    make_binop, make_func_call, make_i32, make_ident, BinOpKind, Expr, ExprEnum, Int,
-};
+use kaede_ast::expr::{Args, BinOp, BinOpKind, Expr, ExprKind, FnCall, Ident, Int, IntKind};
 use kaede_lex::token::{Token, TokenKind};
-use kaede_location::Spanned;
+use kaede_location::Span;
 
 use crate::{
     error::{ParseError, ParseResult},
@@ -19,10 +17,24 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         let mut node = self.mul()?;
 
         loop {
-            if let Some(s) = self.consume_s(&TokenKind::Add) {
-                node = make_binop(Box::new(node), BinOpKind::Add, Box::new(self.mul()?), s);
-            } else if let Some(s) = self.consume_s(&TokenKind::Sub) {
-                node = make_binop(Box::new(node), BinOpKind::Sub, Box::new(self.mul()?), s);
+            if let Ok(span) = self.consume(&TokenKind::Add) {
+                node = Expr {
+                    kind: ExprKind::BinOp(BinOp::new(
+                        Box::new(node),
+                        BinOpKind::Add,
+                        Box::new(self.mul()?),
+                    )),
+                    span,
+                };
+            } else if let Ok(span) = self.consume(&TokenKind::Sub) {
+                node = Expr {
+                    kind: ExprKind::BinOp(BinOp::new(
+                        Box::new(node),
+                        BinOpKind::Sub,
+                        Box::new(self.mul()?),
+                    )),
+                    span,
+                };
             } else {
                 return Ok(node);
             }
@@ -34,10 +46,24 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         let mut node = self.unary()?;
 
         loop {
-            if let Some(s) = self.consume_s(&TokenKind::Mul) {
-                node = make_binop(Box::new(node), BinOpKind::Mul, Box::new(self.unary()?), s);
-            } else if let Some(s) = self.consume_s(&TokenKind::Div) {
-                node = make_binop(Box::new(node), BinOpKind::Div, Box::new(self.unary()?), s);
+            if let Ok(span) = self.consume(&TokenKind::Mul) {
+                node = Expr {
+                    kind: ExprKind::BinOp(BinOp::new(
+                        Box::new(node),
+                        BinOpKind::Mul,
+                        Box::new(self.unary()?),
+                    )),
+                    span,
+                };
+            } else if let Ok(span) = self.consume(&TokenKind::Div) {
+                node = Expr {
+                    kind: ExprKind::BinOp(BinOp::new(
+                        Box::new(node),
+                        BinOpKind::Div,
+                        Box::new(self.unary()?),
+                    )),
+                    span,
+                };
             } else {
                 return Ok(node);
             }
@@ -50,13 +76,22 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             return self.primary();
         }
 
-        if let Some(s) = self.consume_s(&TokenKind::Sub) {
-            return Ok(make_binop(
-                Box::new(make_i32(0, s.clone())),
-                BinOpKind::Sub,
-                Box::new(self.primary()?),
-                s,
-            ));
+        if let Ok(span) = self.consume(&TokenKind::Sub) {
+            // Subtracting a number from 0 inverts the sign.
+            let zero = Box::new(Expr {
+                kind: ExprKind::Int(Int {
+                    kind: IntKind::I32(0),
+                    span,
+                }),
+                span,
+            });
+
+            let primary = self.primary()?;
+
+            return Ok(Expr {
+                span: Span::new(span.start, primary.span.finish),
+                kind: ExprKind::BinOp(BinOp::new(zero, BinOpKind::Sub, Box::new(primary))),
+            });
         }
 
         self.primary()
@@ -72,52 +107,94 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         if let Ok(ident) = self.ident() {
             // Function call
-            if self.consume_b(&TokenKind::OpenParen) {
-                self.consume(&TokenKind::CloseParen)?;
-
-                return Ok(make_func_call(ident.val, ident.span));
+            if self.check(&TokenKind::OpenParen) {
+                return self.fn_call(ident);
             }
 
-            return Ok(make_ident(ident.val, ident.span));
+            // Identifier
+            return Ok(Expr {
+                span: ident.span,
+                kind: ExprKind::Ident(ident),
+            });
         }
 
         let int = self.integer()?;
-        Ok(Spanned::new(ExprEnum::Int(int.val), int.span))
+        Ok(Expr {
+            span: int.span,
+            kind: ExprKind::Int(int),
+        })
     }
 
-    pub fn integer(&mut self) -> ParseResult<Spanned<Int>> {
+    fn fn_call(&mut self, name: Ident) -> ParseResult<Expr> {
+        self.consume(&TokenKind::OpenParen)?;
+
+        let args = self.fn_call_args()?;
+
+        let start = name.span.start;
+        let finish = self.consume(&TokenKind::CloseParen)?.finish;
+        let span = Span::new(start, finish);
+
+        Ok(Expr {
+            kind: ExprKind::FnCall(FnCall { name, args, span }),
+            span,
+        })
+    }
+
+    fn fn_call_args(&mut self) -> ParseResult<Args> {
+        let mut args = Args::new();
+
+        if self.check(&TokenKind::CloseParen) {
+            // No arguments.
+            return Ok(args);
+        }
+
+        loop {
+            args.push(self.expr()?);
+
+            if !self.consume_b(&TokenKind::Comma) {
+                break;
+            }
+        }
+
+        Ok(args)
+    }
+
+    pub fn integer(&mut self) -> ParseResult<Int> {
         let token = self.bump().unwrap();
 
         match token.kind {
             TokenKind::Int(int_s) => {
                 // Try to convert to i32.
                 match int_s.parse() {
-                    Ok(n) => Ok(Spanned::new(Int::I32(n), token.span)),
+                    Ok(n) => Ok(Int {
+                        kind: IntKind::I32(n),
+                        span: token.span,
+                    }),
                     Err(_) => Err(ParseError::OutOfRangeForI32(token.span)),
                 }
             }
 
             _ => Err(ParseError::ExpectedError {
                 expected: "integer".to_string(),
-                but: token.kind,
+                but: token.kind.to_string(),
                 span: token.span,
             }),
         }
     }
 
-    pub fn ident(&mut self) -> ParseResult<Spanned<String>> {
-        let start_span = self.first().span.clone();
+    pub fn ident(&mut self) -> ParseResult<Ident> {
+        let span = self.first().span;
 
         if matches!(self.first().kind, TokenKind::Ident(_)) {
             if let TokenKind::Ident(ident) = self.bump().unwrap().kind {
-                return Ok(Spanned::new(ident, start_span));
+                return Ok(Ident { name: ident, span });
             }
         }
 
         Err(ParseError::ExpectedError {
             expected: "identifier".to_string(),
-            but: self.first().kind.clone(),
-            span: self.first().span.clone(),
+            but: self.first().kind.to_string(),
+            span: self.first().span,
         })
     }
 }

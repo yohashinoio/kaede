@@ -1,5 +1,5 @@
 use inkwell::types::BasicTypeEnum;
-use kaede_ast::stmt::{Let, Return, Stmt, StmtEnum, StmtList};
+use kaede_ast::stmt::{Let, Return, Stmt, StmtKind, StmtList};
 
 use crate::{error::CodegenResult, expr::build_expression, CGCtx, SymbolTable};
 
@@ -38,21 +38,21 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
     }
 
     fn build(&mut self, stmt: Stmt) -> CodegenResult<()> {
-        match stmt.val {
-            StmtEnum::Expr(e) => {
+        match stmt.kind {
+            StmtKind::Expr(e) => {
                 build_expression(self.ctx, e, self.scope)?;
             }
 
-            StmtEnum::Return(node) => self.return_(node)?,
+            StmtKind::Return(node) => self.return_(node)?,
 
-            StmtEnum::Let(node) => self.let_(node)?,
+            StmtKind::Let(node) => self.let_(node)?,
         }
 
         Ok(())
     }
 
     fn return_(&mut self, node: Return) -> CodegenResult<()> {
-        match node.0 {
+        match node.val {
             Some(val) => self.ctx.builder.build_return(Some(
                 &build_expression(self.ctx, val, self.scope)?.get_value(),
             )),

@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use inkwell::{types::BasicType, values::FunctionValue};
-use kaede_ast::top::{Func, Top, TopEnum};
+use kaede_ast::top::{Fn, Top, TopKind};
 use kaede_type::Ty;
 
 use crate::{error::CodegenResult, stmt::build_statement_list, CGCtx, SymbolTable};
@@ -24,14 +24,14 @@ impl<'a, 'ctx, 'c> TopBuilder<'a, 'ctx, 'c> {
     }
 
     fn build(&mut self, node: Top) -> CodegenResult<()> {
-        match node.val {
-            TopEnum::Func(func) => self.func(func)?,
+        match node.kind {
+            TopKind::Fn(func) => self.func(func)?,
         }
 
         Ok(())
     }
 
-    fn func(&mut self, node: Func) -> CodegenResult<()> {
+    fn func(&mut self, node: Fn) -> CodegenResult<()> {
         let param_llvm_tys = node
             .params
             .iter()
