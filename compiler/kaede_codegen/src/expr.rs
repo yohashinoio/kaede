@@ -5,8 +5,9 @@ use crate::{
     value::Value,
     CGCtx, SymbolTable,
 };
-use inkwell::values::BasicValue;
-use kaede_ast::expr::{BinOp, BinOpKind, Expr, ExprKind, FnCall, Ident};
+use inkwell::{values::BasicValue, IntPredicate};
+use kaede_ast::expr::{Binary, BinaryKind, Expr, ExprKind, FnCall, Ident};
+use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability};
 
 pub fn build_expression<'a, 'ctx>(
     ctx: &'a CGCtx<'ctx, '_>,
@@ -60,8 +61,8 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
         }
     }
 
-    fn binary_op(&self, node: BinOp) -> CodegenResult<Value<'ctx>> {
-        use BinOpKind::*;
+    fn binary_op(&self, node: Binary) -> CodegenResult<Value<'ctx>> {
+        use BinaryKind::*;
 
         let lhs = self.build(*node.lhs)?;
         let rhs = self.build(*node.rhs)?;
@@ -69,16 +70,50 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
         let lhs_val = lhs.get_value().into_int_value();
         let rhs_val = rhs.get_value().into_int_value();
 
-        Ok(Value::new(
-            match node.op {
-                Add => self.ctx.builder.build_int_add(lhs_val, rhs_val, ""),
-                Sub => self.ctx.builder.build_int_sub(lhs_val, rhs_val, ""),
-                Mul => self.ctx.builder.build_int_mul(lhs_val, rhs_val, ""),
-                Div => self.ctx.builder.build_int_signed_div(lhs_val, rhs_val, ""), // TODO: unsigned
-            }
-            .as_basic_value_enum(),
-            lhs.get_type(),
-        ))
+        Ok(match node.op {
+            Add => Value::new(
+                self.ctx
+                    .builder
+                    .build_int_add(lhs_val, rhs_val, "")
+                    .as_basic_value_enum(),
+                lhs.get_type(),
+            ),
+
+            Sub => Value::new(
+                self.ctx
+                    .builder
+                    .build_int_sub(lhs_val, rhs_val, "")
+                    .as_basic_value_enum(),
+                lhs.get_type(),
+            ),
+
+            Mul => Value::new(
+                self.ctx
+                    .builder
+                    .build_int_mul(lhs_val, rhs_val, "")
+                    .as_basic_value_enum(),
+                lhs.get_type(),
+            ),
+
+            Div => Value::new(
+                self.ctx
+                    .builder
+                    .build_int_signed_div(lhs_val, rhs_val, "")
+                    .as_basic_value_enum(),
+                lhs.get_type(),
+            ), // TODO: unsigned
+
+            Eq => Value::new(
+                self.ctx
+                    .builder
+                    .build_int_compare(IntPredicate::EQ, lhs_val, rhs_val, "")
+                    .as_basic_value_enum(),
+                Rc::new(make_fundamental_type(
+                    FundamentalTypeKind::Bool,
+                    Mutability::Not,
+                )),
+            ),
+        })
     }
 
     fn call_fn(&self, node: FnCall) -> CodegenResult<Value<'ctx>> {

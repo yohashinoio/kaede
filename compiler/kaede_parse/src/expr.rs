@@ -1,4 +1,4 @@
-use kaede_ast::expr::{Args, BinOp, BinOpKind, Expr, ExprKind, FnCall, Ident, Int, IntKind};
+use kaede_ast::expr::{Args, Binary, BinaryKind, Expr, ExprKind, FnCall, Ident, Int, IntKind};
 use kaede_lex::token::{Token, TokenKind};
 use kaede_location::Span;
 
@@ -19,18 +19,18 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         loop {
             if let Ok(span) = self.consume(&TokenKind::Add) {
                 node = Expr {
-                    kind: ExprKind::BinOp(BinOp::new(
+                    kind: ExprKind::BinOp(Binary::new(
                         Box::new(node),
-                        BinOpKind::Add,
+                        BinaryKind::Add,
                         Box::new(self.mul()?),
                     )),
                     span,
                 };
             } else if let Ok(span) = self.consume(&TokenKind::Sub) {
                 node = Expr {
-                    kind: ExprKind::BinOp(BinOp::new(
+                    kind: ExprKind::BinOp(Binary::new(
                         Box::new(node),
-                        BinOpKind::Sub,
+                        BinaryKind::Sub,
                         Box::new(self.mul()?),
                     )),
                     span,
@@ -43,23 +43,43 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
     /// Same precedence of multiplication
     fn mul(&mut self) -> ParseResult<Expr> {
-        let mut node = self.unary()?;
+        let mut node = self.equal()?;
 
         loop {
             if let Ok(span) = self.consume(&TokenKind::Mul) {
                 node = Expr {
-                    kind: ExprKind::BinOp(BinOp::new(
+                    kind: ExprKind::BinOp(Binary::new(
                         Box::new(node),
-                        BinOpKind::Mul,
-                        Box::new(self.unary()?),
+                        BinaryKind::Mul,
+                        Box::new(self.equal()?),
                     )),
                     span,
                 };
             } else if let Ok(span) = self.consume(&TokenKind::Div) {
                 node = Expr {
-                    kind: ExprKind::BinOp(BinOp::new(
+                    kind: ExprKind::BinOp(Binary::new(
                         Box::new(node),
-                        BinOpKind::Div,
+                        BinaryKind::Div,
+                        Box::new(self.equal()?),
+                    )),
+                    span,
+                };
+            } else {
+                return Ok(node);
+            }
+        }
+    }
+
+    /// Same precedence of equal
+    fn equal(&mut self) -> ParseResult<Expr> {
+        let mut node = self.unary()?;
+
+        loop {
+            if let Ok(span) = self.consume(&TokenKind::Eq) {
+                node = Expr {
+                    kind: ExprKind::BinOp(Binary::new(
+                        Box::new(node),
+                        BinaryKind::Eq,
                         Box::new(self.unary()?),
                     )),
                     span,
@@ -90,7 +110,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
             return Ok(Expr {
                 span: Span::new(span.start, primary.span.finish),
-                kind: ExprKind::BinOp(BinOp::new(zero, BinOpKind::Sub, Box::new(primary))),
+                kind: ExprKind::BinOp(Binary::new(zero, BinaryKind::Sub, Box::new(primary))),
             });
         }
 

@@ -39,31 +39,29 @@ impl IntKind {
 
     pub fn get_type(&self) -> Ty {
         match self {
-            IntKind::I32(_) => Ty::new(
-                make_fundamental_type(FundamentalTypeKind::I32),
-                Mutability::Not,
-            ),
+            IntKind::I32(_) => make_fundamental_type(FundamentalTypeKind::I32, Mutability::Not),
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Copy)]
-pub enum BinOpKind {
+pub enum BinaryKind {
     Add,
     Sub,
     Mul,
     Div,
+    Eq,
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct BinOp {
+pub struct Binary {
     pub lhs: Box<Expr>,
-    pub op: BinOpKind,
+    pub op: BinaryKind,
     pub rhs: Box<Expr>,
 }
 
-impl BinOp {
-    pub fn new(lhs: Box<Expr>, op: BinOpKind, rhs: Box<Expr>) -> Self {
+impl Binary {
+    pub fn new(lhs: Box<Expr>, op: BinaryKind, rhs: Box<Expr>) -> Self {
         Self { lhs, op, rhs }
     }
 }
@@ -77,7 +75,7 @@ pub struct Expr {
 #[derive(Debug, PartialEq, Eq)]
 pub enum ExprKind {
     Int(Int),
-    BinOp(BinOp),
+    BinOp(Binary),
     Ident(Ident),
     FnCall(FnCall),
 }

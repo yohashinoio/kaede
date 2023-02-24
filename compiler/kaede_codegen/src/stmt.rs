@@ -1,5 +1,4 @@
-use inkwell::types::BasicTypeEnum;
-use kaede_ast::stmt::{Block, Let, Return, Stmt, StmtKind};
+use kaede_ast::stmt::{Block, If, Let, Return, Stmt, StmtKind};
 
 use crate::{error::CodegenResult, expr::build_expression, CGCtx, SymbolTable};
 
@@ -48,10 +47,14 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
 
             StmtKind::Let(node) => self.let_(node)?,
 
-            StmtKind::If(_node) => unimplemented!(),
+            StmtKind::If(node) => self.if_(node)?,
         }
 
         Ok(())
+    }
+
+    fn if_(&mut self, _node: If) -> CodegenResult<()> {
+        unimplemented!()
     }
 
     fn return_(&mut self, node: Return) -> CodegenResult<()> {
@@ -67,9 +70,7 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
     }
 
     fn let_(&mut self, node: Let) -> CodegenResult<()> {
-        let ty: BasicTypeEnum<'ctx> = node.ty.as_llvm_type(self.ctx.context);
-
-        let alloca = self.ctx.builder.build_alloca(ty, &node.name);
+        let alloca = self.ctx.create_entry_block_alloca(&node.name, &node.ty);
 
         if let Some(init) = node.init {
             let init = build_expression(self.ctx, init, self.scope)?;

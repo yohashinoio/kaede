@@ -4,7 +4,7 @@ use kaede_ast::{
 };
 use kaede_lex::token::{Token, TokenKind};
 use kaede_location::Span;
-use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability, Ty};
+use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability};
 
 use crate::{
     error::{ParseError, ParseResult},
@@ -147,7 +147,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         let ident = self.ident()?;
 
-        if self.consume_b(&TokenKind::Eq) {
+        if self.consume_b(&TokenKind::Assign) {
             let init = self.expr()?;
 
             let finish = init.span.finish;
@@ -155,7 +155,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             return Ok(Let {
                 name: ident.name,
                 init: Some(init),
-                ty: Ty::new(make_fundamental_type(FundamentalTypeKind::I32), mutability),
+                ty: make_fundamental_type(FundamentalTypeKind::I32, mutability),
                 span: Span::new(start, finish),
             });
         }
@@ -163,7 +163,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         Ok(Let {
             name: ident.name,
             init: None,
-            ty: Ty::new(make_fundamental_type(FundamentalTypeKind::I32), mutability),
+            ty: make_fundamental_type(FundamentalTypeKind::I32, mutability),
             span: Span::new(start, ident.span.finish),
         })
     }

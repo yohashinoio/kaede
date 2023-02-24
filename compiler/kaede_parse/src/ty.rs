@@ -11,7 +11,8 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         let ty = self.ident()?;
 
         match ty.name.as_str() {
-            "i32" => Ok(Ty::new(make_fundamental_type(I32), Mutability::Not)),
+            "i32" => Ok(make_fundamental_type(I32, Mutability::Not)),
+            "bool" => Ok(make_fundamental_type(Bool, Mutability::Not)),
 
             _ => unimplemented!(),
         }

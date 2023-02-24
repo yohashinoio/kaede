@@ -159,7 +159,16 @@ impl Cursor<'_> {
             '}' => self.create_token(TokenKind::CloseBrace),
             ',' => self.create_token(TokenKind::Comma),
             ';' => self.create_token(TokenKind::Semi),
-            '=' => self.create_token(TokenKind::Eq),
+            '=' => {
+                if self.first() == '=' {
+                    // ==
+                    self.bump();
+                    self.create_token(TokenKind::Eq)
+                } else {
+                    // =
+                    self.create_token(TokenKind::Assign)
+                }
+            }
 
             // Operators
             '+' => self.create_token(TokenKind::Add),

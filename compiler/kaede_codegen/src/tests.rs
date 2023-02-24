@@ -186,14 +186,14 @@ fn fn_call_multi_args() -> anyhow::Result<()> {
 #[test]
 fn if_statement() -> anyhow::Result<()> {
     let program = r"fn test() i32 {
-        if 48 + 10 {
+        if 48 == 10 {
             return 48
         } else if
-        4810 {
-            return 10
+        58 == 58 {
+            return 58
         } else
         {
-            return 58
+            return 10
         }
 
         return 123

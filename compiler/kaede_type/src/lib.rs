@@ -42,8 +42,17 @@ impl Mutability {
     }
 }
 
-pub fn make_fundamental_type(kind: FundamentalTypeKind) -> TyEnum {
-    TyEnum::FundamentalType(FundamentalType { kind })
+#[derive(Debug, PartialEq, Eq)]
+pub enum FundamentalTypeKind {
+    I32,
+    Bool,
+}
+
+pub fn make_fundamental_type(kind: FundamentalTypeKind, mutability: Mutability) -> Ty {
+    Ty {
+        ty: TyEnum::FundamentalType(FundamentalType { kind }),
+        mutability,
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -63,12 +72,6 @@ impl TyEnum {
 trait Type {
     fn as_llvm_type<'ctx>(&self, context: &'ctx Context) -> BasicTypeEnum<'ctx>;
 }
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum FundamentalTypeKind {
-    I32,
-}
-
 #[derive(Debug, PartialEq, Eq)]
 pub struct FundamentalType {
     kind: FundamentalTypeKind,
@@ -80,6 +83,8 @@ impl Type for FundamentalType {
 
         match self.kind {
             I32 => context.i32_type().as_basic_type_enum(),
+
+            Bool => context.bool_type().as_basic_type_enum(),
         }
     }
 }

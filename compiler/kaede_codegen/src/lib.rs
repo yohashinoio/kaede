@@ -31,7 +31,7 @@ pub fn codegen<'ctx>(
     module: &Module<'ctx>,
     ast: TranslationUnit,
 ) -> CodegenResult<()> {
-    CGCtx::new(context, module).generate(ast)?;
+    CGCtx::new(context, module).codegen(ast)?;
 
     Ok(())
 }
@@ -59,7 +59,28 @@ impl<'ctx, 'module> CGCtx<'ctx, 'module> {
         }
     }
 
-    pub fn generate(&mut self, ast: TranslationUnit) -> CodegenResult<()> {
+    /// Creates a new stack allocation instruction in the entry block of the function.
+    fn create_entry_block_alloca(&self, name: &str, ty: &Ty) -> PointerValue<'ctx> {
+        let builder = self.context.create_builder();
+
+        let entry = self
+            .builder
+            .get_insert_block()
+            .unwrap()
+            .get_parent()
+            .unwrap()
+            .get_first_basic_block()
+            .unwrap();
+
+        match entry.get_first_instruction() {
+            Some(first_instr) => builder.position_before(&first_instr),
+            None => builder.position_at_end(entry),
+        }
+
+        builder.build_alloca(ty.as_llvm_type(self.context), name)
+    }
+
+    pub fn codegen(&mut self, ast: TranslationUnit) -> CodegenResult<()> {
         for top in ast {
             build_top_level(self, top)?;
         }

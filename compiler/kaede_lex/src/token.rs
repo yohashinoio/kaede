@@ -35,6 +35,8 @@ pub enum TokenKind {
     /// '/'
     Div,
     /// '='
+    Assign,
+    /// "=="
     Eq,
 
     // Reserved words
@@ -71,12 +73,13 @@ impl std::fmt::Display for TokenKind {
             CloseBrace => write!(f, "'}}'"),
             Comma => write!(f, "','"),
             Semi => write!(f, "';'"),
-            Eq => write!(f, "'='"),
 
             Add => write!(f, "'+'"),
             Sub => write!(f, "'-'"),
             Mul => write!(f, "'*'"),
             Div => write!(f, "'/'"),
+            Assign => write!(f, "'='"),
+            Eq => write!(f, "'=='"),
 
             Function => write!(f, "'fn'"),
             Return => write!(f, "'return'"),
