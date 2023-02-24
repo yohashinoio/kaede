@@ -140,6 +140,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         })
     }
 
+    /// Works with zero arguments.
     fn fn_call_args(&mut self) -> ParseResult<Args> {
         let mut args = Args::new();
 

@@ -23,6 +23,7 @@ impl Ty {
     }
 }
 
+/// Represents whether a value can be changed.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Copy)]
 pub enum Mutability {
     Not,

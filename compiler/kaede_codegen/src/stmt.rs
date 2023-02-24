@@ -37,6 +37,7 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
         Self { ctx, scope }
     }
 
+    /// Generate statement code.
     fn build(&mut self, stmt: Stmt) -> CodegenResult<()> {
         match stmt.kind {
             StmtKind::Expr(e) => {

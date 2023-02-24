@@ -29,6 +29,7 @@ impl<'a> Cursor<'a> {
         self.chars.as_str().is_empty() || self.first() == EOF_CHAR
     }
 
+    /// Advance to the next character.
     pub fn bump(&mut self) -> Option<char> {
         let c = match self.chars.next() {
             Some(c) => c,
@@ -38,7 +39,7 @@ impl<'a> Cursor<'a> {
         match c {
             // Unix (LF)
             '\n' => {
-                self.span_builder.increme_line();
+                self.span_builder.increase_line();
             }
 
             // Windows (CRLF), Mac (CR)
@@ -48,11 +49,11 @@ impl<'a> Cursor<'a> {
                     self.chars.next();
                 }
 
-                self.span_builder.increme_line();
+                self.span_builder.increase_line();
             }
 
             _ => {
-                self.span_builder.increme_column();
+                self.span_builder.increase_column();
             }
         }
 

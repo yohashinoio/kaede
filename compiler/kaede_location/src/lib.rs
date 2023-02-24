@@ -1,3 +1,7 @@
+/// Record the start location with the `start` method,
+/// then increase the location with `increase*` methods.
+///
+/// The `build` method creates a span from start to the current position.
 #[derive(Debug, Clone)]
 pub struct SpanBuilder {
     current: Location,
@@ -13,14 +17,15 @@ impl SpanBuilder {
         }
     }
 
-    pub fn increme_line(&mut self) {
-        self.current.increme_line();
+    pub fn increase_line(&mut self) {
+        self.current.increase_line();
     }
 
-    pub fn increme_column(&mut self) {
-        self.current.increme_column();
+    pub fn increase_column(&mut self) {
+        self.current.increase_column();
     }
 
+    /// Record a start position.
     pub fn start(&mut self) {
         self.start = Some(self.current);
     }
@@ -67,12 +72,12 @@ impl Location {
         Self { line: 1, column: 1 }
     }
 
-    pub fn increme_line(&mut self) {
+    pub fn increase_line(&mut self) {
         self.line += 1;
         self.column = 1;
     }
 
-    pub fn increme_column(&mut self) {
+    pub fn increase_column(&mut self) {
         self.column += 1;
     }
 }

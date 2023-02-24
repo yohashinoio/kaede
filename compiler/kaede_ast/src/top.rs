@@ -13,12 +13,12 @@ pub struct Fn {
     pub return_ty: Option<Ty>,
 }
 
-pub struct Top {
-    pub kind: TopKind,
+pub struct TopLevel {
+    pub kind: TopLevelKind,
     pub span: Span,
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum TopKind {
+pub enum TopLevelKind {
     Fn(Fn),
 }

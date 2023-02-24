@@ -48,6 +48,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             .unwrap_or_else(|| self.end_token.as_ref().unwrap())
     }
 
+    /// Advance to next token.
     pub fn bump(&mut self) -> Option<Token> {
         self.tokens.next().map(|t| match t.kind {
             TokenKind::Eoi => {

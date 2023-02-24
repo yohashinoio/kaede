@@ -9,7 +9,7 @@ use inkwell::{
 };
 use kaede_ast::TranslationUnit;
 use kaede_type::Ty;
-use top::build_top;
+use top::build_top_level;
 
 mod error;
 mod expr;
@@ -61,7 +61,7 @@ impl<'ctx, 'module> CGCtx<'ctx, 'module> {
 
     pub fn generate(&mut self, ast: TranslationUnit) -> CodegenResult<()> {
         for top in ast {
-            build_top(self, top)?;
+            build_top_level(self, top)?;
         }
 
         self.module.verify().map_err(|e| CodegenError::LLVMError {

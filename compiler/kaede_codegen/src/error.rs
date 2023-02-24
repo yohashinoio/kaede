@@ -9,6 +9,7 @@ pub enum CodegenError {
     #[error("{}:{} Variable '{}' declared void.", span.start.line, span.start.column, .name)]
     VoidVariable { name: String, span: Span },
 
+    /// Error issued by LLVM.
     #[error("{}", .what)]
     LLVMError { what: String },
 }

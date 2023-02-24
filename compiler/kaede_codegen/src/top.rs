@@ -1,31 +1,32 @@
 use std::rc::Rc;
 
 use inkwell::{types::BasicType, values::FunctionValue};
-use kaede_ast::top::{Fn, Top, TopKind};
+use kaede_ast::top::{Fn, TopLevel, TopLevelKind};
 use kaede_type::Ty;
 
 use crate::{error::CodegenResult, stmt::build_block, CGCtx, SymbolTable};
 
-pub fn build_top(ctx: &mut CGCtx, node: Top) -> CodegenResult<()> {
-    let mut builder = TopBuilder::new(ctx);
+pub fn build_top_level(ctx: &mut CGCtx, node: TopLevel) -> CodegenResult<()> {
+    let mut builder = TopLevelBuilder::new(ctx);
 
     builder.build(node)?;
 
     Ok(())
 }
 
-struct TopBuilder<'a, 'ctx, 'c> {
+struct TopLevelBuilder<'a, 'ctx, 'c> {
     ctx: &'a mut CGCtx<'ctx, 'c>,
 }
 
-impl<'a, 'ctx, 'c> TopBuilder<'a, 'ctx, 'c> {
+impl<'a, 'ctx, 'c> TopLevelBuilder<'a, 'ctx, 'c> {
     fn new(ctx: &'a mut CGCtx<'ctx, 'c>) -> Self {
         Self { ctx }
     }
 
-    fn build(&mut self, node: Top) -> CodegenResult<()> {
+    /// Generate top-level code.
+    fn build(&mut self, node: TopLevel) -> CodegenResult<()> {
         match node.kind {
-            TopKind::Fn(func) => self.func(func)?,
+            TopLevelKind::Fn(func) => self.func(func)?,
         }
 
         Ok(())
@@ -83,6 +84,7 @@ impl<'a, 'ctx, 'c> TopBuilder<'a, 'ctx, 'c> {
         Ok(())
     }
 
+    /// Expand function parameters into a symbol table.
     fn create_param_table(
         &self,
         param_info: Vec<(String, Rc<Ty>)>,
