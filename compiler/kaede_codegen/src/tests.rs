@@ -184,6 +184,21 @@ fn fn_call_multi_args() -> anyhow::Result<()> {
 }
 
 #[test]
+fn simple_if_statement() -> anyhow::Result<()> {
+    let program = r"fn test() i32 {
+        if 58 == 58 {
+            return 58
+        }
+
+        return 123
+    }";
+
+    assert_eq!(cg_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
 fn if_statement() -> anyhow::Result<()> {
     let program = r"fn test() i32 {
         if 48 == 10 {

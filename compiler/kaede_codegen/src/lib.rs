@@ -63,14 +63,7 @@ impl<'ctx, 'module> CGCtx<'ctx, 'module> {
     fn create_entry_block_alloca(&self, name: &str, ty: &Ty) -> PointerValue<'ctx> {
         let builder = self.context.create_builder();
 
-        let entry = self
-            .builder
-            .get_insert_block()
-            .unwrap()
-            .get_parent()
-            .unwrap()
-            .get_first_basic_block()
-            .unwrap();
+        let entry = self.get_current_fn().get_first_basic_block().unwrap();
 
         match entry.get_first_instruction() {
             Some(first_instr) => builder.position_before(&first_instr),
@@ -80,10 +73,29 @@ impl<'ctx, 'module> CGCtx<'ctx, 'module> {
         builder.build_alloca(ty.as_llvm_type(self.context), name)
     }
 
+    pub fn get_current_fn(&self) -> FunctionValue<'ctx> {
+        self.builder
+            .get_insert_block()
+            .unwrap()
+            .get_parent()
+            .unwrap()
+    }
+
+    /// `True` if there is **not** a terminator in the current block.
+    pub fn no_terminator(&self) -> bool {
+        self.builder
+            .get_insert_block()
+            .unwrap()
+            .get_terminator()
+            .is_none()
+    }
+
     pub fn codegen(&mut self, ast: TranslationUnit) -> CodegenResult<()> {
         for top in ast {
             build_top_level(self, top)?;
         }
+
+        self.module.print_to_stderr();
 
         self.module.verify().map_err(|e| CodegenError::LLVMError {
             what: e.to_string(),

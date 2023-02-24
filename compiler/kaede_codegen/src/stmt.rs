@@ -1,4 +1,5 @@
-use kaede_ast::stmt::{Block, If, Let, Return, Stmt, StmtKind};
+use inkwell::IntPredicate;
+use kaede_ast::stmt::{Block, Else, If, Let, Return, Stmt, StmtKind};
 
 use crate::{error::CodegenResult, expr::build_expression, CGCtx, SymbolTable};
 
@@ -53,8 +54,49 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
         Ok(())
     }
 
-    fn if_(&mut self, _node: If) -> CodegenResult<()> {
-        unimplemented!()
+    fn if_(&mut self, node: If) -> CodegenResult<()> {
+        let parent = self.ctx.get_current_fn();
+        let zero_const = self.ctx.context.bool_type().const_zero();
+
+        let cond = build_expression(self.ctx, node.cond, self.scope)?;
+        let cond = self.ctx.builder.build_int_compare(
+            IntPredicate::NE,
+            cond.get_value().into_int_value(),
+            zero_const,
+            "ifcond",
+        );
+
+        let then_bb = self.ctx.context.append_basic_block(parent, "then");
+        let else_bb = self.ctx.context.append_basic_block(parent, "else");
+        let cont_bb = self.ctx.context.append_basic_block(parent, "ifcont");
+
+        self.ctx
+            .builder
+            .build_conditional_branch(cond, then_bb, else_bb);
+
+        // Build then block
+        self.ctx.builder.position_at_end(then_bb);
+        build_block(self.ctx, node.then, self.scope)?;
+        if self.ctx.no_terminator() {
+            self.ctx.builder.build_unconditional_branch(cont_bb);
+        }
+
+        // Build else block
+        self.ctx.builder.position_at_end(else_bb);
+        if let Some(else_) = node.else_ {
+            match *else_ {
+                Else::If(if_) => self.if_(if_)?,
+                Else::Block(block) => build_block(self.ctx, block, self.scope)?,
+            }
+        }
+        if self.ctx.no_terminator() {
+            self.ctx.builder.build_unconditional_branch(cont_bb);
+        }
+
+        // Build continue block
+        self.ctx.builder.position_at_end(cont_bb);
+
+        Ok(())
     }
 
     fn return_(&mut self, node: Return) -> CodegenResult<()> {
