@@ -4,7 +4,7 @@ use inkwell::{types::BasicType, values::FunctionValue};
 use kaede_ast::top::{Fn, Top, TopKind};
 use kaede_type::Ty;
 
-use crate::{error::CodegenResult, stmt::build_statement_list, CGCtx, SymbolTable};
+use crate::{error::CodegenResult, stmt::build_block, CGCtx, SymbolTable};
 
 pub fn build_top(ctx: &mut CGCtx, node: Top) -> CodegenResult<()> {
     let mut builder = TopBuilder::new(ctx);
@@ -74,10 +74,10 @@ impl<'a, 'ctx, 'c> TopBuilder<'a, 'ctx, 'c> {
         // Allocate parameters.
         let mut param_table = self.create_param_table(param_info, fn_value);
 
-        if node.body.is_empty() {
+        if node.body.body.is_empty() {
             self.ctx.builder.build_return(None);
         } else {
-            build_statement_list(self.ctx, node.body, &mut param_table)?;
+            build_block(self.ctx, node.body, &mut param_table)?;
         }
 
         Ok(())

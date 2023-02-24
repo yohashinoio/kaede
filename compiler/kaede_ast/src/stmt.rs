@@ -4,6 +4,20 @@ use kaede_type::Ty;
 use crate::expr::Expr;
 
 #[derive(Debug, PartialEq, Eq)]
+pub enum Else {
+    If(If),
+    Block(Block),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct If {
+    pub cond: Expr,
+    pub then: Block,
+    pub else_: Option<Box<Else>>,
+    pub span: Span,
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub struct Return {
     pub val: Option<Expr>,
     pub span: Span,
@@ -28,6 +42,12 @@ pub enum StmtKind {
     Expr(Expr),
     Return(Return),
     Let(Let),
+    If(If),
 }
 
-pub type StmtList = Vec<Stmt>;
+/// Statement list
+#[derive(Debug, PartialEq, Eq)]
+pub struct Block {
+    pub body: Vec<Stmt>,
+    pub span: Span,
+}

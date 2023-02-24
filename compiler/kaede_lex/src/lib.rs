@@ -142,9 +142,12 @@ impl Cursor<'_> {
                 let ident = self.ident(c);
 
                 match ident.as_str() {
+                    // Reserved words
                     "fn" => self.create_token(TokenKind::Function),
                     "return" => self.create_token(TokenKind::Return),
                     "let" => self.create_token(TokenKind::Let),
+                    "if" => self.create_token(TokenKind::If),
+                    "else" => self.create_token(TokenKind::Else),
                     _ => self.create_token(TokenKind::Ident(ident)),
                 }
             }

@@ -182,3 +182,24 @@ fn fn_call_multi_args() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn if_statement() -> anyhow::Result<()> {
+    let program = r"fn test() i32 {
+        if 48 + 10 {
+            return 48
+        } else if
+        4810 {
+            return 10
+        } else
+        {
+            return 58
+        }
+
+        return 123
+    }";
+
+    assert_eq!(cg_test(program)?, 58);
+
+    Ok(())
+}

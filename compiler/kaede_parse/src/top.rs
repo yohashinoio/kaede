@@ -36,7 +36,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             }
         };
 
-        let body = self.stmt_list()?;
+        let body = self.block()?;
 
         let finish = self.consume_semi()?.finish;
 

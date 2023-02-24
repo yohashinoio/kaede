@@ -1,6 +1,6 @@
 use kaede_ast::{
     expr::Expr,
-    stmt::{Let, Return, Stmt, StmtKind, StmtList},
+    stmt::{Block, Else, If, Let, Return, Stmt, StmtKind},
 };
 use kaede_lex::token::{Token, TokenKind};
 use kaede_location::Span;
@@ -12,14 +12,17 @@ use crate::{
 };
 
 impl<T: Iterator<Item = Token>> Parser<T> {
-    pub fn stmt_list(&mut self) -> ParseResult<StmtList> {
-        let mut result = StmtList::new();
+    pub fn block(&mut self) -> ParseResult<Block> {
+        let mut body = Vec::new();
 
-        self.consume(&TokenKind::OpenBrace)?;
+        let start = self.consume(&TokenKind::OpenBrace)?.start;
 
         loop {
-            if self.consume_b(&TokenKind::CloseBrace) {
-                return Ok(result);
+            if let Ok(span) = self.consume(&TokenKind::CloseBrace) {
+                return Ok(Block {
+                    body,
+                    span: Span::new(start, span.finish),
+                });
             } else if self.check(&TokenKind::Eoi) {
                 return Err(ParseError::ExpectedError {
                     expected: TokenKind::CloseBrace.to_string(),
@@ -28,7 +31,8 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                 });
             }
 
-            result.push(self.stmt()?);
+            body.push(self.stmt()?);
+            self.consume_semi()?;
         }
     }
 
@@ -45,12 +49,17 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                 span: l.span,
                 kind: StmtKind::Let(l),
             })
+        } else if self.check(&TokenKind::If) {
+            let i = self.if_()?;
+            Ok(Stmt {
+                span: i.span,
+                kind: StmtKind::If(i),
+            })
         } else {
             // Expression statement
             match self.expr() {
                 Ok(e) => {
                     let expr_stmt = self.expr_stmt(e);
-                    self.consume_semi()?;
                     Ok(expr_stmt)
                 }
 
@@ -70,6 +79,45 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
     }
 
+    fn if_(&mut self) -> ParseResult<If> {
+        let start = self.consume(&TokenKind::If).unwrap().start;
+
+        let cond = self.expr()?;
+
+        let then = self.block()?;
+
+        let else_ = self.else_()?.map(|e| Box::new(e));
+
+        let finish = match else_.as_ref() {
+            Some(else_) => match else_.as_ref() {
+                Else::Block(block) => block.span.finish,
+                Else::If(if_) => if_.span.finish,
+            },
+
+            None => then.span.finish,
+        };
+
+        Ok(If {
+            cond,
+            then,
+            else_,
+            span: Span::new(start, finish),
+        })
+    }
+
+    /// `None` if there is no else
+    fn else_(&mut self) -> ParseResult<Option<Else>> {
+        if !self.consume_b(&TokenKind::Else) {
+            return Ok(None);
+        }
+
+        if self.check(&TokenKind::If) {
+            return Ok(Some(Else::If(self.if_()?)));
+        }
+
+        Ok(Some(Else::Block(self.block()?)))
+    }
+
     fn return_(&mut self) -> ParseResult<Return> {
         let span = self.consume(&TokenKind::Return).unwrap();
 
@@ -78,8 +126,6 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
 
         let expr = self.expr()?;
-
-        self.consume_semi()?;
 
         Ok(Return {
             span: Span::new(span.start, expr.span.finish),
@@ -101,8 +147,6 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         if self.consume_b(&TokenKind::Eq) {
             let init = self.expr()?;
 
-            self.consume_semi()?;
-
             let finish = init.span.finish;
 
             return Ok(Let {
@@ -112,8 +156,6 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                 span: Span::new(start, finish),
             });
         }
-
-        self.consume_semi()?;
 
         Ok(Let {
             name: ident.name,

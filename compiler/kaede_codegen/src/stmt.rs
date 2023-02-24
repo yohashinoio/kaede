@@ -1,14 +1,14 @@
 use inkwell::types::BasicTypeEnum;
-use kaede_ast::stmt::{Let, Return, Stmt, StmtKind, StmtList};
+use kaede_ast::stmt::{Block, Let, Return, Stmt, StmtKind};
 
 use crate::{error::CodegenResult, expr::build_expression, CGCtx, SymbolTable};
 
-pub fn build_statement_list<'a, 'ctx>(
+pub fn build_block<'a, 'ctx>(
     ctx: &'a CGCtx<'ctx, '_>,
-    list: StmtList,
+    block: Block,
     scope: &'a mut SymbolTable<'ctx>,
 ) -> CodegenResult<()> {
-    for stmt in list {
+    for stmt in block.body {
         build_statement(ctx, stmt, scope)?;
     }
 
@@ -46,6 +46,8 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
             StmtKind::Return(node) => self.return_(node)?,
 
             StmtKind::Let(node) => self.let_(node)?,
+
+            StmtKind::If(node) => unimplemented!(),
         }
 
         Ok(())

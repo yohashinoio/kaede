@@ -1,7 +1,7 @@
 use kaede_location::Span;
 use kaede_type::Ty;
 
-use crate::stmt::StmtList;
+use crate::stmt::Block;
 
 pub type Params = Vec<(String, Ty)>;
 
@@ -9,7 +9,7 @@ pub type Params = Vec<(String, Ty)>;
 pub struct Fn {
     pub name: String,
     pub params: Params,
-    pub body: StmtList,
+    pub body: Block,
     pub return_ty: Option<Ty>,
 }
 

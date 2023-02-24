@@ -46,6 +46,10 @@ pub enum TokenKind {
     Let,
     /// "mut"
     Mut,
+    /// "if"
+    If,
+    /// "else"
+    Else,
 
     /// End of input
     Eoi,
@@ -78,6 +82,8 @@ impl std::fmt::Display for TokenKind {
             Return => write!(f, "'return'"),
             Let => write!(f, "'let'"),
             Mut => write!(f, "'mut'"),
+            If => write!(f, "'if'"),
+            Else => write!(f, "'else'"),
 
             Eoi => write!(f, "end of input"),
 
