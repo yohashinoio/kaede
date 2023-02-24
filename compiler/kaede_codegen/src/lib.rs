@@ -95,8 +95,6 @@ impl<'ctx, 'module> CGCtx<'ctx, 'module> {
             build_top_level(self, top)?;
         }
 
-        self.module.print_to_stderr();
-
         self.module.verify().map_err(|e| CodegenError::LLVMError {
             what: e.to_string(),
         })?;
