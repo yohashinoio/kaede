@@ -199,7 +199,7 @@ fn simple_if_statement() -> anyhow::Result<()> {
 }
 
 #[test]
-fn if_statement() -> anyhow::Result<()> {
+fn if_else_statement() -> anyhow::Result<()> {
     let program = r"fn test() i32 {
         if 48 == 10 {
             return 48
