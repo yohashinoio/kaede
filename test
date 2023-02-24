@@ -1,4 +1,0 @@
-fn main() i32 {
-    let n = 58
-    return 58
-}
