@@ -33,37 +33,34 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     }
 
     pub fn stmt(&mut self) -> ParseResult<Stmt> {
-        let result;
-
         if self.check(&TokenKind::Return) {
             let r = self.return_()?;
-            result = Stmt {
+            Ok(Stmt {
                 span: r.span,
                 kind: StmtKind::Return(r),
-            };
+            })
         } else if self.check(&TokenKind::Let) {
             let l = self.let_()?;
-            result = Stmt {
+            Ok(Stmt {
                 span: l.span,
                 kind: StmtKind::Let(l),
-            }
+            })
         } else {
+            // Expression statement
             match self.expr() {
-                Ok(e) => result = self.expr_stmt(e),
-
-                Err(_) => {
-                    return Err(ParseError::ExpectedError {
-                        expected: "statement".to_string(),
-                        but: self.first().kind.to_string(),
-                        span: self.first().span,
-                    })
+                Ok(e) => {
+                    let expr_stmt = self.expr_stmt(e);
+                    self.consume_semi()?;
+                    Ok(expr_stmt)
                 }
+
+                Err(_) => Err(ParseError::ExpectedError {
+                    expected: "statement".to_string(),
+                    but: self.first().kind.to_string(),
+                    span: self.first().span,
+                }),
             }
         }
-
-        self.consume_semi()?;
-
-        Ok(result)
     }
 
     fn expr_stmt(&mut self, e: Expr) -> Stmt {
@@ -104,6 +101,8 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         if self.consume_b(&TokenKind::Eq) {
             let init = self.expr()?;
 
+            self.consume_semi()?;
+
             let finish = init.span.finish;
 
             return Ok(Let {
@@ -113,6 +112,8 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                 span: Span::new(start, finish),
             });
         }
+
+        self.consume_semi()?;
 
         Ok(Let {
             name: ident.name,
