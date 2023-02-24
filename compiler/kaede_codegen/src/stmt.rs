@@ -47,7 +47,7 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
 
             StmtKind::Let(node) => self.let_(node)?,
 
-            StmtKind::If(node) => unimplemented!(),
+            StmtKind::If(_node) => unimplemented!(),
         }
 
         Ok(())

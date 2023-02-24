@@ -86,7 +86,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         let then = self.block()?;
 
-        let else_ = self.else_()?.map(|e| Box::new(e));
+        let else_ = self.else_()?.map(Box::new);
 
         let finish = match else_.as_ref() {
             Some(else_) => match else_.as_ref() {
