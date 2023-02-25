@@ -77,6 +77,7 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
         // Build then block
         self.ctx.builder.position_at_end(then_bb);
         build_block(self.ctx, node.then, self.scope)?;
+        // Since there can be no more than one terminator per block.
         if self.ctx.no_terminator() {
             self.ctx.builder.build_unconditional_branch(cont_bb);
         }
@@ -89,6 +90,7 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
                 Else::Block(block) => build_block(self.ctx, block, self.scope)?,
             }
         }
+        // Since there can be no more than one terminator per block.
         if self.ctx.no_terminator() {
             self.ctx.builder.build_unconditional_branch(cont_bb);
         }
