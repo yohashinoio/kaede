@@ -21,6 +21,12 @@ impl Ty {
     pub fn mutability(&self) -> Mutability {
         self.mutability
     }
+
+    pub fn is_signed(&self) -> bool {
+        match &self.ty {
+            TyEnum::FundamentalType(fty) => fty.is_signed(),
+        }
+    }
 }
 
 /// Represents whether a value can be changed.
@@ -75,6 +81,17 @@ trait Type {
 #[derive(Debug, PartialEq, Eq)]
 pub struct FundamentalType {
     kind: FundamentalTypeKind,
+}
+
+impl FundamentalType {
+    fn is_signed(&self) -> bool {
+        use FundamentalTypeKind::*;
+
+        match self.kind {
+            I32 => true,
+            Bool => false,
+        }
+    }
 }
 
 impl Type for FundamentalType {

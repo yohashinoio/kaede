@@ -95,13 +95,25 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
                 lhs.get_type(),
             ),
 
-            Div => Value::new(
-                self.ctx
-                    .builder
-                    .build_int_signed_div(lhs_val, rhs_val, "")
-                    .as_basic_value_enum(),
-                lhs.get_type(),
-            ), // TODO: unsigned
+            Div => {
+                if lhs.get_type().is_signed() || rhs.get_type().is_signed() {
+                    Value::new(
+                        self.ctx
+                            .builder
+                            .build_int_signed_div(lhs_val, rhs_val, "")
+                            .as_basic_value_enum(),
+                        lhs.get_type(),
+                    )
+                } else {
+                    Value::new(
+                        self.ctx
+                            .builder
+                            .build_int_unsigned_div(lhs_val, rhs_val, "")
+                            .as_basic_value_enum(),
+                        lhs.get_type(),
+                    )
+                }
+            }
 
             Eq => Value::new(
                 self.ctx
