@@ -218,3 +218,18 @@ fn if_else_statement() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn equality_operation() -> anyhow::Result<()> {
+    let program = r"fn test() i32 {
+        if 4810 == 4810 {
+            return 58
+        }
+
+        return 123
+    }";
+
+    assert_eq!(cg_test(program)?, 58);
+
+    Ok(())
+}
