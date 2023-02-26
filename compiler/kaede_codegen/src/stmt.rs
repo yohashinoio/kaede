@@ -1,5 +1,5 @@
 use inkwell::IntPredicate;
-use kaede_ast::stmt::{Block, Else, If, Let, Return, Stmt, StmtKind};
+use kaede_ast::stmt::{Block, Else, If, Let, Loop, Return, Stmt, StmtKind};
 
 use crate::{error::CodegenResult, expr::build_expression, CGCtx, SymbolTable};
 
@@ -49,7 +49,33 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
             StmtKind::Let(node) => self.let_(node)?,
 
             StmtKind::If(node) => self.if_(node)?,
+
+            StmtKind::Loop(node) => self.loop_(node)?,
         }
+
+        Ok(())
+    }
+
+    fn loop_(&mut self, node: Loop) -> CodegenResult<()> {
+        //     auto const func = ctx.builder.GetInsertBlock()->getParent();
+        let parent = self.ctx.get_current_fn();
+
+        let body_bb = self.ctx.context.append_basic_block(parent, "body");
+
+        let cont_bb = self.ctx.context.append_basic_block(parent, "cont");
+
+        // Build body block
+        self.ctx.builder.build_unconditional_branch(body_bb);
+        self.ctx.builder.position_at_end(body_bb);
+        build_block(self.ctx, node.body, self.scope)?;
+
+        // Loop!
+        if self.ctx.no_terminator() {
+            self.ctx.builder.build_unconditional_branch(body_bb);
+        }
+
+        self.ctx.builder.build_unconditional_branch(cont_bb);
+        self.ctx.builder.position_at_end(cont_bb);
 
         Ok(())
     }

@@ -233,3 +233,22 @@ fn equality_operation() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn loop_statement() -> anyhow::Result<()> {
+    let program = r"fn test() i32 {
+        loop {
+            let mut n = 0
+
+            if n == 58 {
+                return 58
+            }
+
+            ++n
+        }
+    }";
+
+    assert_eq!(cg_test(program)?, 58);
+
+    Ok(())
+}
