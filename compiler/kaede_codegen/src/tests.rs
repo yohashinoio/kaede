@@ -244,11 +244,35 @@ fn loop_statement() -> anyhow::Result<()> {
                 return 58
             }
 
-            ++n
+            n += 1
         }
     }";
 
     assert_eq!(cg_test(program)?, 58);
 
     Ok(())
+}
+
+#[test]
+fn break_statement() -> anyhow::Result<()> {
+    let program = r"fn test() i32 {
+        loop {
+            break
+        }
+
+        return 58
+    }";
+
+    assert_eq!(cg_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn break_outside_of_loop() {
+    let program = r"fn test() i32 {
+        break
+    }";
+
+    cg_test(program).unwrap_err();
 }

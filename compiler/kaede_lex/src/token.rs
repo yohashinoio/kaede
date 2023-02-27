@@ -54,6 +54,8 @@ pub enum TokenKind {
     Else,
     /// "loop"
     Loop,
+    /// "break"
+    Break,
 
     /// End of input
     Eoi,
@@ -90,6 +92,7 @@ impl std::fmt::Display for TokenKind {
             If => write!(f, "'if'"),
             Else => write!(f, "'else'"),
             Loop => write!(f, "'loop'"),
+            Break => write!(f, "'break'"),
 
             Eoi => write!(f, "end of input"),
 

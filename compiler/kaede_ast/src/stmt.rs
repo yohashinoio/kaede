@@ -4,6 +4,11 @@ use kaede_type::Ty;
 use crate::expr::Expr;
 
 #[derive(Debug, PartialEq, Eq)]
+pub struct Break {
+    pub span: Span,
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub struct Loop {
     pub body: Block,
     pub span: Span,
@@ -50,6 +55,7 @@ pub enum StmtKind {
     Let(Let),
     If(If),
     Loop(Loop),
+    Break(Break),
 }
 
 /// Statement list

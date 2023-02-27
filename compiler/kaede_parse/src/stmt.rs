@@ -1,6 +1,6 @@
 use kaede_ast::{
     expr::Expr,
-    stmt::{Block, Else, If, Let, Loop, Return, Stmt, StmtKind},
+    stmt::{Block, Break, Else, If, Let, Loop, Return, Stmt, StmtKind},
 };
 use kaede_lex::token::{Token, TokenKind};
 use kaede_location::Span;
@@ -64,6 +64,12 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                 span: l.span,
                 kind: StmtKind::Loop(l),
             })
+        } else if self.check(&TokenKind::Break) {
+            let b = self.break_()?;
+            Ok(Stmt {
+                span: b.span,
+                kind: StmtKind::Break(b),
+            })
         } else {
             // Expression statement
             match self.expr() {
@@ -88,6 +94,12 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
     }
 
+    fn break_(&mut self) -> ParseResult<Break> {
+        Ok(Break {
+            span: self.consume(&TokenKind::Break).unwrap(),
+        })
+    }
+
     fn loop_(&mut self) -> ParseResult<Loop> {
         let start = self.consume(&TokenKind::Loop).unwrap().start;
 
@@ -95,7 +107,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         Ok(Loop {
             span: Span::new(start, body.span.finish),
-            body: body,
+            body,
         })
     }
 

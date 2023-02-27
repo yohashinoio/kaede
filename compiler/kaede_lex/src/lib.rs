@@ -149,6 +149,7 @@ impl Cursor<'_> {
                     "if" => self.create_token(TokenKind::If),
                     "else" => self.create_token(TokenKind::Else),
                     "loop" => self.create_token(TokenKind::Loop),
+                    "break" => self.create_token(TokenKind::Break),
                     _ => self.create_token(TokenKind::Ident(ident)),
                 }
             }
