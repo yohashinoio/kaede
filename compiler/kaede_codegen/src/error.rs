@@ -12,6 +12,9 @@ pub enum CodegenError {
     #[error("{}:{} `break` outside of a loop", span.start.line, span.start.column)]
     BreakOutsideOfLoop { span: Span },
 
+    #[error("{}:{} Mismatched types", span.start.line, span.start.column)]
+    MismatchedTypes { span: Span },
+
     /// Error issued by LLVM.
     #[error("{}", .what)]
     LLVMError { what: String },

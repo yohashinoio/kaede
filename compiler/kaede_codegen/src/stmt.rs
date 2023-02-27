@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use inkwell::{basic_block::BasicBlock, IntPredicate};
 use kaede_ast::stmt::{Block, Break, Else, If, Let, Loop, Return, Stmt, StmtKind};
 
@@ -184,15 +186,36 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
     }
 
     fn let_(&mut self, node: Let) -> CodegenResult<()> {
-        let alloca = self.ctx.create_entry_block_alloca(&node.name, &node.ty);
-
         if let Some(init) = node.init {
             let init = build_expression(self.ctx, init, self.scope)?;
 
+            let alloca = if node.ty.is_unknown() {
+                // No type information was available, so infer from an initializer
+                let mut ty = (*init.get_type()).clone();
+                ty.mutability = node.ty.mutability;
+
+                let alloca = self.ctx.create_entry_block_alloca(&node.name, &ty);
+
+                self.scope.insert(node.name, (alloca, Rc::new(ty)));
+
+                alloca
+            } else {
+                // Type information is available
+
+                // Check if an initializer type and type match
+                if node.ty != *init.get_type() {
+                    return Err(CodegenError::MismatchedTypes { span: node.span });
+                }
+
+                let alloca = self.ctx.create_entry_block_alloca(&node.name, &node.ty);
+
+                self.scope.insert(node.name, (alloca, Rc::new(node.ty)));
+
+                alloca
+            };
+
             // Initialization
             self.ctx.builder.build_store(alloca, init.get_value());
-
-            self.scope.insert(node.name, (alloca, init.get_type()));
 
             return Ok(());
         }

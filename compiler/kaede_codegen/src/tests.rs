@@ -107,11 +107,36 @@ fn return_stmt() -> anyhow::Result<()> {
 }
 
 #[test]
-fn variable() -> anyhow::Result<()> {
+fn let_statement() -> anyhow::Result<()> {
+    // Type inference
     let program = r"fn test() i32 {
         let yoha = 48
         let io = 10
         return yoha + io
+    }";
+
+    assert_eq!(cg_test(program)?, 58);
+
+    // Mutable, Type inference
+    let program = r"fn test() i32 {
+        let mut yohaio = 58
+        return yohaio
+    }";
+
+    assert_eq!(cg_test(program)?, 58);
+
+    // Specified type
+    let program = r"fn test() i32 {
+        let yohaio i32 = 58
+        return yohaio
+    }";
+
+    assert_eq!(cg_test(program)?, 58);
+
+    // Mutable, Specified type
+    let program = r"fn test() i32 {
+        let mut yohaio i32 = 58
+        return yohaio
     }";
 
     assert_eq!(cg_test(program)?, 58);
@@ -275,4 +300,19 @@ fn break_outside_of_loop() {
     }";
 
     cg_test(program).unwrap_err();
+}
+
+#[test]
+fn simple_assignment() -> anyhow::Result<()> {
+    let program = r"fn test() i32 {
+        let mut n = 0
+
+        n = 58
+
+        return n
+    }";
+
+    assert_eq!(cg_test(program)?, 58);
+
+    Ok(())
 }

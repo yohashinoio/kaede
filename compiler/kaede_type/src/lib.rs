@@ -3,10 +3,10 @@ use inkwell::{
     types::{BasicType, BasicTypeEnum},
 };
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Ty {
     ty: TyEnum,
-    mutability: Mutability,
+    pub mutability: Mutability,
 }
 
 impl Ty {
@@ -18,14 +18,16 @@ impl Ty {
         self.ty.as_llvm_type(context)
     }
 
-    pub fn mutability(&self) -> Mutability {
-        self.mutability
-    }
-
     pub fn is_signed(&self) -> bool {
         match &self.ty {
             TyEnum::FundamentalType(fty) => fty.is_signed(),
+
+            TyEnum::Unknown => panic!("Cannot get sign information of Unknown type!"),
         }
+    }
+
+    pub fn is_unknown(&self) -> bool {
+        self.ty.is_unknown()
     }
 }
 
@@ -48,7 +50,7 @@ impl Mutability {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum FundamentalTypeKind {
     I32,
     Bool,
@@ -61,16 +63,25 @@ pub fn make_fundamental_type(kind: FundamentalTypeKind, mutability: Mutability) 
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TyEnum {
     FundamentalType(FundamentalType),
+
+    /// If a type is not yet known
+    Unknown,
 }
 
 impl TyEnum {
     pub fn as_llvm_type<'ctx>(&self, context: &'ctx Context) -> BasicTypeEnum<'ctx> {
         match self {
-            TyEnum::FundamentalType(t) => t.as_llvm_type(context),
+            Self::FundamentalType(t) => t.as_llvm_type(context),
+
+            Self::Unknown => panic!("Cannot get LLVM type of Unknown type!"),
         }
+    }
+
+    pub fn is_unknown(&self) -> bool {
+        matches!(self, Self::Unknown)
     }
 }
 
@@ -78,7 +89,8 @@ impl TyEnum {
 trait Type {
     fn as_llvm_type<'ctx>(&self, context: &'ctx Context) -> BasicTypeEnum<'ctx>;
 }
-#[derive(Debug, PartialEq, Eq)]
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct FundamentalType {
     kind: FundamentalTypeKind,
 }
