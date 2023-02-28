@@ -20,14 +20,16 @@ mod value;
 #[cfg(test)]
 mod tests;
 
-pub struct SymbolTable<'ctx>(HashMap<String, (PointerValue<'ctx>, Rc<Ty>)>);
+type Symbol<'ctx> = (PointerValue<'ctx>, Rc<Ty>);
+
+pub struct SymbolTable<'ctx>(HashMap<String, Symbol<'ctx>>);
 
 impl<'ctx> SymbolTable<'ctx> {
     pub fn new() -> Self {
         Self(HashMap::new())
     }
 
-    pub fn find(&self, ident: &Ident) -> CodegenResult<&(PointerValue<'ctx>, Rc<Ty>)> {
+    pub fn find(&self, ident: &Ident) -> CodegenResult<&Symbol<'ctx>> {
         match self.0.get(&ident.name) {
             Some(result) => Ok(result),
 
