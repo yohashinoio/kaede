@@ -1,11 +1,15 @@
 use std::rc::Rc;
 
-use inkwell::{basic_block::BasicBlock, IntPredicate};
-use kaede_ast::stmt::{Block, Break, Else, If, Let, Loop, Return, Stmt, StmtKind};
+use inkwell::{basic_block::BasicBlock, values::BasicValue, IntPredicate};
+use kaede_ast::{
+    expr::{Expr, ExprKind},
+    stmt::{Assign, AssignKind, Block, Break, Else, If, Let, Loop, Return, Stmt, StmtKind},
+};
 
 use crate::{
     error::{CodegenError, CodegenResult},
     expr::build_expression,
+    value::Value,
     CGCtx, SymbolTable,
 };
 
@@ -85,7 +89,40 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
             StmtKind::Loop(node) => self.loop_(node)?,
 
             StmtKind::Break(node) => self.break_(node)?,
+
+            StmtKind::Assign(node) => self.assign(node)?,
         }
+
+        Ok(())
+    }
+
+    /// Create a value for the side to be assigned.
+    /// Return `Err` if the expression is inappropriate as the one to be assigned.
+    fn build_assignable(&mut self, node: Expr) -> CodegenResult<Value<'ctx>> {
+        match node.kind {
+            ExprKind::Ident(ident) => {
+                let (ptr, ty) = self.scope.find(&ident)?;
+
+                Ok(Value::new(ptr.as_basic_value_enum(), ty.clone()))
+            }
+
+            ExprKind::FnCall(_) => unimplemented!(),
+
+            _ => Err(CodegenError::InvalidLeftOfAssignment { span: node.span }),
+        }
+    }
+
+    fn assign(&mut self, node: Assign) -> CodegenResult<()> {
+        let lhs = self.build_assignable(node.lhs)?;
+
+        let rhs = build_expression(self.ctx, node.rhs, self.scope)?;
+
+        match node.kind {
+            AssignKind::Simple => self
+                .ctx
+                .builder
+                .build_store(lhs.get_value().into_pointer_value(), rhs.get_value()),
+        };
 
         Ok(())
     }
@@ -106,7 +143,7 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
 
         let body_bb = self.ctx.context.append_basic_block(parent, "body");
 
-        let cont_bb = self.ctx.context.append_basic_block(parent, "cont");
+        let cont_bb = self.ctx.context.append_basic_block(parent, "loopcont");
 
         // Setup for break statement
         self.stmt_ctx.loop_break_bb = Some(cont_bb);
@@ -196,7 +233,7 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
 
                 let alloca = self.ctx.create_entry_block_alloca(&node.name, &ty);
 
-                self.scope.insert(node.name, (alloca, Rc::new(ty)));
+                self.scope.0.insert(node.name, (alloca, Rc::new(ty)));
 
                 alloca
             } else {
@@ -209,7 +246,7 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
 
                 let alloca = self.ctx.create_entry_block_alloca(&node.name, &node.ty);
 
-                self.scope.insert(node.name, (alloca, Rc::new(node.ty)));
+                self.scope.0.insert(node.name, (alloca, Rc::new(node.ty)));
 
                 alloca
             };

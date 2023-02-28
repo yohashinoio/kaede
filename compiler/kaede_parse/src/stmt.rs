@@ -1,6 +1,6 @@
 use kaede_ast::{
     expr::Expr,
-    stmt::{Block, Break, Else, If, Let, Loop, Return, Stmt, StmtKind},
+    stmt::{Assign, AssignKind, Block, Break, Else, If, Let, Loop, Return, Stmt, StmtKind},
 };
 use kaede_lex::token::{Token, TokenKind};
 use kaede_location::Span;
@@ -71,19 +71,28 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                 kind: StmtKind::Break(b),
             })
         } else {
-            // Expression statement
-            match self.expr() {
-                Ok(e) => {
-                    let expr_stmt = self.expr_stmt(e);
-                    Ok(expr_stmt)
-                }
+            let expr = self.expr()?;
 
-                Err(_) => Err(ParseError::ExpectedError {
-                    expected: "statement".to_string(),
-                    but: self.first().kind.to_string(),
-                    span: self.first().span,
-                }),
+            // Assignment statement
+            if let Some(kind) = self.assign_ops() {
+                let rhs = self.expr()?;
+
+                let span = Span::new(expr.span.start, rhs.span.finish);
+
+                return Ok(Stmt {
+                    kind: StmtKind::Assign(Assign {
+                        lhs: expr,
+                        kind,
+                        rhs,
+                        span,
+                    }),
+                    span,
+                });
             }
+
+            // Expression statement
+            let expr_stmt = self.expr_stmt(expr);
+            Ok(expr_stmt)
         }
     }
 
@@ -92,6 +101,15 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             span: e.span,
             kind: StmtKind::Expr(e),
         }
+    }
+
+    /// Assignment operators
+    fn assign_ops(&mut self) -> Option<AssignKind> {
+        if self.consume_b(&TokenKind::Assign) {
+            return Some(AssignKind::Simple);
+        }
+
+        None
     }
 
     fn break_(&mut self) -> ParseResult<Break> {

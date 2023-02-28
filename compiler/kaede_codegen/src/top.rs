@@ -108,7 +108,7 @@ impl<'a, 'ctx, 'c> TopLevelBuilder<'a, 'ctx, 'c> {
                 .builder
                 .build_store(alloca, fn_value.get_nth_param(idx as u32).unwrap());
 
-            params.insert(name, (alloca, ty));
+            params.0.insert(name, (alloca, ty));
         }
 
         params

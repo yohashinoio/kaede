@@ -15,6 +15,9 @@ pub enum CodegenError {
     #[error("{}:{} Mismatched types", span.start.line, span.start.column)]
     MismatchedTypes { span: Span },
 
+    #[error("{}:{} Invalid left-hand side of assignment", span.start.line, span.start.column)]
+    InvalidLeftOfAssignment { span: Span },
+
     /// Error issued by LLVM.
     #[error("{}", .what)]
     LLVMError { what: String },

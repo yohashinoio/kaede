@@ -5,6 +5,7 @@ use crate::{
     value::Value,
     CGCtx, SymbolTable,
 };
+
 use inkwell::{values::BasicValue, IntPredicate};
 use kaede_ast::expr::{Binary, BinaryKind, Expr, ExprKind, FnCall, Ident};
 use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability};
@@ -48,17 +49,12 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
     }
 
     fn expr_ident(&self, ident: Ident) -> CodegenResult<Value<'ctx>> {
-        match self.scope.get(&ident.name) {
-            Some((ptr, ty)) => Ok(Value::new(
-                self.ctx.builder.build_load(*ptr, ""),
-                ty.clone(),
-            )),
+        let (ptr, ty) = self.scope.find(&ident)?;
 
-            None => Err(CodegenError::Undeclared {
-                name: ident.name,
-                span: ident.span,
-            }),
-        }
+        Ok(Value::new(
+            self.ctx.builder.build_load(*ptr, ""),
+            ty.clone(),
+        ))
     }
 
     fn binary_op(&self, node: Binary) -> CodegenResult<Value<'ctx>> {

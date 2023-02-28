@@ -7,7 +7,7 @@ use inkwell::{
     module::Module,
     values::{FunctionValue, PointerValue},
 };
-use kaede_ast::TranslationUnit;
+use kaede_ast::{expr::Ident, TranslationUnit};
 use kaede_type::Ty;
 use top::build_top_level;
 
@@ -20,7 +20,24 @@ mod value;
 #[cfg(test)]
 mod tests;
 
-pub type SymbolTable<'ctx> = HashMap<String, (PointerValue<'ctx>, Rc<Ty>)>;
+pub struct SymbolTable<'ctx>(HashMap<String, (PointerValue<'ctx>, Rc<Ty>)>);
+
+impl<'ctx> SymbolTable<'ctx> {
+    pub fn new() -> Self {
+        Self(HashMap::new())
+    }
+
+    pub fn find(&self, ident: &Ident) -> CodegenResult<&(PointerValue<'ctx>, Rc<Ty>)> {
+        match self.0.get(&ident.name) {
+            Some(result) => Ok(result),
+
+            None => Err(CodegenError::Undeclared {
+                name: ident.name.clone(),
+                span: ident.span,
+            }),
+        }
+    }
+}
 
 pub type ReturnTypeTable<'ctx> = HashMap<FunctionValue<'ctx>, Option<Rc<Ty>>>;
 
@@ -59,7 +76,7 @@ impl<'ctx, 'module> CGCtx<'ctx, 'module> {
         }
     }
 
-    /// Creates a new stack allocation instruction in the entry block of the function.
+    /// Create a new stack allocation instruction in the entry block of the function.
     fn create_entry_block_alloca(&self, name: &str, ty: &Ty) -> PointerValue<'ctx> {
         let builder = self.context.create_builder();
 
@@ -95,8 +112,11 @@ impl<'ctx, 'module> CGCtx<'ctx, 'module> {
             build_top_level(self, top)?;
         }
 
-        self.module.verify().map_err(|e| CodegenError::LLVMError {
-            what: e.to_string(),
+        self.module.verify().map_err(|e| {
+            self.module.print_to_stderr();
+            CodegenError::LLVMError {
+                what: e.to_string(),
+            }
         })?;
 
         Ok(())

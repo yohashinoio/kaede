@@ -4,6 +4,20 @@ use kaede_type::Ty;
 use crate::expr::Expr;
 
 #[derive(Debug, PartialEq, Eq)]
+pub enum AssignKind {
+    /// '='
+    Simple,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct Assign {
+    pub lhs: Expr,
+    pub kind: AssignKind,
+    pub rhs: Expr,
+    pub span: Span,
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub struct Break {
     pub span: Span,
 }
@@ -56,6 +70,7 @@ pub enum StmtKind {
     If(If),
     Loop(Loop),
     Break(Break),
+    Assign(Assign),
 }
 
 /// Statement list
