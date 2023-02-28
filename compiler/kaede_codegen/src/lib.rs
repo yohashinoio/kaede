@@ -39,6 +39,12 @@ impl<'ctx> SymbolTable<'ctx> {
     }
 }
 
+impl<'ctx> Default for SymbolTable<'ctx> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub type ReturnTypeTable<'ctx> = HashMap<FunctionValue<'ctx>, Option<Rc<Ty>>>;
 
 pub type ParamTable<'ctx> = HashMap<FunctionValue<'ctx>, Vec<Rc<Ty>>>;
