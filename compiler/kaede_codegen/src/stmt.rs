@@ -103,6 +103,13 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
             ExprKind::Ident(ident) => {
                 let (ptr, ty) = self.scope.find(&ident)?;
 
+                if ty.mutability.is_not() {
+                    return Err(CodegenError::CannotAssignTwiceToImutable {
+                        name: ident.name,
+                        span: ident.span,
+                    });
+                }
+
                 Ok(Value::new(ptr.as_basic_value_enum(), ty.clone()))
             }
 

@@ -318,3 +318,14 @@ fn simple_assignment() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn assign_to_immutable() {
+    let program = r"fn test() i32 {
+        let n = 58
+        n = 4810
+        return n
+    }";
+
+    cg_test(program).unwrap_err();
+}

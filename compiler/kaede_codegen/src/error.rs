@@ -18,6 +18,9 @@ pub enum CodegenError {
     #[error("{}:{} Invalid left-hand side of assignment", span.start.line, span.start.column)]
     InvalidLeftOfAssignment { span: Span },
 
+    #[error("{}:{} Cannot assign twice to immutable variable `{}`", span.start.line, span.start.column, .name)]
+    CannotAssignTwiceToImutable { name: String, span: Span },
+
     /// Error issued by LLVM.
     #[error("{}", .what)]
     LLVMError { what: String },
