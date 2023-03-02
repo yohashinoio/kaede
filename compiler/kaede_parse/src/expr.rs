@@ -138,6 +138,15 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             });
         }
 
+        if matches!(self.first().kind, TokenKind::StringLiteral(_)) {
+            let slit = self.bump().unwrap();
+
+            return Ok(Expr {
+                span: slit.span,
+                kind: ExprKind::StirngLiteral(slit.kind.to_string()),
+            });
+        }
+
         let int = self.integer()?;
         Ok(Expr {
             span: int.span,

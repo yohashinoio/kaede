@@ -40,6 +40,8 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
                 Rc::new(int.kind.get_type()),
             ),
 
+            ExprKind::StirngLiteral(_) => todo!(),
+
             ExprKind::Ident(name) => self.expr_ident(name)?,
 
             ExprKind::BinOp(binop) => self.binary_op(binop)?,

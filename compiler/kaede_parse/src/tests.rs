@@ -246,3 +246,11 @@ fn variable_initialization() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn string_literal() -> anyhow::Result<()> {
+    parse_test(
+        r#"fn test() { "よはいお" }"#,
+        StmtList::from([Stmt::Expr(Expr::StringLiteral("よはいお".to_string()))]),
+    )?;
+}

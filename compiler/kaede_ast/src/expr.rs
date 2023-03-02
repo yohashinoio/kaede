@@ -75,6 +75,7 @@ pub struct Expr {
 #[derive(Debug, PartialEq, Eq)]
 pub enum ExprKind {
     Int(Int),
+    StirngLiteral(String),
     BinOp(Binary),
     Ident(Ident),
     FnCall(FnCall),
