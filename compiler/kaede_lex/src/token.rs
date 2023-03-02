@@ -10,6 +10,7 @@ pub struct Token {
 pub enum TokenKind {
     Int(String),
     Ident(String),
+    StringLiteral(String),
 
     // Punctuators
     /// '('
@@ -70,6 +71,7 @@ impl std::fmt::Display for TokenKind {
         match self {
             Int(_) => write!(f, "integer"),
             Ident(_) => write!(f, "identifier"),
+            StringLiteral(_) => write!(f, "string literal"),
 
             OpenParen => write!(f, "'('"),
             CloseParen => write!(f, "')'"),

@@ -99,3 +99,19 @@ fn auto_inserted_semi_span() {
         )
     );
 }
+
+#[test]
+fn simple_string_literal() {
+    lex_test(
+        r#""aeiueoao""#,
+        vec![StringLiteral("aeiueoao".to_string()), Semi],
+    );
+}
+
+#[test]
+fn unicode_string_literal() {
+    lex_test(
+        r#""🌹🌼あえいうえおあお🥀🌼""#,
+        vec![StringLiteral("🌹🌼あえいうえおあお🥀🌼".to_string()), Semi],
+    );
+}

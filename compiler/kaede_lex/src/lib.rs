@@ -69,7 +69,10 @@ fn insert_semicolons(tokens: impl Iterator<Item = Token>) -> Vec<Token> {
 fn can_insert_semicolon(token: &TokenKind) -> bool {
     use TokenKind::*;
 
-    matches!(token, Int(_) | Ident(_) | CloseParen | CloseBrace | Return)
+    matches!(
+        token,
+        Int(_) | Ident(_) | StringLiteral(_) | CloseParen | CloseBrace | Return
+    )
 }
 
 fn is_whitespace(c: char) -> bool {
@@ -155,6 +158,12 @@ impl Cursor<'_> {
                 }
             }
 
+            // String literal
+            '"' => {
+                let lit = self.string_literal();
+                self.create_token(TokenKind::StringLiteral(lit))
+            }
+
             // Punctuators
             '(' => self.create_token(TokenKind::OpenParen),
             ')' => self.create_token(TokenKind::CloseParen),
@@ -187,6 +196,23 @@ impl Cursor<'_> {
         self.eat_while(is_whitespace);
     }
 
+    fn string_literal(&mut self) -> String {
+        let mut lit = String::new();
+
+        loop {
+            let c = self.first();
+
+            if c == '"' {
+                // The last double quote is also consumed
+                self.bump().unwrap();
+                return lit;
+            }
+
+            lit.push(c);
+            self.bump().unwrap();
+        }
+    }
+
     fn number(&mut self, first_digit: char) -> String {
         assert!(first_digit.is_ascii_digit());
 
@@ -197,13 +223,11 @@ impl Cursor<'_> {
 
             if c.is_ascii_digit() {
                 result.push(c);
-                self.bump();
+                self.bump().unwrap();
             } else {
-                break;
+                return result;
             }
         }
-
-        result
     }
 
     fn ident(&mut self, first: char) -> String {
@@ -215,12 +239,10 @@ impl Cursor<'_> {
             if is_id_continue(c) {
                 ident.push(c);
             } else {
-                break;
+                return ident;
             }
 
-            self.bump();
+            self.bump().unwrap();
         }
-
-        ident
     }
 }
