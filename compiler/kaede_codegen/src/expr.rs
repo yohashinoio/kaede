@@ -60,7 +60,9 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
         let (ptr, ty) = self.scope.find(&ident)?;
 
         Ok(Value::new(
-            self.ctx.builder.build_load(*ptr, ""),
+            self.ctx
+                .builder
+                .build_load(ty.as_llvm_type(self.ctx.context), *ptr, ""),
             ty.clone(),
         ))
     }
