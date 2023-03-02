@@ -1,6 +1,7 @@
 use inkwell::{
     context::Context,
     types::{BasicType, BasicTypeEnum},
+    AddressSpace,
 };
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -22,6 +23,7 @@ impl Ty {
         match &self.ty {
             TyEnum::FundamentalType(fty) => fty.is_signed(),
 
+            TyEnum::Str => panic!("Cannot get sign information of Str type!"),
             TyEnum::Unknown => panic!("Cannot get sign information of Unknown type!"),
         }
     }
@@ -66,6 +68,7 @@ pub fn make_fundamental_type(kind: FundamentalTypeKind, mutability: Mutability) 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TyEnum {
     FundamentalType(FundamentalType),
+    Str,
 
     /// If a type is not yet known
     Unknown,
@@ -75,6 +78,11 @@ impl TyEnum {
     pub fn as_llvm_type<'ctx>(&self, context: &'ctx Context) -> BasicTypeEnum<'ctx> {
         match self {
             Self::FundamentalType(t) => t.as_llvm_type(context),
+
+            Self::Str => context
+                .i8_type()
+                .ptr_type(AddressSpace::default())
+                .as_basic_type_enum(),
 
             Self::Unknown => panic!("Cannot get LLVM type of Unknown type!"),
         }

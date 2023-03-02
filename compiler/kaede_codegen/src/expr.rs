@@ -8,7 +8,7 @@ use crate::{
 
 use inkwell::{values::BasicValue, IntPredicate};
 use kaede_ast::expr::{Binary, BinaryKind, Expr, ExprKind, FnCall, Ident};
-use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability};
+use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability, Ty, TyEnum};
 
 pub fn build_expression<'a, 'ctx>(
     ctx: &'a CGCtx<'ctx, '_>,
@@ -40,7 +40,13 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
                 Rc::new(int.kind.get_type()),
             ),
 
-            ExprKind::StirngLiteral(_) => todo!(),
+            ExprKind::StirngLiteral(lit) => Value::new(
+                self.ctx
+                    .builder
+                    .build_global_string_ptr(&lit, "str")
+                    .as_basic_value_enum(),
+                Rc::new(Ty::new(TyEnum::Str, Mutability::Not)),
+            ),
 
             ExprKind::Ident(name) => self.expr_ident(name)?,
 

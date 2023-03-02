@@ -329,3 +329,17 @@ fn assign_to_immutable() {
 
     cg_test(program).unwrap_err();
 }
+
+#[test]
+fn string_literal() -> anyhow::Result<()> {
+    let program = r#"fn test() i32 {
+        let s1 = "yohaio"
+        let s2 = "よはいお"
+
+        return 58
+    }"#;
+
+    assert_eq!(cg_test(program)?, 58);
+
+    Ok(())
+}
