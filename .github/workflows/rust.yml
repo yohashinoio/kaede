@@ -8,20 +8,40 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/cache@v3
+
+      - name: Cache rust
+        uses: actions/cache@v3
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - uses: KyleMayes/install-llvm-action@v1
+
+      - name: Cache llvm
+        uses: actions/cache@v3
         with:
-          version: "15.0.6"
-      - uses: dtolnay/rust-toolchain@stable
+          path: |
+            ./llvm
+          key: llvm-15.0
+
+      - name: Install llvm
+        uses: KyleMayes/install-llvm-action@v1
+        with:
+          version: "15.0"
+          cached: ${{ steps.cache-llvm.outputs.cache-hit }}
+
+      - name: Install rust
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
           components: rustfmt, clippy
-      - run: cargo fmt --all -- --check
-      - run: cargo clippy -- -D warnings
-      - run: cargo test --release --all-features
+
+      - name: Run format
+        run: cargo fmt --all -- --check
+
+      - name: Run clippy
+        run: cargo clippy -- -D warnings
+
+      - name: Run test
+        run: cargo test --release --all-features
