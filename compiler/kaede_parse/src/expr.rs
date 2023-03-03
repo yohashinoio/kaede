@@ -138,12 +138,16 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             });
         }
 
+        // String literals
         if matches!(self.first().kind, TokenKind::StringLiteral(_)) {
-            let slit = self.bump().unwrap();
+            let token = self.bump().unwrap();
 
             return Ok(Expr {
-                span: slit.span,
-                kind: ExprKind::StirngLiteral(slit.kind.to_string()),
+                span: token.span,
+                kind: ExprKind::StirngLiteral(match token.kind {
+                    TokenKind::StringLiteral(s) => s,
+                    _ => unreachable!(),
+                }),
             });
         }
 
