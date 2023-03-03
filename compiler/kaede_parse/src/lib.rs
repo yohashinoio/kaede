@@ -69,7 +69,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         let span = self.first().span;
 
         if &self.first().kind == tok {
-            self.bump();
+            self.bump().unwrap();
             return Ok(span);
         }
 
@@ -83,7 +83,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     /// Return boolean.
     pub fn consume_b(&mut self, tok: &TokenKind) -> bool {
         if &self.first().kind == tok {
-            self.bump();
+            self.bump().unwrap();
             return true;
         }
 

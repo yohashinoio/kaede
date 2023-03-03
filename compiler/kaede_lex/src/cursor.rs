@@ -58,7 +58,7 @@ impl<'a> Cursor<'a> {
 
     pub fn eat_while(&mut self, mut predicate: impl FnMut(char) -> bool) {
         while predicate(self.first()) && !self.is_eof() {
-            self.bump();
+            self.bump().unwrap();
         }
     }
 }

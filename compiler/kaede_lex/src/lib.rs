@@ -174,7 +174,7 @@ impl Cursor<'_> {
             '=' => {
                 if self.first() == '=' {
                     // ==
-                    self.bump();
+                    self.bump().unwrap();
                     self.create_token(TokenKind::Eq)
                 } else {
                     // =
