@@ -40,11 +40,12 @@ impl<'a, 'ctx, 'c> TopLevelBuilder<'a, 'ctx, 'c> {
         let param_llvm_tys = node
             .params
             .iter()
-            .map(|e| e.1.as_llvm_type(self.ctx.context).into())
+            .map(|e| e.1.kind.as_llvm_type(self.ctx.context).into())
             .collect::<Vec<_>>();
 
         let fn_type = match &node.return_ty {
             Some(ty) => ty
+                .kind
                 .as_llvm_type(self.ctx.context)
                 .fn_type(param_llvm_tys.as_slice(), false),
 
@@ -102,7 +103,7 @@ impl<'a, 'ctx, 'c> TopLevelBuilder<'a, 'ctx, 'c> {
             let alloca = self
                 .ctx
                 .builder
-                .build_alloca(ty.as_llvm_type(self.ctx.context), &name);
+                .build_alloca(ty.kind.as_llvm_type(self.ctx.context), &name);
 
             self.ctx
                 .builder

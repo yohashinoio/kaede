@@ -6,30 +6,13 @@ use inkwell::{
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Ty {
-    ty: TyEnum,
+    pub kind: TyKind,
     pub mutability: Mutability,
 }
 
 impl Ty {
-    pub fn new(ty: TyEnum, mutability: Mutability) -> Self {
-        Self { ty, mutability }
-    }
-
-    pub fn as_llvm_type<'ctx>(&self, context: &'ctx Context) -> BasicTypeEnum<'ctx> {
-        self.ty.as_llvm_type(context)
-    }
-
-    pub fn is_signed(&self) -> bool {
-        match &self.ty {
-            TyEnum::FundamentalType(fty) => fty.is_signed(),
-
-            TyEnum::Str => panic!("Cannot get sign information of Str type!"),
-            TyEnum::Unknown => panic!("Cannot get sign information of Unknown type!"),
-        }
-    }
-
-    pub fn is_unknown(&self) -> bool {
-        self.ty.is_unknown()
+    pub fn new(kind: TyKind, mutability: Mutability) -> Self {
+        Self { kind, mutability }
     }
 }
 
@@ -60,24 +43,24 @@ pub enum FundamentalTypeKind {
 
 pub fn make_fundamental_type(kind: FundamentalTypeKind, mutability: Mutability) -> Ty {
     Ty {
-        ty: TyEnum::FundamentalType(FundamentalType { kind }),
+        kind: TyKind::Fundamental(FundamentalType { kind }),
         mutability,
     }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum TyEnum {
-    FundamentalType(FundamentalType),
+pub enum TyKind {
+    Fundamental(FundamentalType),
     Str,
 
     /// If a type is not yet known
     Unknown,
 }
 
-impl TyEnum {
+impl TyKind {
     pub fn as_llvm_type<'ctx>(&self, context: &'ctx Context) -> BasicTypeEnum<'ctx> {
         match self {
-            Self::FundamentalType(t) => t.as_llvm_type(context),
+            Self::Fundamental(t) => t.as_llvm_type(context),
 
             Self::Str => {
                 let str_ty = context
@@ -95,14 +78,18 @@ impl TyEnum {
         }
     }
 
+    pub fn is_signed(&self) -> bool {
+        match &self {
+            Self::Fundamental(fty) => fty.is_signed(),
+
+            Self::Str => panic!("Cannot get sign information of Str type!"),
+            Self::Unknown => panic!("Cannot get sign information of Unknown type!"),
+        }
+    }
+
     pub fn is_unknown(&self) -> bool {
         matches!(self, Self::Unknown)
     }
-}
-
-/// Interface for types.
-trait Type {
-    fn as_llvm_type<'ctx>(&self, context: &'ctx Context) -> BasicTypeEnum<'ctx>;
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -111,17 +98,6 @@ pub struct FundamentalType {
 }
 
 impl FundamentalType {
-    fn is_signed(&self) -> bool {
-        use FundamentalTypeKind::*;
-
-        match self.kind {
-            I32 => true,
-            Bool => false,
-        }
-    }
-}
-
-impl Type for FundamentalType {
     fn as_llvm_type<'ctx>(&self, context: &'ctx Context) -> BasicTypeEnum<'ctx> {
         use FundamentalTypeKind::*;
 
@@ -129,6 +105,15 @@ impl Type for FundamentalType {
             I32 => context.i32_type().as_basic_type_enum(),
 
             Bool => context.bool_type().as_basic_type_enum(),
+        }
+    }
+
+    fn is_signed(&self) -> bool {
+        use FundamentalTypeKind::*;
+
+        match self.kind {
+            I32 => true,
+            Bool => false,
         }
     }
 }

@@ -4,7 +4,7 @@ use kaede_ast::{
 };
 use kaede_lex::token::{Token, TokenKind};
 use kaede_location::Span;
-use kaede_type::{Mutability, Ty, TyEnum};
+use kaede_type::{Mutability, Ty, TyKind};
 
 use crate::{
     error::{ParseError, ParseResult},
@@ -196,7 +196,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         let ty = match self.ty() {
             Ok(ty) => ty,
-            Err(_) => Ty::new(TyEnum::Unknown, mutability),
+            Err(_) => Ty::new(TyKind::Unknown, mutability),
         };
 
         if self.consume_b(&TokenKind::Assign) {
@@ -212,7 +212,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             });
         }
 
-        if ty.is_unknown() {
+        if ty.kind.is_unknown() {
             // Error if both type and initializer are missing
             self.consume(&TokenKind::Assign)?;
         }

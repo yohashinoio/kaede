@@ -8,7 +8,7 @@ use crate::{
 
 use inkwell::{values::BasicValue, IntPredicate};
 use kaede_ast::expr::{Binary, BinaryKind, Expr, ExprKind, FnCall, Ident};
-use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability, Ty, TyEnum};
+use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability, Ty, TyKind};
 
 pub fn build_expression<'a, 'ctx>(
     ctx: &'a CGCtx<'ctx, '_>,
@@ -72,7 +72,7 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
                     true,
                 )
                 .as_basic_value_enum(),
-            Rc::new(Ty::new(TyEnum::Str, Mutability::Not)),
+            Rc::new(Ty::new(TyKind::Str, Mutability::Not)),
         )
     }
 
@@ -82,7 +82,7 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
         Ok(Value::new(
             self.ctx
                 .builder
-                .build_load(ty.as_llvm_type(self.ctx.context), *ptr, ""),
+                .build_load(ty.kind.as_llvm_type(self.ctx.context), *ptr, ""),
             ty.clone(),
         ))
     }
@@ -122,7 +122,7 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
             ),
 
             Div => {
-                if lhs.get_type().is_signed() || rhs.get_type().is_signed() {
+                if lhs.get_type().kind.is_signed() || rhs.get_type().kind.is_signed() {
                     Value::new(
                         self.ctx
                             .builder

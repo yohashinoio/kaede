@@ -233,7 +233,7 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
         if let Some(init) = node.init {
             let init = build_expression(self.ctx, init, self.scope)?;
 
-            let alloca = if node.ty.is_unknown() {
+            let alloca = if node.ty.kind.is_unknown() {
                 // No type information was available, so infer from an initializer
                 let mut ty = (*init.get_type()).clone();
                 ty.mutability = node.ty.mutability;

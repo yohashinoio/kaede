@@ -95,7 +95,7 @@ impl<'ctx, 'module> CGCtx<'ctx, 'module> {
             None => builder.position_at_end(entry),
         }
 
-        builder.build_alloca(ty.as_llvm_type(self.context), name)
+        builder.build_alloca(ty.kind.as_llvm_type(self.context), name)
     }
 
     pub fn get_current_fn(&self) -> FunctionValue<'ctx> {
