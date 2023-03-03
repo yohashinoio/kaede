@@ -40,13 +40,7 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
                 Rc::new(int.kind.get_type()),
             ),
 
-            ExprKind::StirngLiteral(lit) => Value::new(
-                self.ctx
-                    .builder
-                    .build_global_string_ptr(&lit, "str")
-                    .as_basic_value_enum(),
-                Rc::new(Ty::new(TyEnum::Str, Mutability::Not)),
-            ),
+            ExprKind::StirngLiteral(s) => self.string_literal(&s),
 
             ExprKind::Ident(name) => self.expr_ident(name)?,
 
@@ -54,6 +48,32 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
 
             ExprKind::FnCall(fcall) => self.call_fn(fcall)?,
         })
+    }
+
+    fn string_literal(&self, s: &str) -> Value<'ctx> {
+        let global_s = self
+            .ctx
+            .builder
+            .build_global_string_ptr(s, "str")
+            .as_basic_value_enum();
+
+        Value::new(
+            self.ctx
+                .context
+                .const_struct(
+                    &[
+                        global_s,
+                        self.ctx
+                            .context
+                            .i64_type()
+                            .const_int(s.len() as u64, false)
+                            .as_basic_value_enum(),
+                    ],
+                    true,
+                )
+                .as_basic_value_enum(),
+            Rc::new(Ty::new(TyEnum::Str, Mutability::Not)),
+        )
     }
 
     fn expr_ident(&self, ident: Ident) -> CodegenResult<Value<'ctx>> {

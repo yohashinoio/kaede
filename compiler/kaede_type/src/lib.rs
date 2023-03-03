@@ -79,10 +79,17 @@ impl TyEnum {
         match self {
             Self::FundamentalType(t) => t.as_llvm_type(context),
 
-            Self::Str => context
-                .i8_type()
-                .ptr_type(AddressSpace::default())
-                .as_basic_type_enum(),
+            Self::Str => {
+                let str_ty = context
+                    .i8_type()
+                    .ptr_type(AddressSpace::default())
+                    .as_basic_type_enum();
+                let len_ty = context.i64_type().as_basic_type_enum();
+                // { *i8, i64 }
+                context
+                    .struct_type(&[str_ty, len_ty], true)
+                    .as_basic_type_enum()
+            }
 
             Self::Unknown => panic!("Cannot get LLVM type of Unknown type!"),
         }
