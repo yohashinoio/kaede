@@ -30,13 +30,13 @@ impl<'a, 'ctx, 'c> TopLevelBuilder<'a, 'ctx, 'c> {
     /// Generate top-level code.
     fn build(&mut self, node: TopLevel) -> CodegenResult<()> {
         match node.kind {
-            TopLevelKind::Fn(func) => self.func(func)?,
+            TopLevelKind::Fn(func) => self.define_func(func)?,
         }
 
         Ok(())
     }
 
-    fn func(&mut self, node: Fn) -> CodegenResult<()> {
+    fn define_func(&mut self, node: Fn) -> CodegenResult<()> {
         let param_llvm_tys = node
             .params
             .iter()

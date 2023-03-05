@@ -42,7 +42,7 @@ pub enum TokenKind {
 
     // Reserved words
     /// "fn"
-    Function,
+    Fn,
     /// "return"
     Return,
     /// "let"
@@ -57,6 +57,8 @@ pub enum TokenKind {
     Loop,
     /// "break"
     Break,
+    /// "struct"
+    Struct,
 
     /// End of input
     Eoi,
@@ -87,7 +89,7 @@ impl std::fmt::Display for TokenKind {
             Assign => write!(f, "'='"),
             Eq => write!(f, "'=='"),
 
-            Function => write!(f, "'fn'"),
+            Fn => write!(f, "'fn'"),
             Return => write!(f, "'return'"),
             Let => write!(f, "'let'"),
             Mut => write!(f, "'mut'"),
@@ -95,6 +97,7 @@ impl std::fmt::Display for TokenKind {
             Else => write!(f, "'else'"),
             Loop => write!(f, "'loop'"),
             Break => write!(f, "'break'"),
+            Struct => write!(f, "'struct'"),
 
             Eoi => write!(f, "end of input"),
 

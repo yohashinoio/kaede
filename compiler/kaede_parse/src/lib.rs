@@ -7,18 +7,7 @@ mod ty;
 pub fn parse(tokens: impl Iterator<Item = Token>) -> ParseResult<TranslationUnit> {
     let mut parser = Parser::new(tokens.peekable());
 
-    let mut result = Vec::new();
-
-    loop {
-        let top = parser.top()?;
-
-        match top {
-            Some(x) => result.push(x),
-            None => break,
-        }
-    }
-
-    Ok(result)
+    parser.parse()
 }
 
 use std::iter::Peekable;
@@ -42,13 +31,29 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
     }
 
+    pub fn parse(&mut self) -> ParseResult<TranslationUnit> {
+        let mut unit = TranslationUnit::new();
+
+        while !self.is_eof() {
+            let top = self.top()?;
+
+            unit.push(top);
+        }
+
+        Ok(unit)
+    }
+
+    fn is_eof(&mut self) -> bool {
+        self.end_token.is_some() || self.first().kind == TokenKind::Eoi
+    }
+
     pub fn first(&mut self) -> &Token {
         self.tokens
             .peek()
             .unwrap_or_else(|| self.end_token.as_ref().unwrap())
     }
 
-    /// Advance to next token.
+    /// Advance to next token
     pub fn bump(&mut self) -> Option<Token> {
         self.tokens.next().map(|t| match t.kind {
             TokenKind::Eoi => {
@@ -60,7 +65,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         })
     }
 
-    /// Check without consuming tokens.
+    /// Check without consuming tokens
     pub fn check(&mut self, tok: &TokenKind) -> bool {
         &self.first().kind == tok
     }
@@ -80,7 +85,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         })
     }
 
-    /// Return boolean.
+    /// Return boolean
     pub fn consume_b(&mut self, tok: &TokenKind) -> bool {
         if &self.first().kind == tok {
             self.bump().unwrap();
@@ -90,8 +95,8 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         false
     }
 
-    /// Consumes a semicolon.
-    /// ')' or '}', then success. (Following Golang's rules)
+    /// Consume a semicolon
+    /// ')' or '}', then success (Following Golang's rules)
     pub fn consume_semi(&mut self) -> ParseResult<Span> {
         if let Ok(span) = self.consume(&TokenKind::Semi) {
             return Ok(span);
@@ -108,9 +113,9 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         })
     }
 
-    /// Consumes a semicolon.
-    /// ')' or '}', then success. (Following Golang's rules)
-    /// Return boolean.
+    /// Consume a semicolon
+    /// ')' or '}', then success (Following Golang's rules)
+    /// Return boolean
     pub fn consume_semi_b(&mut self) -> bool {
         if self.consume_b(&TokenKind::Semi)
             || (self.check(&TokenKind::CloseParen) || self.check(&TokenKind::CloseBrace))

@@ -1,25 +1,23 @@
 use kaede_ast::top::{Fn, Params, TopLevel, TopLevelKind};
 use kaede_lex::token::{Token, TokenKind};
-use kaede_location::{Location, Span};
+use kaede_location::Span;
 
 use crate::{error::ParseResult, Parser};
 
 impl<T: Iterator<Item = Token>> Parser<T> {
-    /// None if end of tokens
-    pub fn top(&mut self) -> ParseResult<Option<TopLevel>> {
-        let token = match self.bump() {
-            Some(x) => x,
-            None => return Ok(None),
-        };
+    pub fn top(&mut self) -> ParseResult<TopLevel> {
+        let token = self.first();
 
         match token.kind {
-            TokenKind::Function => Ok(Some(self.func(token.span.start)?)),
+            TokenKind::Fn => Ok(self.func()?),
 
-            t => unreachable!("{:?}", t),
+            _ => unreachable!("{:?}", token.kind),
         }
     }
 
-    fn func(&mut self, start: Location) -> ParseResult<TopLevel> {
+    fn func(&mut self) -> ParseResult<TopLevel> {
+        let start = self.consume(&TokenKind::Fn).unwrap().start;
+
         let name = self.ident()?;
 
         self.consume(&TokenKind::OpenParen)?;

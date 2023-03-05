@@ -33,28 +33,30 @@ fn lex_internal(input: &str) -> impl Iterator<Item = Token> + '_ {
     result.into_iter()
 }
 
-/// Rules similar to Go language.
-/// 'NewLine' token will be removed.
+/// Rules similar to Go language
+/// 'NewLine' token will be removed
 fn insert_semicolons(tokens: impl Iterator<Item = Token>) -> Vec<Token> {
     let mut result = Vec::<Token>::new();
 
     for tok in tokens {
         match tok.kind {
             TokenKind::NewLine | TokenKind::Eoi => {
-                let last = match result.last() {
-                    Some(last) => last,
-                    None => continue,
-                };
+                if let Some(last) = result.last() {
+                    if can_insert_semicolon(&last.kind) {
+                        let start = last.span.finish;
+                        let mut finish = start;
+                        finish.increase_column();
 
-                if can_insert_semicolon(&last.kind) {
-                    let start = last.span.finish;
-                    let mut finish = start;
-                    finish.increase_column();
+                        result.push(Token {
+                            kind: TokenKind::Semi,
+                            span: Span::new(start, finish),
+                        });
+                    }
+                }
 
-                    result.push(Token {
-                        kind: TokenKind::Semi,
-                        span: Span::new(start, finish),
-                    });
+                // Eoi not discarded
+                if tok.kind == TokenKind::Eoi {
+                    result.push(tok);
                 }
             }
 
@@ -65,7 +67,7 @@ fn insert_semicolons(tokens: impl Iterator<Item = Token>) -> Vec<Token> {
     result
 }
 
-/// True if a semicolon can be inserted after the token.
+/// True if a semicolon can be inserted after the token
 fn can_insert_semicolon(token: &TokenKind) -> bool {
     use TokenKind::*;
 
@@ -98,12 +100,12 @@ fn is_whitespace(c: char) -> bool {
     )
 }
 
-/// True if `c` is valid as a first character of an identifier.
+/// True if `c` is valid as a first character of an identifier
 fn is_id_start(c: char) -> bool {
     c == '_' || unicode_xid::UnicodeXID::is_xid_start(c)
 }
 
-/// True if `c` is valid as a non-first character of an identifier.
+/// True if `c` is valid as a non-first character of an identifier
 fn is_id_continue(c: char) -> bool {
     unicode_xid::UnicodeXID::is_xid_continue(c)
 }
@@ -146,7 +148,7 @@ impl Cursor<'_> {
 
                 match ident.as_str() {
                     // Reserved words
-                    "fn" => self.create_token(TokenKind::Function),
+                    "fn" => self.create_token(TokenKind::Fn),
                     "return" => self.create_token(TokenKind::Return),
                     "let" => self.create_token(TokenKind::Let),
                     "if" => self.create_token(TokenKind::If),
@@ -154,6 +156,7 @@ impl Cursor<'_> {
                     "loop" => self.create_token(TokenKind::Loop),
                     "break" => self.create_token(TokenKind::Break),
                     "mut" => self.create_token(TokenKind::Mut),
+                    "struct" => self.create_token(TokenKind::Struct),
                     _ => self.create_token(TokenKind::Ident(ident)),
                 }
             }

@@ -14,14 +14,14 @@ fn lex_test(program: &str, expect: Vec<TokenKind>) {
 
 #[test]
 fn number() {
-    lex_test("4810", vec![Int(4810.to_string()), Semi]);
+    lex_test("4810", vec![Int(4810.to_string()), Semi, Eoi]);
 }
 
 #[test]
 fn skip_whitespaces() {
-    lex_test("  \n  ", vec![]);
+    lex_test("  \n  ", vec![Eoi]);
 
-    lex_test("\t\r", vec![]);
+    lex_test("\t\r", vec![Eoi]);
 }
 
 #[test]
@@ -34,6 +34,7 @@ fn multi_numbers() {
             Int(5.to_string()),
             Int(8.to_string()),
             Semi,
+            Eoi,
         ],
     );
 }
@@ -42,7 +43,12 @@ fn multi_numbers() {
 fn identifier() {
     lex_test(
         "yoha io",
-        vec![Ident("yoha".to_string()), Ident("io".to_string()), Semi],
+        vec![
+            Ident("yoha".to_string()),
+            Ident("io".to_string()),
+            Semi,
+            Eoi,
+        ],
     );
 }
 
@@ -50,7 +56,9 @@ fn identifier() {
 fn punct() {
     lex_test(
         "() , {}",
-        vec![OpenParen, CloseParen, Comma, OpenBrace, CloseBrace, Semi],
+        vec![
+            OpenParen, CloseParen, Comma, OpenBrace, CloseBrace, Semi, Eoi,
+        ],
     );
 }
 
@@ -76,10 +84,10 @@ fn span() {
 fn auto_insert_semi() {
     lex_test(
         "48 +\n 10\n",
-        vec![Int(48.to_string()), Add, Int(10.to_string()), Semi],
+        vec![Int(48.to_string()), Add, Int(10.to_string()), Semi, Eoi],
     );
 
-    lex_test("return", vec![Return, Semi]);
+    lex_test("return", vec![Return, Semi, Eoi]);
 }
 
 #[test]
@@ -104,7 +112,7 @@ fn auto_inserted_semi_span() {
 fn simple_string_literal() {
     lex_test(
         r#""aeiueoao""#,
-        vec![StringLiteral("aeiueoao".to_string()), Semi],
+        vec![StringLiteral("aeiueoao".to_string()), Semi, Eoi],
     );
 }
 
@@ -112,6 +120,10 @@ fn simple_string_literal() {
 fn unicode_string_literal() {
     lex_test(
         r#""🌹🌼あえいうえおあお🥀🌼""#,
-        vec![StringLiteral("🌹🌼あえいうえおあお🥀🌼".to_string()), Semi],
+        vec![
+            StringLiteral("🌹🌼あえいうえおあお🥀🌼".to_string()),
+            Semi,
+            Eoi,
+        ],
     );
 }
