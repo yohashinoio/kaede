@@ -32,7 +32,7 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
         Self { ctx, scope }
     }
 
-    /// Generate expression code.
+    /// Generate expression code
     fn build(&self, node: Expr) -> CodegenResult<Value<'ctx>> {
         Ok(match node.kind {
             ExprKind::Int(int) => Value::new(

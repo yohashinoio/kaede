@@ -4,7 +4,7 @@ use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability, Ty};
 use crate::{error::ParseResult, Parser};
 
 impl<T: Iterator<Item = Token>> Parser<T> {
-    /// Type.
+    /// Type
     pub fn ty(&mut self) -> ParseResult<Ty> {
         use FundamentalTypeKind::*;
 

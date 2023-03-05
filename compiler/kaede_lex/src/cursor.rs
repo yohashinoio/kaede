@@ -25,7 +25,7 @@ impl<'a> Cursor<'a> {
         self.chars.as_str().is_empty() || self.first() == EOF_CHAR
     }
 
-    /// Advance to the next character.
+    /// Advance to the next character
     pub fn bump(&mut self) -> Option<char> {
         let c = match self.chars.next() {
             Some(c) => c,

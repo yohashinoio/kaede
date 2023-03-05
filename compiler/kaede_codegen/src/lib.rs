@@ -61,8 +61,8 @@ pub fn codegen<'ctx>(
     Ok(())
 }
 
-/// Codegen context.
-/// Instantiate per translation unit.
+/// Codegen context
+/// Instantiate per translation unit
 pub struct CGCtx<'ctx, 'module> {
     pub context: &'ctx Context,
 
@@ -84,7 +84,7 @@ impl<'ctx, 'module> CGCtx<'ctx, 'module> {
         }
     }
 
-    /// Create a new stack allocation instruction in the entry block of the function.
+    /// Create a new stack allocation instruction in the entry block of the function
     fn create_entry_block_alloca(&self, name: &str, ty: &Ty) -> PointerValue<'ctx> {
         let builder = self.context.create_builder();
 
@@ -106,7 +106,7 @@ impl<'ctx, 'module> CGCtx<'ctx, 'module> {
             .unwrap()
     }
 
-    /// `True` if there is **not** a terminator in the current block.
+    /// `True` if there is **not** a terminator in the current block
     pub fn no_terminator(&self) -> bool {
         self.builder
             .get_insert_block()

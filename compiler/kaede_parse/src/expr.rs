@@ -97,7 +97,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
 
         if let Ok(span) = self.consume(&TokenKind::Sub) {
-            // Subtracting a number from 0 inverts the sign.
+            // Subtracting a number from 0 inverts the sign
             let zero = Box::new(Expr {
                 kind: ExprKind::Int(Int {
                     kind: IntKind::I32(0),
@@ -173,12 +173,12 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         })
     }
 
-    /// Works with zero arguments.
+    /// Works with zero arguments
     fn fn_call_args(&mut self) -> ParseResult<Args> {
         let mut args = Args::new();
 
         if self.check(&TokenKind::CloseParen) {
-            // No arguments.
+            // No arguments
             return Ok(args);
         }
 
@@ -198,7 +198,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         match token.kind {
             TokenKind::Int(int_s) => {
-                // Try to convert to i32.
+                // Try to convert to i32
                 match int_s.parse() {
                     Ok(n) => Ok(Int {
                         kind: IntKind::I32(n),

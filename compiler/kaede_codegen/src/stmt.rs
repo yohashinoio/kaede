@@ -40,13 +40,13 @@ pub fn build_statement<'a, 'ctx>(
 }
 
 pub struct StmtCtx<'ctx> {
-    /// Jump at break (statement).
-    /// None if not in a loop.
+    /// Jump at break (statement)
+    /// None if not in a loop
     pub loop_break_bb: Option<BasicBlock<'ctx>>,
 }
 
 impl StmtCtx<'_> {
-    /// Fields of type `Option<T>` will be `None`.
+    /// Fields of type `Option<T>` will be `None`
     pub fn new() -> Self {
         Self {
             loop_break_bb: None,
@@ -73,7 +73,7 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
         }
     }
 
-    /// Generate statement code.
+    /// Generate statement code
     fn build(&mut self, stmt: Stmt) -> CodegenResult<()> {
         match stmt.kind {
             StmtKind::Expr(e) => {
@@ -96,8 +96,8 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
         Ok(())
     }
 
-    /// Create a value for the side to be assigned.
-    /// Return `Err` if the expression is inappropriate as the one to be assigned.
+    /// Create a value for the side to be assigned
+    /// Return `Err` if the expression is inappropriate as the one to be assigned
     fn build_assignable(&mut self, node: Expr) -> CodegenResult<Value<'ctx>> {
         match node.kind {
             ExprKind::Ident(ident) => {
@@ -193,7 +193,7 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
         // Build then block
         self.ctx.builder.position_at_end(then_bb);
         build_block(self.ctx, self.stmt_ctx, self.scope, node.then)?;
-        // Since there can be no more than one terminator per block.
+        // Since there can be no more than one terminator per block
         if self.ctx.no_terminator() {
             self.ctx.builder.build_unconditional_branch(cont_bb);
         }
@@ -206,7 +206,7 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
                 Else::Block(block) => build_block(self.ctx, self.stmt_ctx, self.scope, block)?,
             }
         }
-        // Since there can be no more than one terminator per block.
+        // Since there can be no more than one terminator per block
         if self.ctx.no_terminator() {
             self.ctx.builder.build_unconditional_branch(cont_bb);
         }

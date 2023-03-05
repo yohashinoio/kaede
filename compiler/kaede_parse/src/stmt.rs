@@ -12,7 +12,7 @@ use crate::{
 };
 
 impl<T: Iterator<Item = Token>> Parser<T> {
-    /// Consume a semicolon immediately following each statement.
+    /// Consume a semicolon immediately following each statement
     pub fn block(&mut self) -> ParseResult<Block> {
         let mut body = Vec::new();
 
@@ -33,12 +33,12 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             }
 
             body.push(self.stmt()?);
-            // Consume a semicolon immediately following each statement.
+            // Consume a semicolon immediately following each statement
             self.consume_semi()?;
         }
     }
 
-    /// Semicolons are **not** consumed.
+    /// Semicolons are **not** consumed
     pub fn stmt(&mut self) -> ParseResult<Stmt> {
         if self.check(&TokenKind::Return) {
             let r = self.return_()?;

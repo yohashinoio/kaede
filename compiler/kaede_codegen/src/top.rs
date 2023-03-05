@@ -67,17 +67,17 @@ impl<'a, 'ctx, 'c> TopLevelBuilder<'a, 'ctx, 'c> {
             .map(|e| (e.0, Rc::new(e.1)))
             .collect::<Vec<_>>();
 
-        // Store return type information in table.
+        // Store return type information in table
         self.ctx
             .return_ty_table
             .insert(fn_value, node.return_ty.map(Rc::new));
 
-        // Store parameter information in table.
+        // Store parameter information in table
         self.ctx
             .param_table
             .insert(fn_value, param_info.iter().map(|e| e.1.clone()).collect());
 
-        // Allocate parameters.
+        // Allocate parameters
         let mut param_table = self.create_param_table(param_info, fn_value);
 
         if node.body.body.is_empty() {
@@ -89,7 +89,7 @@ impl<'a, 'ctx, 'c> TopLevelBuilder<'a, 'ctx, 'c> {
         Ok(())
     }
 
-    /// Expand function parameters into a symbol table.
+    /// Expand function parameters into a symbol table
     fn create_param_table(
         &self,
         param_info: Vec<(String, Rc<Ty>)>,

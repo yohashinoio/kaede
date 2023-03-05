@@ -3,13 +3,13 @@ use std::rc::Rc;
 use inkwell::values::BasicValueEnum;
 use kaede_type::Ty;
 
-/// The type information in llvm's value is **insufficient**, so wrap it with our own type.
+/// The type information in llvm's value is **insufficient**, so wrap it with our own type
 ///
-/// For example, there is **no** sign information in the integer value of llvm.
+/// For example, there is **no** sign information in the integer value of llvm
 pub struct Value<'ctx> {
-    /// None if void.
+    /// None if void
     val: Option<BasicValueEnum<'ctx>>,
-    /// None if void type.
+    /// None if void type
     ty: Option<Rc<Ty>>,
 }
 
@@ -21,7 +21,7 @@ impl<'ctx> Value<'ctx> {
         }
     }
 
-    /// Create a `Value` representing a void value of type void.
+    /// Create a `Value` representing a void value of type void
     pub fn new_void() -> Self {
         Self {
             val: None,
@@ -29,12 +29,12 @@ impl<'ctx> Value<'ctx> {
         }
     }
 
-    /// If the value is `void`, this function **panics**.
+    /// If the value is `void`, this function **panics**
     pub fn get_value(&self) -> BasicValueEnum<'ctx> {
         self.val.unwrap()
     }
 
-    /// If the type is `void`, this function **panics**.
+    /// If the type is `void`, this function **panics**
     pub fn get_type(&self) -> Rc<Ty> {
         self.ty.as_ref().unwrap().clone()
     }
