@@ -1,7 +1,7 @@
 use kaede_location::Span;
 use kaede_type::Ty;
 
-use crate::expr::Expr;
+use crate::expr::{Expr, Ident};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum AssignKind {
@@ -50,7 +50,7 @@ pub struct Return {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Let {
-    pub name: String,
+    pub name: Ident,
     pub init: Option<Expr>,
     pub ty: Ty,
     pub span: Span,

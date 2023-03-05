@@ -31,6 +31,8 @@ impl<'a, 'ctx, 'c> TopLevelBuilder<'a, 'ctx, 'c> {
     fn build(&mut self, node: TopLevel) -> CodegenResult<()> {
         match node.kind {
             TopLevelKind::Fn(func) => self.define_func(func)?,
+
+            TopLevelKind::Struct(_) => unimplemented!(),
         }
 
         Ok(())
@@ -56,7 +58,10 @@ impl<'a, 'ctx, 'c> TopLevelBuilder<'a, 'ctx, 'c> {
                 .fn_type(param_llvm_tys.as_slice(), false),
         };
 
-        let fn_value = self.ctx.module.add_function(&node.name, fn_type, None);
+        let fn_value = self
+            .ctx
+            .module
+            .add_function(node.name.as_str(), fn_type, None);
 
         let basic_block = self.ctx.context.append_basic_block(fn_value, "entry");
         self.ctx.builder.position_at_end(basic_block);

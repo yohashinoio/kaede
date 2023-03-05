@@ -155,7 +155,7 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
     }
 
     fn call_fn(&self, node: FnCall) -> CodegenResult<Value<'ctx>> {
-        let func = self.ctx.module.get_function(&node.name.name);
+        let func = self.ctx.module.get_function(node.name.as_str());
 
         let args = {
             let mut args = Vec::new();

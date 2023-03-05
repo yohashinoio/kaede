@@ -8,6 +8,12 @@ pub struct Ident {
     pub span: Span,
 }
 
+impl Ident {
+    pub fn as_str(&self) -> &str {
+        &self.name
+    }
+}
+
 pub type Args = Vec<Expr>;
 
 #[derive(Debug, PartialEq, Eq)]

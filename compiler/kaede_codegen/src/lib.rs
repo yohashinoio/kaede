@@ -30,7 +30,7 @@ impl<'ctx> SymbolTable<'ctx> {
     }
 
     pub fn find(&self, ident: &Ident) -> CodegenResult<&Symbol<'ctx>> {
-        match self.0.get(&ident.name) {
+        match self.0.get(ident.as_str()) {
             Some(result) => Ok(result),
 
             None => Err(CodegenError::Undeclared {

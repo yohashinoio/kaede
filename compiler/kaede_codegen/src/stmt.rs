@@ -238,9 +238,9 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
                 let mut ty = (*init.get_type()).clone();
                 ty.mutability = node.ty.mutability;
 
-                let alloca = self.ctx.create_entry_block_alloca(&node.name, &ty);
+                let alloca = self.ctx.create_entry_block_alloca(node.name.as_str(), &ty);
 
-                self.scope.0.insert(node.name, (alloca, Rc::new(ty)));
+                self.scope.0.insert(node.name.name, (alloca, Rc::new(ty)));
 
                 alloca
             } else {
@@ -251,9 +251,13 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
                     return Err(CodegenError::MismatchedTypes { span: node.span });
                 }
 
-                let alloca = self.ctx.create_entry_block_alloca(&node.name, &node.ty);
+                let alloca = self
+                    .ctx
+                    .create_entry_block_alloca(node.name.as_str(), &node.ty);
 
-                self.scope.0.insert(node.name, (alloca, Rc::new(node.ty)));
+                self.scope
+                    .0
+                    .insert(node.name.name, (alloca, Rc::new(node.ty)));
 
                 alloca
             };

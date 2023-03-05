@@ -343,3 +343,19 @@ fn string_literal() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn declare_struct() -> anyhow::Result<()> {
+    let program = r"struct A {
+        a i32
+        b bool
+    }
+
+    fn test() i32 {
+        return 58
+    }";
+
+    assert_eq!(cg_test(program)?, 58);
+
+    Ok(())
+}

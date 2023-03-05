@@ -1,4 +1,4 @@
-use kaede_ast::top::{Fn, Params, TopLevel, TopLevelKind};
+use kaede_ast::top::{Access, Fn, Params, Struct, StructField, TopLevel, TopLevelKind};
 use kaede_lex::token::{Token, TokenKind};
 use kaede_location::Span;
 
@@ -8,11 +8,17 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     pub fn top(&mut self) -> ParseResult<TopLevel> {
         let token = self.first();
 
-        match token.kind {
-            TokenKind::Fn => Ok(self.func()?),
+        let top = match token.kind {
+            TokenKind::Fn => self.func(),
+
+            TokenKind::Struct => self.struct_(),
 
             _ => unreachable!("{:?}", token.kind),
-        }
+        };
+
+        self.consume_semi()?;
+
+        top
     }
 
     fn func(&mut self) -> ParseResult<TopLevel> {
@@ -36,16 +42,17 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         let body = self.block()?;
 
-        let finish = self.consume_semi()?.finish;
+        let span = Span::new(start, body.span.finish);
 
         Ok(TopLevel {
             kind: TopLevelKind::Fn(Fn {
-                name: name.name,
+                name,
                 params,
                 body,
                 return_ty,
+                span,
             }),
-            span: Span::new(start, finish),
+            span,
         })
     }
 
@@ -65,5 +72,48 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
 
         Ok(params)
+    }
+
+    fn struct_(&mut self) -> ParseResult<TopLevel> {
+        let start = self.consume(&TokenKind::Struct).unwrap().start;
+
+        let name = self.ident()?;
+
+        self.consume(&TokenKind::OpenBrace)?;
+
+        let fields = self.struct_fields()?;
+
+        let finish = self.consume(&TokenKind::CloseBrace)?.finish;
+
+        let span = Span::new(start, finish);
+
+        Ok(TopLevel {
+            kind: TopLevelKind::Struct(Struct { name, fields, span }),
+            span,
+        })
+    }
+
+    fn struct_fields(&mut self) -> ParseResult<Vec<StructField>> {
+        let mut fields = Vec::new();
+
+        loop {
+            if self.check(&TokenKind::CloseBrace) {
+                break;
+            }
+
+            let name = self.ident()?;
+
+            let ty = self.ty()?;
+
+            self.consume_semi()?;
+
+            fields.push(StructField {
+                name,
+                ty,
+                access: Access::Public,
+            });
+        }
+
+        Ok(fields)
     }
 }

@@ -192,7 +192,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             Mutability::Not
         };
 
-        let ident = self.ident()?;
+        let name = self.ident()?;
 
         let ty = match self.ty() {
             Ok(ty) => ty,
@@ -205,7 +205,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             let finish = init.span.finish;
 
             return Ok(Let {
-                name: ident.name,
+                name,
                 init: Some(init),
                 ty,
                 span: Span::new(start, finish),
@@ -218,10 +218,10 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
 
         Ok(Let {
-            name: ident.name,
+            span: Span::new(start, name.span.finish),
+            name,
             init: None,
             ty,
-            span: Span::new(start, ident.span.finish),
         })
     }
 }
