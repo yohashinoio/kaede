@@ -8,7 +8,7 @@ use crate::{
 };
 
 use inkwell::{values::BasicValue, IntPredicate};
-use kaede_ast::expr::{Binary, BinaryKind, Expr, ExprKind, FnCall, Ident, StructInstantiation};
+use kaede_ast::expr::{Binary, BinaryKind, Expr, ExprKind, FnCall, Ident, StructLiteral};
 use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability, Ty, TyKind, UDType};
 
 pub fn build_expression<'a, 'ctx>(
@@ -49,7 +49,7 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
 
             ExprKind::FnCall(fcall) => self.call_fn(fcall)?,
 
-            ExprKind::StructInstantiation(node) => self.struct_instantiation(node)?,
+            ExprKind::StructLiteral(node) => self.struct_literal(node)?,
 
             // Boolean literals
             ExprKind::True => self.boolean_literal(true),
@@ -71,7 +71,7 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
         )
     }
 
-    fn struct_instantiation(&self, node: StructInstantiation) -> CodegenResult<Value<'ctx>> {
+    fn struct_literal(&self, node: StructLiteral) -> CodegenResult<Value<'ctx>> {
         let (_ty, info) = match self.ctx.struct_table.get(node.struct_name.as_str()) {
             Some(value) => value,
 

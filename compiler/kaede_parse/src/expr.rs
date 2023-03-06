@@ -1,5 +1,5 @@
 use kaede_ast::expr::{
-    Args, Binary, BinaryKind, Expr, ExprKind, FnCall, Ident, Int, IntKind, StructInstantiation,
+    Args, Binary, BinaryKind, Expr, ExprKind, FnCall, Ident, Int, IntKind, StructLiteral,
 };
 use kaede_lex::token::{Token, TokenKind};
 use kaede_location::Span;
@@ -133,7 +133,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                 return self.fn_call(ident);
             }
 
-            // Struct instantiation
+            // Struct literal
             if self.first().kind == TokenKind::OpenBrace {
                 // Check if this brace is from a block statement
                 // if x {}
@@ -141,7 +141,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
                 // If parsing an expression for a condition now, skip
                 if !self.in_cond_expr {
-                    return self.struct_instantiation(ident);
+                    return self.struct_literal(ident);
                 }
             }
 
@@ -188,7 +188,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         None
     }
 
-    fn struct_instantiation(&mut self, struct_name: Ident) -> ParseResult<Expr> {
+    fn struct_literal(&mut self, struct_name: Ident) -> ParseResult<Expr> {
         let mut inits = Vec::new();
 
         self.consume(&TokenKind::OpenBrace).unwrap();
@@ -196,7 +196,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         if let Ok(finish) = self.consume(&TokenKind::CloseBrace) {
             return Ok(Expr {
                 span: Span::new(struct_name.span.start, finish.finish),
-                kind: ExprKind::StructInstantiation(StructInstantiation {
+                kind: ExprKind::StructLiteral(StructLiteral {
                     struct_name,
                     values: inits,
                 }),
@@ -211,7 +211,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
                 return Ok(Expr {
                     span: Span::new(struct_name.span.start, finish),
-                    kind: ExprKind::StructInstantiation(StructInstantiation {
+                    kind: ExprKind::StructLiteral(StructLiteral {
                         struct_name,
                         values: inits,
                     }),

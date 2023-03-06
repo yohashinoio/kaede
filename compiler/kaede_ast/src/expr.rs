@@ -14,9 +14,9 @@ impl Ident {
     }
 }
 
-// Struct instantiation
+// Struct literal
 #[derive(Debug, PartialEq, Eq)]
-pub struct StructInstantiation {
+pub struct StructLiteral {
     pub struct_name: Ident,
     pub values: Vec<(Ident, Expr)>,
 }
@@ -92,7 +92,7 @@ pub enum ExprKind {
     Binary(Binary),
     Ident(Ident),
     FnCall(FnCall),
-    StructInstantiation(StructInstantiation),
+    StructLiteral(StructLiteral),
     True,
     False,
 }
