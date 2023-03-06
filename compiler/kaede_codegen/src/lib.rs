@@ -97,7 +97,7 @@ pub fn codegen<'ctx>(
 }
 
 /// Codegen context
-/// Instantiate per translation unit
+/// Per translation unit
 pub struct CGCtx<'ctx, 'module> {
     pub context: &'ctx Context,
 
