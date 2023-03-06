@@ -9,7 +9,7 @@ use inkwell::{
     values::{FunctionValue, PointerValue},
     AddressSpace,
 };
-use kaede_ast::{expr::Ident, top::StructField, TranslationUnit};
+use kaede_ast::{expr::Ident, top::Access, TranslationUnit};
 use kaede_type::{Ty, TyKind};
 use top::build_top_level;
 
@@ -74,8 +74,14 @@ pub type ReturnTypeTable<'ctx> = HashMap<FunctionValue<'ctx>, Option<Rc<Ty>>>;
 
 pub type ParamTable<'ctx> = HashMap<FunctionValue<'ctx>, Vec<Rc<Ty>>>;
 
+pub struct StructFieldInfo {
+    pub ty: Ty,
+    pub access: Access,
+    pub offset: u64,
+}
+
 pub struct StructInfo {
-    pub fields: HashMap<String, StructField>,
+    pub fields: HashMap<String, StructFieldInfo>,
 }
 
 pub type StructTable<'ctx> = HashMap<String, (StructType<'ctx>, StructInfo)>;

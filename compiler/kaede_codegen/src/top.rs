@@ -1,4 +1,4 @@
-use std::{collections::HashMap, rc::Rc};
+use std::rc::Rc;
 
 use inkwell::{types::BasicType, values::FunctionValue};
 use kaede_ast::top::{Fn, Struct, TopLevel, TopLevelKind};
@@ -8,7 +8,7 @@ use crate::{
     as_llvm_type,
     error::CodegenResult,
     stmt::{build_block, StmtCtx},
-    CGCtx, StructInfo, SymbolTable,
+    CGCtx, StructFieldInfo, StructInfo, SymbolTable,
 };
 
 pub fn build_top_level(ctx: &mut CGCtx, node: TopLevel) -> CodegenResult<()> {
@@ -129,15 +129,20 @@ impl<'a, 'ctx, 'c> TopLevelBuilder<'a, 'ctx, 'c> {
 
         ty.set_body(&field_tys, true);
 
-        let fields = {
-            let mut info = HashMap::new();
-
-            for fi in node.fields {
-                info.insert(fi.name.name.clone(), fi);
-            }
-
-            info
-        };
+        let fields = node
+            .fields
+            .into_iter()
+            .map(|f| {
+                (
+                    f.name.name,
+                    StructFieldInfo {
+                        ty: f.ty,
+                        access: f.access,
+                        offset: f.offset,
+                    },
+                )
+            })
+            .collect();
 
         self.ctx
             .struct_table
