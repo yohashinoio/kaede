@@ -121,11 +121,11 @@ impl<'a, 'ctx, 'c> TopLevelBuilder<'a, 'ctx, 'c> {
     }
 
     fn define_struct(&mut self, node: Struct) {
-        let mut field_tys = Vec::new();
-
-        for field in node.fields {
-            field_tys.push(field.ty.kind.as_llvm_type(self.ctx.context));
-        }
+        let field_tys: Vec<_> = node
+            .fields
+            .iter()
+            .map(|f| f.ty.kind.as_llvm_type(self.ctx.context))
+            .collect();
 
         let ty = self.ctx.context.opaque_struct_type(node.name.as_str());
 
