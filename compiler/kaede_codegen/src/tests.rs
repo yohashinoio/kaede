@@ -7,7 +7,7 @@ use super::*;
 
 type TestFunc = unsafe extern "C" fn() -> i32;
 
-// Expects that a test function of type TestFunc is defined in the module.
+// Expects that a test function of type TestFunc is defined in the module
 fn jit_compile_test(module: &Module) -> i32 {
     let ee = module
         .create_jit_execution_engine(OptimizationLevel::Default)
