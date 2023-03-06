@@ -47,6 +47,8 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
             ExprKind::BinOp(binop) => self.binary_op(binop)?,
 
             ExprKind::FnCall(fcall) => self.call_fn(fcall)?,
+
+            ExprKind::StructInit(_) => todo!(),
         })
     }
 

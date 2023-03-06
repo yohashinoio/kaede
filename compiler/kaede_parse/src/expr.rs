@@ -1,4 +1,6 @@
-use kaede_ast::expr::{Args, Binary, BinaryKind, Expr, ExprKind, FnCall, Ident, Int, IntKind};
+use kaede_ast::expr::{
+    Args, Binary, BinaryKind, Expr, ExprKind, FnCall, Ident, Int, IntKind, StructInit,
+};
 use kaede_lex::token::{Token, TokenKind};
 use kaede_location::Span;
 
@@ -126,36 +128,73 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
 
         if let Ok(ident) = self.ident() {
-            // Function call
-            if self.check(&TokenKind::OpenParen) {
-                return self.fn_call(ident);
-            }
+            return match self.first().kind {
+                // Function call
+                TokenKind::OpenParen => self.fn_call(ident),
 
-            // Identifier
-            return Ok(Expr {
-                span: ident.span,
-                kind: ExprKind::Ident(ident),
-            });
+                // Struct initialization
+                TokenKind::OpenBrace => self.struct_init(ident),
+
+                _ => Ok(Expr {
+                    span: ident.span,
+                    kind: ExprKind::Ident(ident),
+                }),
+            };
         }
 
         // String literals
-        if matches!(self.first().kind, TokenKind::StringLiteral(_)) {
-            let token = self.bump().unwrap();
-
-            return Ok(Expr {
-                span: token.span,
-                kind: ExprKind::StirngLiteral(match token.kind {
-                    TokenKind::StringLiteral(s) => s,
-                    _ => unreachable!(),
-                }),
-            });
+        if let Some(lit) = self.string_literal() {
+            return Ok(lit);
         }
 
+        // Integers
         let int = self.integer()?;
         Ok(Expr {
             span: int.span,
             kind: ExprKind::Int(int),
         })
+    }
+
+    fn struct_init(&mut self, struct_name: Ident) -> ParseResult<Expr> {
+        let mut inits = Vec::new();
+
+        self.consume(&TokenKind::OpenBrace)?;
+
+        if let Ok(finish) = self.consume(&TokenKind::CloseBrace) {
+            return Ok(Expr {
+                span: Span::new(struct_name.span.start, finish.finish),
+                kind: ExprKind::StructInit(StructInit { struct_name, inits }),
+            });
+        }
+
+        loop {
+            inits.push((self.ident()?, self.expr()?));
+
+            if !self.consume_b(&TokenKind::Comma) {
+                let finish = self.consume(&TokenKind::CloseBrace)?.finish;
+
+                return Ok(Expr {
+                    span: Span::new(struct_name.span.start, finish),
+                    kind: ExprKind::StructInit(StructInit { struct_name, inits }),
+                });
+            }
+        }
+    }
+
+    fn string_literal(&mut self) -> Option<Expr> {
+        if matches!(self.first().kind, TokenKind::StringLiteral(_)) {
+            let token = self.bump().unwrap();
+
+            Some(Expr {
+                span: token.span,
+                kind: ExprKind::StirngLiteral(match token.kind {
+                    TokenKind::StringLiteral(s) => s,
+                    _ => unreachable!(),
+                }),
+            })
+        } else {
+            None
+        }
     }
 
     fn fn_call(&mut self, name: Ident) -> ParseResult<Expr> {
