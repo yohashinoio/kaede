@@ -9,16 +9,22 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         let token = self.first();
 
         let top = match token.kind {
-            TokenKind::Fn => self.func(),
+            TokenKind::Fn => {
+                // Because the semicolon is consumed before the value is returned, ? is required
+                self.func()?
+            }
 
-            TokenKind::Struct => self.struct_(),
+            TokenKind::Struct => {
+                // Because the semicolon is consumed before the value is returned, ? is required
+                self.struct_()?
+            }
 
             _ => unreachable!("{:?}", token.kind),
         };
 
         self.consume_semi()?;
 
-        top
+        Ok(top)
     }
 
     fn func(&mut self) -> ParseResult<TopLevel> {

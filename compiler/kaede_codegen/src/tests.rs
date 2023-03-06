@@ -107,6 +107,22 @@ fn return_stmt() -> anyhow::Result<()> {
 }
 
 #[test]
+fn empty_return_stmt() -> anyhow::Result<()> {
+    let program = r"fn f() {
+        return
+    }
+
+    fn test() i32 {
+        f()
+        return 58
+    }";
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
 fn let_statement() -> anyhow::Result<()> {
     // Type inference
     let program = r"fn test() i32 {
@@ -377,6 +393,40 @@ fn use_struct() -> anyhow::Result<()> {
     fn test() i32 {
         let p = Person { is_male false, age 58, is_female true }
         return p.age
+    }";
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn true_() -> anyhow::Result<()> {
+    let program = r"fn test() i32 {
+        let b = true
+
+        if b {
+            return 58
+        }
+
+        return 123
+    }";
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn false_() -> anyhow::Result<()> {
+    let program = r"fn test() i32 {
+        let b = false
+
+        if b {
+            return 123
+        }
+
+        return 58
     }";
 
     assert_eq!(run_test(program)?, 58);

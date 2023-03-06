@@ -45,12 +45,30 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
 
             ExprKind::Ident(name) => self.expr_ident(name)?,
 
-            ExprKind::BinOp(binop) => self.binary_op(binop)?,
+            ExprKind::Binary(b) => self.binary_op(b)?,
 
             ExprKind::FnCall(fcall) => self.call_fn(fcall)?,
 
-            ExprKind::StructInit(node) => self.struct_instantiation(node)?,
+            ExprKind::StructInstantiation(node) => self.struct_instantiation(node)?,
+
+            // Boolean literals
+            ExprKind::True => self.boolean_literal(true),
+            ExprKind::False => self.boolean_literal(false),
         })
+    }
+
+    fn boolean_literal(&self, value: bool) -> Value<'ctx> {
+        Value::new(
+            self.ctx
+                .context
+                .bool_type()
+                .const_int(value as u64, false)
+                .into(),
+            Rc::new(make_fundamental_type(
+                FundamentalTypeKind::Bool,
+                Mutability::Not,
+            )),
+        )
     }
 
     fn struct_instantiation(&self, node: StructInstantiation) -> CodegenResult<Value<'ctx>> {

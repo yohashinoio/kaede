@@ -89,8 +89,10 @@ pub struct Expr {
 pub enum ExprKind {
     Int(Int),
     StirngLiteral(String),
-    BinOp(Binary),
+    Binary(Binary),
     Ident(Ident),
     FnCall(FnCall),
-    StructInit(StructInstantiation),
+    StructInstantiation(StructInstantiation),
+    True,
+    False,
 }

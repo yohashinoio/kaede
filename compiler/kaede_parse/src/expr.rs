@@ -14,14 +14,14 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         self.add()
     }
 
-    /// Same precedence of multiplication
+    /// Same precedence of addition
     fn add(&mut self) -> ParseResult<Expr> {
         let mut node = self.mul()?;
 
         loop {
             if let Ok(span) = self.consume(&TokenKind::Add) {
                 node = Expr {
-                    kind: ExprKind::BinOp(Binary::new(
+                    kind: ExprKind::Binary(Binary::new(
                         Box::new(node),
                         BinaryKind::Add,
                         Box::new(self.mul()?),
@@ -30,7 +30,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                 };
             } else if let Ok(span) = self.consume(&TokenKind::Sub) {
                 node = Expr {
-                    kind: ExprKind::BinOp(Binary::new(
+                    kind: ExprKind::Binary(Binary::new(
                         Box::new(node),
                         BinaryKind::Sub,
                         Box::new(self.mul()?),
@@ -50,7 +50,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         loop {
             if let Ok(span) = self.consume(&TokenKind::Mul) {
                 node = Expr {
-                    kind: ExprKind::BinOp(Binary::new(
+                    kind: ExprKind::Binary(Binary::new(
                         Box::new(node),
                         BinaryKind::Mul,
                         Box::new(self.equal()?),
@@ -59,7 +59,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                 };
             } else if let Ok(span) = self.consume(&TokenKind::Div) {
                 node = Expr {
-                    kind: ExprKind::BinOp(Binary::new(
+                    kind: ExprKind::Binary(Binary::new(
                         Box::new(node),
                         BinaryKind::Div,
                         Box::new(self.equal()?),
@@ -79,7 +79,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         loop {
             if let Ok(span) = self.consume(&TokenKind::Eq) {
                 node = Expr {
-                    kind: ExprKind::BinOp(Binary::new(
+                    kind: ExprKind::Binary(Binary::new(
                         Box::new(node),
                         BinaryKind::Eq,
                         Box::new(self.unary()?),
@@ -112,7 +112,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
             return Ok(Expr {
                 span: Span::new(span.start, primary.span.finish),
-                kind: ExprKind::BinOp(Binary::new(zero, BinaryKind::Sub, Box::new(primary))),
+                kind: ExprKind::Binary(Binary::new(zero, BinaryKind::Sub, Box::new(primary))),
             });
         }
 
@@ -128,22 +128,37 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
 
         if let Ok(ident) = self.ident() {
-            return match self.first().kind {
-                // Function call
-                TokenKind::OpenParen => self.fn_call(ident),
+            // Function call
+            if self.first().kind == TokenKind::OpenParen {
+                return self.fn_call(ident);
+            }
 
-                // Struct instantiation
-                TokenKind::OpenBrace => self.struct_instantiation(ident),
+            // Struct instantiation
+            if self.first().kind == TokenKind::OpenBrace {
+                // Check if this brace is from a block statement
+                // if x {}
+                // Such codes must not be interpreted as struct literals
 
-                _ => Ok(Expr {
-                    span: ident.span,
-                    kind: ExprKind::Ident(ident),
-                }),
-            };
+                // If parsing an expression for a condition now, skip
+                if !self.in_cond_expr {
+                    return self.struct_instantiation(ident);
+                }
+            }
+
+            // Identifier
+            return Ok(Expr {
+                span: ident.span,
+                kind: ExprKind::Ident(ident),
+            });
         }
 
         // String literals
         if let Some(lit) = self.string_literal() {
+            return Ok(lit);
+        }
+
+        // Boolean literals
+        if let Some(lit) = self.boolean_literal() {
             return Ok(lit);
         }
 
@@ -155,15 +170,33 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         })
     }
 
+    fn boolean_literal(&mut self) -> Option<Expr> {
+        if let Ok(span) = self.consume(&TokenKind::True) {
+            return Some(Expr {
+                kind: ExprKind::True,
+                span,
+            });
+        }
+
+        if let Ok(span) = self.consume(&TokenKind::False) {
+            return Some(Expr {
+                kind: ExprKind::False,
+                span,
+            });
+        }
+
+        None
+    }
+
     fn struct_instantiation(&mut self, struct_name: Ident) -> ParseResult<Expr> {
         let mut inits = Vec::new();
 
-        self.consume(&TokenKind::OpenBrace)?;
+        self.consume(&TokenKind::OpenBrace).unwrap();
 
         if let Ok(finish) = self.consume(&TokenKind::CloseBrace) {
             return Ok(Expr {
                 span: Span::new(struct_name.span.start, finish.finish),
-                kind: ExprKind::StructInit(StructInstantiation {
+                kind: ExprKind::StructInstantiation(StructInstantiation {
                     struct_name,
                     values: inits,
                 }),
@@ -178,7 +211,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
                 return Ok(Expr {
                     span: Span::new(struct_name.span.start, finish),
-                    kind: ExprKind::StructInit(StructInstantiation {
+                    kind: ExprKind::StructInstantiation(StructInstantiation {
                         struct_name,
                         values: inits,
                     }),
@@ -262,11 +295,12 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     }
 
     pub fn ident(&mut self) -> ParseResult<Ident> {
-        let span = self.first().span;
-
         if matches!(self.first().kind, TokenKind::Ident(_)) {
             if let TokenKind::Ident(ident) = self.bump().unwrap().kind {
-                return Ok(Ident { name: ident, span });
+                return Ok(Ident {
+                    name: ident,
+                    span: self.first().span,
+                });
             }
         }
 

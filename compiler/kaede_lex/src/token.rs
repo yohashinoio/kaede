@@ -60,6 +60,11 @@ pub enum TokenKind {
     /// "struct"
     Struct,
 
+    /// "true"
+    True,
+    /// "false"
+    False,
+
     /// End of input
     Eoi,
 
@@ -98,6 +103,9 @@ impl std::fmt::Display for TokenKind {
             Loop => write!(f, "'loop'"),
             Break => write!(f, "'break'"),
             Struct => write!(f, "'struct'"),
+
+            True => write!(f, "'true'"),
+            False => write!(f, "'false'"),
 
             Eoi => write!(f, "end of input"),
 

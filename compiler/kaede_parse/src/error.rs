@@ -3,7 +3,7 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum ParseError {
-    #[error("{}:{} Expected {} but {} found.", span.start.line, span.start.column,  .expected, .but)]
+    #[error("{}:{} Expected {} but {} found.", span.start.line, span.start.column, .expected, .but)]
     ExpectedError {
         expected: String,
         but: String,

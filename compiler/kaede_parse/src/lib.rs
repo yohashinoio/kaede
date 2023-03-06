@@ -21,6 +21,8 @@ pub struct Parser<T: Iterator<Item = Token>> {
     tokens: Peekable<T>,
 
     end_token: Option<Token>,
+
+    pub in_cond_expr: bool,
 }
 
 impl<T: Iterator<Item = Token>> Parser<T> {
@@ -28,6 +30,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         Self {
             tokens,
             end_token: None,
+            in_cond_expr: false,
         }
     }
 
@@ -118,6 +121,18 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     /// Return boolean
     pub fn consume_semi_b(&mut self) -> bool {
         if self.consume_b(&TokenKind::Semi)
+            || (self.check(&TokenKind::CloseParen) || self.check(&TokenKind::CloseBrace))
+        {
+            return true;
+        }
+
+        false
+    }
+
+    /// Check a semicolon (Not consumed)
+    /// ')' or '}', then success (Following Golang's rules)
+    pub fn check_semi(&mut self) -> bool {
+        if self.check(&TokenKind::Semi)
             || (self.check(&TokenKind::CloseParen) || self.check(&TokenKind::CloseBrace))
         {
             return true;

@@ -129,10 +129,25 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         })
     }
 
+    /// Needed to **avoid confusion** between struct literals and block statements
+    ///
+    /// ```
+    /// if x {}
+    /// ```
+    ///
+    /// In such code as above,
+    /// `then block` of `if statement` is not parsed as an initializer of a struct literals
+    fn cond_expr(&mut self) -> ParseResult<Expr> {
+        self.in_cond_expr = true;
+        let cond = self.expr();
+        self.in_cond_expr = false;
+        cond
+    }
+
     fn if_(&mut self) -> ParseResult<If> {
         let start = self.consume(&TokenKind::If).unwrap().start;
 
-        let cond = self.expr()?;
+        let cond = self.cond_expr()?;
 
         let then = self.block()?;
 
@@ -171,7 +186,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     fn return_(&mut self) -> ParseResult<Return> {
         let span = self.consume(&TokenKind::Return).unwrap();
 
-        if self.consume_semi_b() {
+        if self.check_semi() {
             return Ok(Return { val: None, span });
         }
 
