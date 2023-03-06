@@ -375,8 +375,8 @@ fn use_struct() -> anyhow::Result<()> {
     }
 
     fn test() i32 {
-        let a = A { age 58, is_male false, is_female true }
-        return a.age
+        let p = Person { age 58, is_male false, is_female true }
+        return p.age
     }";
 
     assert_eq!(run_test(program)?, 58);
