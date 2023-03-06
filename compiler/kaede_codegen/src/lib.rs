@@ -5,6 +5,7 @@ use inkwell::{
     builder::Builder,
     context::Context,
     module::Module,
+    types::StructType,
     values::{FunctionValue, PointerValue},
 };
 use kaede_ast::{expr::Ident, TranslationUnit};
@@ -51,6 +52,8 @@ pub type ReturnTypeTable<'ctx> = HashMap<FunctionValue<'ctx>, Option<Rc<Ty>>>;
 
 pub type ParamTable<'ctx> = HashMap<FunctionValue<'ctx>, Vec<Rc<Ty>>>;
 
+pub type StructTable<'ctx> = HashMap<String, StructType<'ctx>>;
+
 pub fn codegen<'ctx>(
     context: &'ctx Context,
     module: &Module<'ctx>,
@@ -71,6 +74,7 @@ pub struct CGCtx<'ctx, 'module> {
 
     pub return_ty_table: ReturnTypeTable<'ctx>,
     pub param_table: ParamTable<'ctx>,
+    pub struct_table: StructTable<'ctx>,
 }
 
 impl<'ctx, 'module> CGCtx<'ctx, 'module> {
@@ -81,6 +85,7 @@ impl<'ctx, 'module> CGCtx<'ctx, 'module> {
             builder: context.create_builder(),
             return_ty_table: ReturnTypeTable::new(),
             param_table: ParamTable::new(),
+            struct_table: StructTable::new(),
         }
     }
 

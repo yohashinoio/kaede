@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use inkwell::{basic_block::BasicBlock, values::BasicValue, IntPredicate};
+use inkwell::{basic_block::BasicBlock, IntPredicate};
 use kaede_ast::{
     expr::{Expr, ExprKind},
     stmt::{Assign, AssignKind, Block, Break, Else, If, Let, Loop, Return, Stmt, StmtKind},
@@ -110,7 +110,7 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
                     });
                 }
 
-                Ok(Value::new(ptr.as_basic_value_enum(), ty.clone()))
+                Ok(Value::new((*ptr).into(), ty.clone()))
             }
 
             ExprKind::FnCall(_) => unimplemented!(),

@@ -345,7 +345,7 @@ fn string_literal() -> anyhow::Result<()> {
 }
 
 #[test]
-fn declare_struct() -> anyhow::Result<()> {
+fn define_struct() -> anyhow::Result<()> {
     let program = r"struct A {
         a i32
         b bool
@@ -353,6 +353,24 @@ fn declare_struct() -> anyhow::Result<()> {
 
     fn test() i32 {
         return 58
+    }";
+
+    assert_eq!(cg_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn use_struct() -> anyhow::Result<()> {
+    let program = r"struct Person {
+        age i32
+        is_male bool
+        is_female bool
+    }
+
+    fn test() i32 {
+        let a = A { age 58, is_male false, is_female true }
+        return a.age
     }";
 
     assert_eq!(cg_test(program)?, 58);

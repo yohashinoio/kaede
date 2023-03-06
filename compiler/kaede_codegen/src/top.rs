@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use inkwell::{types::BasicType, values::FunctionValue};
-use kaede_ast::top::{Fn, TopLevel, TopLevelKind};
+use kaede_ast::top::{Fn, Struct, TopLevel, TopLevelKind};
 use kaede_type::Ty;
 
 use crate::{
@@ -32,7 +32,7 @@ impl<'a, 'ctx, 'c> TopLevelBuilder<'a, 'ctx, 'c> {
         match node.kind {
             TopLevelKind::Fn(func) => self.define_func(func)?,
 
-            TopLevelKind::Struct(_) => unimplemented!(),
+            TopLevelKind::Struct(node) => self.define_struct(node),
         }
 
         Ok(())
@@ -118,5 +118,19 @@ impl<'a, 'ctx, 'c> TopLevelBuilder<'a, 'ctx, 'c> {
         }
 
         params
+    }
+
+    fn define_struct(&mut self, node: Struct) {
+        let mut field_tys = Vec::new();
+
+        for field in node.fields {
+            field_tys.push(field.ty.kind.as_llvm_type(self.ctx.context));
+        }
+
+        let ty = self.ctx.context.opaque_struct_type(node.name.as_str());
+
+        ty.set_body(&field_tys, true);
+
+        self.ctx.struct_table.insert(node.name.name, ty);
     }
 }

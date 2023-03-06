@@ -36,7 +36,7 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
     fn build(&self, node: Expr) -> CodegenResult<Value<'ctx>> {
         Ok(match node.kind {
             ExprKind::Int(int) => Value::new(
-                int.kind.as_llvm_int(self.ctx.context).as_basic_value_enum(),
+                int.kind.as_llvm_int(self.ctx.context).into(),
                 Rc::new(int.kind.get_type()),
             ),
 
@@ -51,27 +51,23 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
     }
 
     fn string_literal(&self, s: &str) -> Value<'ctx> {
-        let global_s = self
-            .ctx
-            .builder
-            .build_global_string_ptr(s, "str")
-            .as_basic_value_enum();
+        let global_s = self.ctx.builder.build_global_string_ptr(s, "str");
 
         Value::new(
             self.ctx
                 .context
                 .const_struct(
                     &[
-                        global_s,
+                        global_s.as_basic_value_enum(),
                         self.ctx
                             .context
                             .i64_type()
                             .const_int(s.len() as u64, false)
-                            .as_basic_value_enum(),
+                            .into(),
                     ],
                     true,
                 )
-                .as_basic_value_enum(),
+                .into(),
             Rc::new(Ty::new(TyKind::Str, Mutability::Not)),
         )
     }
@@ -98,26 +94,17 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
 
         Ok(match node.op {
             Add => Value::new(
-                self.ctx
-                    .builder
-                    .build_int_add(lhs_val, rhs_val, "")
-                    .as_basic_value_enum(),
+                self.ctx.builder.build_int_add(lhs_val, rhs_val, "").into(),
                 lhs.get_type(),
             ),
 
             Sub => Value::new(
-                self.ctx
-                    .builder
-                    .build_int_sub(lhs_val, rhs_val, "")
-                    .as_basic_value_enum(),
+                self.ctx.builder.build_int_sub(lhs_val, rhs_val, "").into(),
                 lhs.get_type(),
             ),
 
             Mul => Value::new(
-                self.ctx
-                    .builder
-                    .build_int_mul(lhs_val, rhs_val, "")
-                    .as_basic_value_enum(),
+                self.ctx.builder.build_int_mul(lhs_val, rhs_val, "").into(),
                 lhs.get_type(),
             ),
 
@@ -127,7 +114,7 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
                         self.ctx
                             .builder
                             .build_int_signed_div(lhs_val, rhs_val, "")
-                            .as_basic_value_enum(),
+                            .into(),
                         lhs.get_type(),
                     )
                 } else {
@@ -135,7 +122,7 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
                         self.ctx
                             .builder
                             .build_int_unsigned_div(lhs_val, rhs_val, "")
-                            .as_basic_value_enum(),
+                            .into(),
                         lhs.get_type(),
                     )
                 }
@@ -145,7 +132,7 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
                 self.ctx
                     .builder
                     .build_int_compare(IntPredicate::EQ, lhs_val, rhs_val, "")
-                    .as_basic_value_enum(),
+                    .into(),
                 Rc::new(make_fundamental_type(
                     FundamentalTypeKind::Bool,
                     Mutability::Not,
