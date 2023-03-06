@@ -14,11 +14,11 @@ impl Ident {
     }
 }
 
-/// Struct initialization
+// Struct instantiation
 #[derive(Debug, PartialEq, Eq)]
-pub struct StructInit {
+pub struct StructInstantiation {
     pub struct_name: Ident,
-    pub inits: Vec<(Ident, Expr)>,
+    pub values: Vec<(Ident, Expr)>,
 }
 
 pub type Args = Vec<Expr>;
@@ -92,5 +92,5 @@ pub enum ExprKind {
     BinOp(Binary),
     Ident(Ident),
     FnCall(FnCall),
-    StructInit(StructInit),
+    StructInit(StructInstantiation),
 }

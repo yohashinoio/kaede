@@ -5,11 +5,12 @@ use inkwell::{
     builder::Builder,
     context::Context,
     module::Module,
-    types::StructType,
+    types::{BasicTypeEnum, StructType},
     values::{FunctionValue, PointerValue},
+    AddressSpace,
 };
-use kaede_ast::{expr::Ident, TranslationUnit};
-use kaede_type::Ty;
+use kaede_ast::{expr::Ident, top::StructField, TranslationUnit};
+use kaede_type::{Ty, TyKind};
 use top::build_top_level;
 
 mod error;
@@ -20,6 +21,27 @@ mod value;
 
 #[cfg(test)]
 mod tests;
+
+pub fn as_llvm_type<'ctx>(ctx: &CGCtx<'ctx, '_>, ty: &Ty) -> BasicTypeEnum<'ctx> {
+    let context = ctx.context;
+
+    match &ty.kind {
+        TyKind::Fundamental(t) => t.as_llvm_type(ctx.context),
+
+        TyKind::Str => {
+            let str_ty = context.i8_type().ptr_type(AddressSpace::default());
+            let len_ty = context.i64_type();
+            // { *i8, i64 }
+            context
+                .struct_type(&[str_ty.into(), len_ty.into()], true)
+                .into()
+        }
+
+        TyKind::UserDefinedType(name) => ctx.struct_table[&name.0].0.into(),
+
+        TyKind::Unknown => panic!("Cannot get LLVM type of Unknown type!"),
+    }
+}
 
 type Symbol<'ctx> = (PointerValue<'ctx>, Rc<Ty>);
 
@@ -52,7 +74,11 @@ pub type ReturnTypeTable<'ctx> = HashMap<FunctionValue<'ctx>, Option<Rc<Ty>>>;
 
 pub type ParamTable<'ctx> = HashMap<FunctionValue<'ctx>, Vec<Rc<Ty>>>;
 
-pub type StructTable<'ctx> = HashMap<String, StructType<'ctx>>;
+pub struct StructInfo {
+    pub fields: HashMap<String, StructField>,
+}
+
+pub type StructTable<'ctx> = HashMap<String, (StructType<'ctx>, StructInfo)>;
 
 pub fn codegen<'ctx>(
     context: &'ctx Context,
@@ -100,7 +126,7 @@ impl<'ctx, 'module> CGCtx<'ctx, 'module> {
             None => builder.position_at_end(entry),
         }
 
-        builder.build_alloca(ty.kind.as_llvm_type(self.context), name)
+        builder.build_alloca(as_llvm_type(self, ty), name)
     }
 
     pub fn get_current_fn(&self) -> FunctionValue<'ctx> {

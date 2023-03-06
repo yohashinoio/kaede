@@ -1,13 +1,14 @@
-use std::rc::Rc;
+use std::{collections::HashMap, rc::Rc};
 
 use inkwell::{types::BasicType, values::FunctionValue};
 use kaede_ast::top::{Fn, Struct, TopLevel, TopLevelKind};
 use kaede_type::Ty;
 
 use crate::{
+    as_llvm_type,
     error::CodegenResult,
     stmt::{build_block, StmtCtx},
-    CGCtx, SymbolTable,
+    CGCtx, StructInfo, SymbolTable,
 };
 
 pub fn build_top_level(ctx: &mut CGCtx, node: TopLevel) -> CodegenResult<()> {
@@ -42,14 +43,11 @@ impl<'a, 'ctx, 'c> TopLevelBuilder<'a, 'ctx, 'c> {
         let param_llvm_tys = node
             .params
             .iter()
-            .map(|e| e.1.kind.as_llvm_type(self.ctx.context).into())
+            .map(|e| as_llvm_type(self.ctx, &e.1).into())
             .collect::<Vec<_>>();
 
         let fn_type = match &node.return_ty {
-            Some(ty) => ty
-                .kind
-                .as_llvm_type(self.ctx.context)
-                .fn_type(param_llvm_tys.as_slice(), false),
+            Some(ty) => as_llvm_type(self.ctx, ty).fn_type(param_llvm_tys.as_slice(), false),
 
             None => self
                 .ctx
@@ -108,7 +106,7 @@ impl<'a, 'ctx, 'c> TopLevelBuilder<'a, 'ctx, 'c> {
             let alloca = self
                 .ctx
                 .builder
-                .build_alloca(ty.kind.as_llvm_type(self.ctx.context), &name);
+                .build_alloca(as_llvm_type(self.ctx, &ty), &name);
 
             self.ctx
                 .builder
@@ -124,13 +122,25 @@ impl<'a, 'ctx, 'c> TopLevelBuilder<'a, 'ctx, 'c> {
         let field_tys: Vec<_> = node
             .fields
             .iter()
-            .map(|f| f.ty.kind.as_llvm_type(self.ctx.context))
+            .map(|f| as_llvm_type(self.ctx, &f.ty))
             .collect();
 
         let ty = self.ctx.context.opaque_struct_type(node.name.as_str());
 
         ty.set_body(&field_tys, true);
 
-        self.ctx.struct_table.insert(node.name.name, ty);
+        let fields = {
+            let mut info = HashMap::new();
+
+            for fi in node.fields {
+                info.insert(fi.name.name.clone(), fi);
+            }
+
+            info
+        };
+
+        self.ctx
+            .struct_table
+            .insert(node.name.name, (ty, StructInfo { fields }));
     }
 }

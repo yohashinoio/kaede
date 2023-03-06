@@ -1,14 +1,15 @@
 use std::rc::Rc;
 
 use crate::{
+    as_llvm_type,
     error::{CodegenError, CodegenResult},
     value::Value,
     CGCtx, SymbolTable,
 };
 
 use inkwell::{values::BasicValue, IntPredicate};
-use kaede_ast::expr::{Binary, BinaryKind, Expr, ExprKind, FnCall, Ident};
-use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability, Ty, TyKind};
+use kaede_ast::expr::{Binary, BinaryKind, Expr, ExprKind, FnCall, Ident, StructInstantiation};
+use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability, Ty, TyKind, UDType};
 
 pub fn build_expression<'a, 'ctx>(
     ctx: &'a CGCtx<'ctx, '_>,
@@ -48,8 +49,47 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
 
             ExprKind::FnCall(fcall) => self.call_fn(fcall)?,
 
-            ExprKind::StructInit(_) => todo!(),
+            ExprKind::StructInit(node) => self.struct_instantiation(node)?,
         })
+    }
+
+    fn struct_instantiation(&self, node: StructInstantiation) -> CodegenResult<Value<'ctx>> {
+        let (_ty, info) = match self.ctx.struct_table.get(node.struct_name.as_str()) {
+            Some(value) => value,
+
+            None => {
+                return Err(CodegenError::Undeclared {
+                    span: node.struct_name.span,
+                    name: node.struct_name.name,
+                })
+            }
+        };
+
+        let mut values = Vec::new();
+
+        for value in node.values {
+            let field_info = &info.fields[value.0.as_str()];
+
+            // To sort by offset, store offset
+            values.push((
+                field_info.offset,
+                build_expression(self.ctx, value.1, self.scope)?.get_value(),
+            ));
+        }
+
+        // Sort in ascending order based on offset
+        values.sort_by(|a, b| a.0.cmp(&b.0));
+
+        // Remove offsets
+        let inits: Vec<_> = values.iter().map(|e| e.1).collect();
+
+        Ok(Value::new(
+            self.ctx.context.const_struct(&inits, true).into(),
+            Rc::new(Ty::new(
+                TyKind::UserDefinedType(UDType(node.struct_name.name)),
+                Mutability::Not,
+            )),
+        ))
     }
 
     fn string_literal(&self, s: &str) -> Value<'ctx> {
@@ -80,7 +120,7 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
         Ok(Value::new(
             self.ctx
                 .builder
-                .build_load(ty.kind.as_llvm_type(self.ctx.context), *ptr, ""),
+                .build_load(as_llvm_type(self.ctx, ty), *ptr, ""),
             ty.clone(),
         ))
     }

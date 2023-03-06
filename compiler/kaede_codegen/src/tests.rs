@@ -375,7 +375,7 @@ fn use_struct() -> anyhow::Result<()> {
     }
 
     fn test() i32 {
-        let p = Person { age 58, is_male false, is_female true }
+        let p = Person { is_male false, age 58, is_female true }
         return p.age
     }";
 

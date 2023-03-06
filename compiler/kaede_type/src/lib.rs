@@ -1,7 +1,6 @@
 use inkwell::{
     context::Context,
     types::{BasicType, BasicTypeEnum},
-    AddressSpace,
 };
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -53,34 +52,17 @@ pub enum TyKind {
     Fundamental(FundamentalType),
     Str,
 
+    UserDefinedType(UDType),
+
     /// If a type is not yet known
     Unknown,
 }
 
 impl TyKind {
-    pub fn as_llvm_type<'ctx>(&self, context: &'ctx Context) -> BasicTypeEnum<'ctx> {
-        match self {
-            Self::Fundamental(t) => t.as_llvm_type(context),
-
-            Self::Str => {
-                let str_ty = context
-                    .i8_type()
-                    .ptr_type(AddressSpace::default())
-                    .as_basic_type_enum();
-                let len_ty = context.i64_type().as_basic_type_enum();
-                // { *i8, i64 }
-                context
-                    .struct_type(&[str_ty, len_ty], true)
-                    .as_basic_type_enum()
-            }
-
-            Self::Unknown => panic!("Cannot get LLVM type of Unknown type!"),
-        }
-    }
-
     pub fn is_signed(&self) -> bool {
         match &self {
             Self::Fundamental(fty) => fty.is_signed(),
+            Self::UserDefinedType(_) => todo!(),
 
             Self::Str => panic!("Cannot get sign information of Str type!"),
             Self::Unknown => panic!("Cannot get sign information of Unknown type!"),
@@ -98,7 +80,7 @@ pub struct FundamentalType {
 }
 
 impl FundamentalType {
-    fn as_llvm_type<'ctx>(&self, context: &'ctx Context) -> BasicTypeEnum<'ctx> {
+    pub fn as_llvm_type<'ctx>(&self, context: &'ctx Context) -> BasicTypeEnum<'ctx> {
         use FundamentalTypeKind::*;
 
         match self.kind {
@@ -117,3 +99,7 @@ impl FundamentalType {
         }
     }
 }
+
+/// User defined types
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct UDType(pub String);

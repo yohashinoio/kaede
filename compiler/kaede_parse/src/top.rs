@@ -96,6 +96,8 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     fn struct_fields(&mut self) -> ParseResult<Vec<StructField>> {
         let mut fields = Vec::new();
 
+        let mut offset = 0;
+
         loop {
             if self.check(&TokenKind::CloseBrace) {
                 break;
@@ -111,7 +113,10 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                 name,
                 ty,
                 access: Access::Public,
+                offset,
             });
+
+            offset += 1;
         }
 
         Ok(fields)

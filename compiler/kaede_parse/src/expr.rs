@@ -1,5 +1,5 @@
 use kaede_ast::expr::{
-    Args, Binary, BinaryKind, Expr, ExprKind, FnCall, Ident, Int, IntKind, StructInit,
+    Args, Binary, BinaryKind, Expr, ExprKind, FnCall, Ident, Int, IntKind, StructInstantiation,
 };
 use kaede_lex::token::{Token, TokenKind};
 use kaede_location::Span;
@@ -132,8 +132,8 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                 // Function call
                 TokenKind::OpenParen => self.fn_call(ident),
 
-                // Struct initialization
-                TokenKind::OpenBrace => self.struct_init(ident),
+                // Struct instantiation
+                TokenKind::OpenBrace => self.struct_instantiation(ident),
 
                 _ => Ok(Expr {
                     span: ident.span,
@@ -155,7 +155,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         })
     }
 
-    fn struct_init(&mut self, struct_name: Ident) -> ParseResult<Expr> {
+    fn struct_instantiation(&mut self, struct_name: Ident) -> ParseResult<Expr> {
         let mut inits = Vec::new();
 
         self.consume(&TokenKind::OpenBrace)?;
@@ -163,7 +163,10 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         if let Ok(finish) = self.consume(&TokenKind::CloseBrace) {
             return Ok(Expr {
                 span: Span::new(struct_name.span.start, finish.finish),
-                kind: ExprKind::StructInit(StructInit { struct_name, inits }),
+                kind: ExprKind::StructInit(StructInstantiation {
+                    struct_name,
+                    values: inits,
+                }),
             });
         }
 
@@ -175,7 +178,10 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
                 return Ok(Expr {
                     span: Span::new(struct_name.span.start, finish),
-                    kind: ExprKind::StructInit(StructInit { struct_name, inits }),
+                    kind: ExprKind::StructInit(StructInstantiation {
+                        struct_name,
+                        values: inits,
+                    }),
                 });
             }
         }

@@ -25,6 +25,7 @@ pub struct StructField {
     pub name: Ident,
     pub ty: Ty,
     pub access: Access,
+    pub offset: u64,
 }
 
 #[derive(Debug, PartialEq, Eq)]
