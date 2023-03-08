@@ -11,7 +11,27 @@ use crate::{
 
 impl<T: Iterator<Item = Token>> Parser<T> {
     pub fn expr(&mut self) -> ParseResult<Expr> {
-        self.add()
+        self.equal()
+    }
+
+    /// Same precedence of equal
+    fn equal(&mut self) -> ParseResult<Expr> {
+        let mut node = self.add()?;
+
+        loop {
+            if let Ok(span) = self.consume(&TokenKind::Eq) {
+                node = Expr {
+                    kind: ExprKind::Binary(Binary::new(
+                        Box::new(node),
+                        BinaryKind::Eq,
+                        Box::new(self.add()?),
+                    )),
+                    span,
+                };
+            } else {
+                return Ok(node);
+            }
+        }
     }
 
     /// Same precedence of addition
@@ -45,7 +65,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
     /// Same precedence of multiplication
     fn mul(&mut self) -> ParseResult<Expr> {
-        let mut node = self.equal()?;
+        let mut node = self.unary()?;
 
         loop {
             if let Ok(span) = self.consume(&TokenKind::Mul) {
@@ -53,7 +73,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                     kind: ExprKind::Binary(Binary::new(
                         Box::new(node),
                         BinaryKind::Mul,
-                        Box::new(self.equal()?),
+                        Box::new(self.unary()?),
                     )),
                     span,
                 };
@@ -62,26 +82,6 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                     kind: ExprKind::Binary(Binary::new(
                         Box::new(node),
                         BinaryKind::Div,
-                        Box::new(self.equal()?),
-                    )),
-                    span,
-                };
-            } else {
-                return Ok(node);
-            }
-        }
-    }
-
-    /// Same precedence of equal
-    fn equal(&mut self) -> ParseResult<Expr> {
-        let mut node = self.unary()?;
-
-        loop {
-            if let Ok(span) = self.consume(&TokenKind::Eq) {
-                node = Expr {
-                    kind: ExprKind::Binary(Binary::new(
-                        Box::new(node),
-                        BinaryKind::Eq,
                         Box::new(self.unary()?),
                     )),
                     span,
