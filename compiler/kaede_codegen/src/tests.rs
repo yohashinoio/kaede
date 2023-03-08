@@ -446,3 +446,27 @@ fn has_no_fields() {
         Err(CodegenError::HasNoFields { span: _ })
     ));
 }
+
+#[test]
+fn reference() -> anyhow::Result<()> {
+    let program = r"fn to_58(n &mut i32) {
+        n = 58
+    }
+
+    fn test() i32 {
+        let mut a = 123
+
+        to_58(&a)
+
+        return a
+    }";
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn assign_to_immutable_reference() {
+    todo!()
+}
