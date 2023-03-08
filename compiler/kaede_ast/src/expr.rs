@@ -64,18 +64,19 @@ pub enum BinaryKind {
     Mul,
     Div,
     Eq,
+    FieldAccess,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Binary {
     pub lhs: Box<Expr>,
-    pub op: BinaryKind,
+    pub kind: BinaryKind,
     pub rhs: Box<Expr>,
 }
 
 impl Binary {
     pub fn new(lhs: Box<Expr>, op: BinaryKind, rhs: Box<Expr>) -> Self {
-        Self { lhs, op, rhs }
+        Self { lhs, kind: op, rhs }
     }
 }
 

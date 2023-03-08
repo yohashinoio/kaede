@@ -176,6 +176,7 @@ impl Cursor<'_> {
             '}' => self.create_token(TokenKind::CloseBrace),
             ',' => self.create_token(TokenKind::Comma),
             ';' => self.create_token(TokenKind::Semi),
+            '.' => self.create_token(TokenKind::Dot),
             '=' => {
                 if self.first() == '=' {
                     // ==

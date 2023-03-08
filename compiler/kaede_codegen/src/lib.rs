@@ -37,7 +37,7 @@ pub fn as_llvm_type<'ctx>(ctx: &CGCtx<'ctx, '_>, ty: &Ty) -> BasicTypeEnum<'ctx>
                 .into()
         }
 
-        TyKind::UserDefinedType(name) => ctx.struct_table[&name.0].0.into(),
+        TyKind::UDType(name) => ctx.struct_table[&name.0].0.into(),
 
         TyKind::Unknown => panic!("Cannot get LLVM type of Unknown type!"),
     }

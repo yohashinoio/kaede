@@ -13,7 +13,7 @@ use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability, Ty, TyK
 
 pub fn build_expression<'a, 'ctx>(
     ctx: &'a CGCtx<'ctx, '_>,
-    node: Expr,
+    node: &Expr,
     scope: &'a SymbolTable<'ctx>,
 ) -> CodegenResult<Value<'ctx>> {
     let builder = ExprBuilder::new(ctx, scope);
@@ -34,14 +34,14 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
     }
 
     /// Generate expression code
-    fn build(&self, node: Expr) -> CodegenResult<Value<'ctx>> {
-        Ok(match node.kind {
+    fn build(&self, node: &Expr) -> CodegenResult<Value<'ctx>> {
+        Ok(match &node.kind {
             ExprKind::Int(int) => Value::new(
                 int.kind.as_llvm_int(self.ctx.context).into(),
                 Rc::new(int.kind.get_type()),
             ),
 
-            ExprKind::StirngLiteral(s) => self.string_literal(&s),
+            ExprKind::StirngLiteral(s) => self.string_literal(s),
 
             ExprKind::Ident(name) => self.expr_ident(name)?,
 
@@ -71,27 +71,27 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
         )
     }
 
-    fn struct_literal(&self, node: StructLiteral) -> CodegenResult<Value<'ctx>> {
+    fn struct_literal(&self, node: &StructLiteral) -> CodegenResult<Value<'ctx>> {
         let (_ty, info) = match self.ctx.struct_table.get(node.struct_name.as_str()) {
             Some(value) => value,
 
             None => {
                 return Err(CodegenError::Undeclared {
                     span: node.struct_name.span,
-                    name: node.struct_name.name,
+                    name: node.struct_name.name.clone(),
                 })
             }
         };
 
         let mut values = Vec::new();
 
-        for value in node.values {
+        for value in node.values.iter() {
             let field_info = &info.fields[value.0.as_str()];
 
             // To sort by offset, store offset
             values.push((
                 field_info.offset,
-                build_expression(self.ctx, value.1, self.scope)?.get_value(),
+                build_expression(self.ctx, &value.1, self.scope)?.get_value(),
             ));
         }
 
@@ -104,7 +104,7 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
         Ok(Value::new(
             self.ctx.context.const_struct(&inits, true).into(),
             Rc::new(Ty::new(
-                TyKind::UserDefinedType(UDType(node.struct_name.name)),
+                TyKind::UDType(UDType(node.struct_name.name.clone())),
                 Mutability::Not,
             )),
         ))
@@ -132,8 +132,8 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
         )
     }
 
-    fn expr_ident(&self, ident: Ident) -> CodegenResult<Value<'ctx>> {
-        let (ptr, ty) = self.scope.find(&ident)?;
+    fn expr_ident(&self, ident: &Ident) -> CodegenResult<Value<'ctx>> {
+        let (ptr, ty) = self.scope.find(ident)?;
 
         Ok(Value::new(
             self.ctx
@@ -143,47 +143,66 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
         ))
     }
 
-    fn binary_op(&self, node: Binary) -> CodegenResult<Value<'ctx>> {
+    fn binary_op(&self, node: &Binary) -> CodegenResult<Value<'ctx>> {
         use BinaryKind::*;
 
-        let lhs = self.build(*node.lhs)?;
-        let rhs = self.build(*node.rhs)?;
+        match node.kind {
+            FieldAccess => self.field_access(node),
 
-        let lhs_val = lhs.get_value().into_int_value();
-        let rhs_val = rhs.get_value().into_int_value();
+            _ => self.binary_arithmetic_op(node),
+        }
+    }
 
-        Ok(match node.op {
+    fn binary_arithmetic_op(&self, node: &Binary) -> CodegenResult<Value<'ctx>> {
+        use BinaryKind::*;
+
+        let left = self.build(node.lhs.as_ref())?;
+        let right = self.build(node.rhs.as_ref())?;
+
+        let left_int = left.get_value().into_int_value();
+        let right_int = right.get_value().into_int_value();
+
+        Ok(match node.kind {
             Add => Value::new(
-                self.ctx.builder.build_int_add(lhs_val, rhs_val, "").into(),
-                lhs.get_type(),
+                self.ctx
+                    .builder
+                    .build_int_add(left_int, right_int, "")
+                    .into(),
+                left.get_type(),
             ),
 
             Sub => Value::new(
-                self.ctx.builder.build_int_sub(lhs_val, rhs_val, "").into(),
-                lhs.get_type(),
+                self.ctx
+                    .builder
+                    .build_int_sub(left_int, right_int, "")
+                    .into(),
+                left.get_type(),
             ),
 
             Mul => Value::new(
-                self.ctx.builder.build_int_mul(lhs_val, rhs_val, "").into(),
-                lhs.get_type(),
+                self.ctx
+                    .builder
+                    .build_int_mul(left_int, right_int, "")
+                    .into(),
+                left.get_type(),
             ),
 
             Div => {
-                if lhs.get_type().kind.is_signed() || rhs.get_type().kind.is_signed() {
+                if left.get_type().kind.is_signed() || right.get_type().kind.is_signed() {
                     Value::new(
                         self.ctx
                             .builder
-                            .build_int_signed_div(lhs_val, rhs_val, "")
+                            .build_int_signed_div(left_int, right_int, "")
                             .into(),
-                        lhs.get_type(),
+                        left.get_type(),
                     )
                 } else {
                     Value::new(
                         self.ctx
                             .builder
-                            .build_int_unsigned_div(lhs_val, rhs_val, "")
+                            .build_int_unsigned_div(left_int, right_int, "")
                             .into(),
-                        lhs.get_type(),
+                        left.get_type(),
                     )
                 }
             }
@@ -191,23 +210,78 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
             Eq => Value::new(
                 self.ctx
                     .builder
-                    .build_int_compare(IntPredicate::EQ, lhs_val, rhs_val, "")
+                    .build_int_compare(IntPredicate::EQ, left_int, right_int, "")
                     .into(),
                 Rc::new(make_fundamental_type(
                     FundamentalTypeKind::Bool,
                     Mutability::Not,
                 )),
             ),
+
+            _ => unreachable!(),
         })
     }
 
-    fn call_fn(&self, node: FnCall) -> CodegenResult<Value<'ctx>> {
+    fn field_access(&self, node: &Binary) -> CodegenResult<Value<'ctx>> {
+        assert!(matches!(node.kind, BinaryKind::FieldAccess));
+
+        // Pointer to left value (struct)
+        let (p, struct_ty) = {
+            match &node.lhs.kind {
+                ExprKind::Ident(name) => self.scope.find(name)?,
+
+                ExprKind::FnCall(_) => todo!(),
+
+                _ => {
+                    return Err(CodegenError::HasNoFields {
+                        span: node.lhs.span,
+                    })
+                }
+            }
+        };
+
+        let struct_name = match &struct_ty.kind {
+            TyKind::UDType(n) => &n.0,
+            _ => todo!(),
+        };
+
+        let field_name = match &node.rhs.kind {
+            ExprKind::Ident(s) => s.as_str(),
+            _ => unreachable!(),
+        };
+
+        let (_, struct_info) = &self.ctx.struct_table[struct_name];
+
+        let field_info = &struct_info.fields[field_name];
+        let field_llvm_ty = as_llvm_type(self.ctx, &field_info.ty);
+
+        let offset = field_info.offset;
+
+        let gep = unsafe {
+            self.ctx.builder.build_in_bounds_gep(
+                as_llvm_type(self.ctx, struct_ty),
+                *p,
+                &[
+                    self.ctx.context.i32_type().const_zero(),
+                    self.ctx.context.i32_type().const_int(offset, false),
+                ],
+                "",
+            )
+        };
+
+        Ok(Value::new(
+            self.ctx.builder.build_load(field_llvm_ty, gep, ""),
+            struct_ty.clone(),
+        ))
+    }
+
+    fn call_fn(&self, node: &FnCall) -> CodegenResult<Value<'ctx>> {
         let func = self.ctx.module.get_function(node.name.as_str());
 
         let args = {
             let mut args = Vec::new();
 
-            for arg in node.args {
+            for arg in node.args.iter() {
                 args.push(self.build(arg)?);
             }
 
@@ -237,7 +311,7 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
             }
 
             None => Err(CodegenError::Undeclared {
-                name: node.name.name,
+                name: node.name.name.clone(),
                 span: node.span,
             }),
         }

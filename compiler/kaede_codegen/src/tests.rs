@@ -386,13 +386,14 @@ fn define_struct() -> anyhow::Result<()> {
 fn use_struct() -> anyhow::Result<()> {
     let program = r"struct Person {
         age i32
+        stature i32
         is_male bool
         is_female bool
     }
 
     fn test() i32 {
-        let p = Person { is_male false, age 58, is_female true }
-        return p.age
+        let person = Person { is_male false, stature 48, age 10, is_female true }
+        return person.age + person.stature
     }";
 
     assert_eq!(run_test(program)?, 58);
@@ -432,4 +433,16 @@ fn false_() -> anyhow::Result<()> {
     assert_eq!(run_test(program)?, 58);
 
     Ok(())
+}
+
+#[test]
+fn has_no_fields() {
+    let program = r"fn test() i32 {
+        4810.shino
+    }";
+
+    assert!(matches!(
+        run_test(program),
+        Err(CodegenError::HasNoFields { span: _ })
+    ));
 }

@@ -95,7 +95,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     /// Unary operators
     fn unary(&mut self) -> ParseResult<Expr> {
         if self.consume_b(&TokenKind::Add) {
-            return self.primary();
+            return self.field_access();
         }
 
         if let Ok(span) = self.consume(&TokenKind::Sub) {
@@ -108,15 +108,39 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                 span,
             });
 
-            let primary = self.primary()?;
+            let e = self.field_access()?;
 
             return Ok(Expr {
-                span: Span::new(span.start, primary.span.finish),
-                kind: ExprKind::Binary(Binary::new(zero, BinaryKind::Sub, Box::new(primary))),
+                span: Span::new(span.start, e.span.finish),
+                kind: ExprKind::Binary(Binary::new(zero, BinaryKind::Sub, Box::new(e))),
             });
         }
 
-        self.primary()
+        self.field_access()
+    }
+
+    fn field_access(&mut self) -> ParseResult<Expr> {
+        let mut node = self.primary()?;
+
+        loop {
+            if let Ok(span) = self.consume(&TokenKind::Dot) {
+                let right = self.ident()?;
+
+                node = Expr {
+                    kind: ExprKind::Binary(Binary::new(
+                        Box::new(node),
+                        BinaryKind::FieldAccess,
+                        Box::new(Expr {
+                            span: right.span,
+                            kind: ExprKind::Ident(right),
+                        }),
+                    )),
+                    span,
+                };
+            } else {
+                return Ok(node);
+            }
+        }
     }
 
     fn primary(&mut self) -> ParseResult<Expr> {

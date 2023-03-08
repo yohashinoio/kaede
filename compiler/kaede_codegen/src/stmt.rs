@@ -77,7 +77,7 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
     fn build(&mut self, stmt: Stmt) -> CodegenResult<()> {
         match stmt.kind {
             StmtKind::Expr(e) => {
-                build_expression(self.ctx, e, self.scope)?;
+                build_expression(self.ctx, &e, self.scope)?;
             }
 
             StmtKind::Return(node) => self.return_(node)?,
@@ -122,7 +122,7 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
     fn assign(&mut self, node: Assign) -> CodegenResult<()> {
         let lhs = self.build_assignable(node.lhs)?;
 
-        let rhs = build_expression(self.ctx, node.rhs, self.scope)?;
+        let rhs = build_expression(self.ctx, &node.rhs, self.scope)?;
 
         match node.kind {
             AssignKind::Simple => self
@@ -174,7 +174,7 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
         let parent = self.ctx.get_current_fn();
         let zero_const = self.ctx.context.bool_type().const_zero();
 
-        let cond = build_expression(self.ctx, node.cond, self.scope)?;
+        let cond = build_expression(self.ctx, &node.cond, self.scope)?;
         let cond = self.ctx.builder.build_int_compare(
             IntPredicate::NE,
             cond.get_value().into_int_value(),
@@ -220,7 +220,7 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
     fn return_(&mut self, node: Return) -> CodegenResult<()> {
         match node.val {
             Some(val) => self.ctx.builder.build_return(Some(
-                &build_expression(self.ctx, val, self.scope)?.get_value(),
+                &build_expression(self.ctx, &val, self.scope)?.get_value(),
             )),
 
             None => self.ctx.builder.build_return(None),
@@ -231,7 +231,7 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
 
     fn let_(&mut self, node: Let) -> CodegenResult<()> {
         if let Some(init) = node.init {
-            let init = build_expression(self.ctx, init, self.scope)?;
+            let init = build_expression(self.ctx, &init, self.scope)?;
 
             let alloca = if node.ty.kind.is_unknown() {
                 // No type information was available, so infer from an initializer

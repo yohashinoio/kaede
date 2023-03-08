@@ -131,9 +131,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
     /// Needed to **avoid confusion** between struct literals and block statements
     ///
-    /// ```
     /// if x {}
-    /// ```
     ///
     /// In such code as above,
     /// `then block` of `if statement` is not parsed as an initializer of a struct literals

@@ -52,7 +52,7 @@ pub enum TyKind {
     Fundamental(FundamentalType),
     Str,
 
-    UserDefinedType(UDType),
+    UDType(UDType),
 
     /// If a type is not yet known
     Unknown,
@@ -62,7 +62,7 @@ impl TyKind {
     pub fn is_signed(&self) -> bool {
         match &self {
             Self::Fundamental(fty) => fty.is_signed(),
-            Self::UserDefinedType(_) => todo!(),
+            Self::UDType(_) => todo!(),
 
             Self::Str => panic!("Cannot get sign information of Str type!"),
             Self::Unknown => panic!("Cannot get sign information of Unknown type!"),
