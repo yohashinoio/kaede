@@ -3,7 +3,7 @@ use kaede_ast::{
     stmt::{Assign, AssignKind, Block, Break, Else, If, Let, Loop, Return, Stmt, StmtKind},
 };
 use kaede_lex::token::{Token, TokenKind};
-use kaede_location::Span;
+use kaede_span::Span;
 use kaede_type::{Mutability, Ty, TyKind};
 
 use crate::{

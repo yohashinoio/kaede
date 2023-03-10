@@ -1,5 +1,5 @@
 use inkwell::{context::Context, values::IntValue};
-use kaede_location::Span;
+use kaede_span::Span;
 use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability, Ty};
 
 #[derive(Debug, PartialEq, Eq)]

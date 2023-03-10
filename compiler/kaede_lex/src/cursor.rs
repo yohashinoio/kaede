@@ -1,6 +1,6 @@
 use std::str::Chars;
 
-use kaede_location::SpanBuilder;
+use kaede_span::SpanBuilder;
 
 pub const EOF_CHAR: char = '\0';
 

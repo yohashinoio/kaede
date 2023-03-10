@@ -1,4 +1,4 @@
-use kaede_location::Span;
+use kaede_span::Span;
 use kaede_type::Ty;
 
 use crate::{expr::Ident, stmt::Block};

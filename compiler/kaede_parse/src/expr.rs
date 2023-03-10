@@ -2,7 +2,7 @@ use kaede_ast::expr::{
     Args, Binary, BinaryKind, Expr, ExprKind, FnCall, Ident, Int, IntKind, StructLiteral,
 };
 use kaede_lex::token::{Token, TokenKind};
-use kaede_location::Span;
+use kaede_span::Span;
 
 use crate::{
     error::{ParseError, ParseResult},

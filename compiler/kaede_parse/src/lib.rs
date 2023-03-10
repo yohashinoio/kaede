@@ -15,7 +15,7 @@ use std::iter::Peekable;
 use error::{ParseError, ParseResult};
 use kaede_ast::TranslationUnit;
 use kaede_lex::token::{Token, TokenKind};
-use kaede_location::Span;
+use kaede_span::Span;
 
 pub struct Parser<T: Iterator<Item = Token>> {
     tokens: Peekable<T>,

@@ -1,4 +1,4 @@
-use kaede_location::{Location, Span};
+use kaede_span::{Location, Span};
 
 use crate::TokenKind::*;
 

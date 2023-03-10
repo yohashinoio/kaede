@@ -1,4 +1,4 @@
-use kaede_location::Span;
+use kaede_span::Span;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Token {

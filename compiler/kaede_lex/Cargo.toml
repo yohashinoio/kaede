@@ -8,4 +8,4 @@ edition = "2021"
 [dependencies]
 unicode-xid = "0.2.4"
 
-kaede_location = { path = "../kaede_location" }
+kaede_span = { path = "../kaede_span" }

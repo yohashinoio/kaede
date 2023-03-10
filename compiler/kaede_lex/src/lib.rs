@@ -1,5 +1,5 @@
 use cursor::Cursor;
-use kaede_location::Span;
+use kaede_span::Span;
 use token::{Token, TokenKind};
 
 mod cursor;

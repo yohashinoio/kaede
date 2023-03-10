@@ -1,6 +1,6 @@
 use kaede_ast::top::{Access, Fn, Params, Struct, StructField, TopLevel, TopLevelKind};
 use kaede_lex::token::{Token, TokenKind};
-use kaede_location::Span;
+use kaede_span::Span;
 
 use crate::{error::ParseResult, Parser};
 

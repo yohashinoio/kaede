@@ -167,7 +167,7 @@ name = "kaede_ast"
 version = "0.1.0"
 dependencies = [
  "inkwell",
- "kaede_location",
+ "kaede_span",
  "kaede_type",
 ]
 
@@ -179,8 +179,8 @@ dependencies = [
  "inkwell",
  "kaede_ast",
  "kaede_lex",
- "kaede_location",
  "kaede_parse",
+ "kaede_span",
  "kaede_type",
  "thiserror",
 ]
@@ -202,13 +202,9 @@ dependencies = [
 name = "kaede_lex"
 version = "0.1.0"
 dependencies = [
- "kaede_location",
+ "kaede_span",
  "unicode-xid",
 ]
-
-[[package]]
-name = "kaede_location"
-version = "0.1.0"
 
 [[package]]
 name = "kaede_parse"
@@ -217,10 +213,14 @@ dependencies = [
  "anyhow",
  "kaede_ast",
  "kaede_lex",
- "kaede_location",
+ "kaede_span",
  "kaede_type",
  "thiserror",
 ]
+
+[[package]]
+name = "kaede_span"
+version = "0.1.0"
 
 [[package]]
 name = "kaede_type"

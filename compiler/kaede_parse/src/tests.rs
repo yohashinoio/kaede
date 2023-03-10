@@ -2,7 +2,7 @@ use kaede_ast::expr::{BinOpKind, Expr};
 use kaede_ast::stmt::{Let, Return, Stmt, StmtList};
 use kaede_ast::Top;
 use kaede_lex::lex;
-use kaede_location::{Location, Span};
+use kaede_span::{Location, Span};
 use kaede_type::{FundamentalTypeKind, TypeEnum};
 
 use super::*;

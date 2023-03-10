@@ -9,4 +9,4 @@ edition = "2021"
 inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm15-0"] }
 
 kaede_type = { path = "../kaede_type" }
-kaede_location = { path = "../kaede_location" }
+kaede_span = { path = "../kaede_span" }
