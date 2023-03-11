@@ -81,6 +81,12 @@ impl Binary {
 }
 
 #[derive(Debug, PartialEq, Eq)]
+pub struct Borrow {
+    pub operand: Box<Expr>,
+    pub span: Span,
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub struct Expr {
     pub kind: ExprKind,
     pub span: Span,
@@ -96,4 +102,5 @@ pub enum ExprKind {
     StructLiteral(StructLiteral),
     True,
     False,
+    Borrow(Borrow),
 }

@@ -448,7 +448,34 @@ fn has_no_fields() {
 }
 
 #[test]
-fn reference() -> anyhow::Result<()> {
+fn shared_borrow() -> anyhow::Result<()> {
+    let program = r"fn test() i32 {
+        let s = 58
+        let r = &s
+        return r
+    }";
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn mutable_borrow_and_deref() -> anyhow::Result<()> {
+    let program = r"fn test() i32 {
+        let mut s = 58
+        let m = &mut s
+        *m = 58
+        return m
+    }";
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn borrow() -> anyhow::Result<()> {
     let program = r"fn to_58(n &mut i32) {
         n = 58
     }

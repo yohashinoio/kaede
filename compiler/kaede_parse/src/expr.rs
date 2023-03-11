@@ -1,5 +1,5 @@
 use kaede_ast::expr::{
-    Args, Binary, BinaryKind, Expr, ExprKind, FnCall, Ident, Int, IntKind, StructLiteral,
+    Args, Binary, BinaryKind, Borrow, Expr, ExprKind, FnCall, Ident, Int, IntKind, StructLiteral,
 };
 use kaede_lex::token::{Token, TokenKind};
 use kaede_span::Span;
@@ -116,6 +116,11 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             });
         }
 
+        // Borrow
+        if self.check(&TokenKind::And) {
+            return self.borrow();
+        }
+
         self.field_access()
     }
 
@@ -191,6 +196,19 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         Ok(Expr {
             span: int.span,
             kind: ExprKind::Int(int),
+        })
+    }
+
+    fn borrow(&mut self) -> ParseResult<Expr> {
+        let start = self.consume(&TokenKind::And).unwrap().start;
+
+        let operand = Box::new(self.expr()?);
+
+        let span = Span::new(start, operand.span.finish);
+
+        Ok(Expr {
+            kind: ExprKind::Borrow(Borrow { span, operand }),
+            span,
         })
     }
 

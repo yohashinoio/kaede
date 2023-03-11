@@ -8,7 +8,7 @@ use crate::{
 };
 
 use inkwell::{values::BasicValue, IntPredicate};
-use kaede_ast::expr::{Binary, BinaryKind, Expr, ExprKind, FnCall, Ident, StructLiteral};
+use kaede_ast::expr::{Binary, BinaryKind, Borrow, Expr, ExprKind, FnCall, Ident, StructLiteral};
 use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability, Ty, TyKind, UDType};
 
 pub fn build_expression<'a, 'ctx>(
@@ -54,7 +54,13 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
             // Boolean literals
             ExprKind::True => self.boolean_literal(true),
             ExprKind::False => self.boolean_literal(false),
+
+            ExprKind::Borrow(node) => self.borrow(node),
         })
+    }
+
+    fn borrow(&self, _node: &Borrow) -> Value<'ctx> {
+        unimplemented!()
     }
 
     fn boolean_literal(&self, value: bool) -> Value<'ctx> {

@@ -193,6 +193,7 @@ impl Cursor<'_> {
             '-' => self.create_token(TokenKind::Sub),
             '*' => self.create_token(TokenKind::Mul),
             '/' => self.create_token(TokenKind::Div),
+            '&' => self.create_token(TokenKind::And),
 
             c => unreachable!("{}", c),
         }

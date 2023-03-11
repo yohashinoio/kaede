@@ -13,34 +13,36 @@ pub enum TokenKind {
     StringLiteral(String),
 
     // Punctuators
-    /// '('
+    /// "("
     OpenParen,
-    /// ')'
+    /// ")"
     CloseParen,
-    /// '{'
+    /// "{"
     OpenBrace,
-    /// '}'
+    /// "}"
     CloseBrace,
-    /// ','
+    /// ","
     Comma,
-    /// ';'
+    /// ";"
     Semi,
-    /// '.'
+    /// "."
     Dot,
 
     // Operators
-    /// '+'
+    /// "+"
     Add,
-    /// '-'
+    /// "-"
     Sub,
-    /// '*'
+    /// "*"
     Mul,
-    /// '/'
+    /// "/"
     Div,
-    /// '='
+    /// "="
     Assign,
     /// "=="
     Eq,
+    /// "&"
+    And,
 
     // Reserved words
     /// "fn"
@@ -96,6 +98,7 @@ impl std::fmt::Display for TokenKind {
             Div => write!(f, "'/'"),
             Assign => write!(f, "'='"),
             Eq => write!(f, "'=='"),
+            And => write!(f, "'&'"),
 
             Fn => write!(f, "'fn'"),
             Return => write!(f, "'return'"),
