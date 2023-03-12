@@ -30,17 +30,17 @@ pub enum TokenKind {
 
     // Operators
     /// "+"
-    Add,
+    Plus,
     /// "-"
-    Sub,
+    Minus,
     /// "*"
-    Mul,
+    Asterisk,
     /// "/"
-    Div,
+    Slash,
     /// "="
-    Assign,
-    /// "=="
     Eq,
+    /// "=="
+    DoubleEq,
     /// "&"
     And,
 
@@ -92,12 +92,12 @@ impl std::fmt::Display for TokenKind {
             Semi => write!(f, "';'"),
             Dot => write!(f, "'.'"),
 
-            Add => write!(f, "'+'"),
-            Sub => write!(f, "'-'"),
-            Mul => write!(f, "'*'"),
-            Div => write!(f, "'/'"),
-            Assign => write!(f, "'='"),
-            Eq => write!(f, "'=='"),
+            Plus => write!(f, "'+'"),
+            Minus => write!(f, "'-'"),
+            Asterisk => write!(f, "'*'"),
+            Slash => write!(f, "'/'"),
+            Eq => write!(f, "'='"),
+            DoubleEq => write!(f, "'=='"),
             And => write!(f, "'&'"),
 
             Fn => write!(f, "'fn'"),

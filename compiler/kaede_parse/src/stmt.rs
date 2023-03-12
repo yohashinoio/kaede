@@ -105,7 +105,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
     /// Assignment operators
     fn assign_ops(&mut self) -> Option<AssignKind> {
-        if self.consume_b(&TokenKind::Assign) {
+        if self.consume_b(&TokenKind::Eq) {
             return Some(AssignKind::Simple);
         }
 
@@ -212,7 +212,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             Err(_) => Ty::new(TyKind::Unknown, mutability),
         };
 
-        if self.consume_b(&TokenKind::Assign) {
+        if self.consume_b(&TokenKind::Eq) {
             let init = self.expr()?;
 
             let finish = init.span.finish;
@@ -227,7 +227,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         if ty.kind.is_unknown() {
             // Error if both type and initializer are missing
-            self.consume(&TokenKind::Assign)?;
+            self.consume(&TokenKind::Eq)?;
         }
 
         Ok(Let {

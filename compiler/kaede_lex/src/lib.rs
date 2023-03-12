@@ -181,18 +181,18 @@ impl Cursor<'_> {
                 if self.first() == '=' {
                     // ==
                     self.bump().unwrap();
-                    self.create_token(TokenKind::Eq)
+                    self.create_token(TokenKind::DoubleEq)
                 } else {
                     // =
-                    self.create_token(TokenKind::Assign)
+                    self.create_token(TokenKind::Eq)
                 }
             }
 
             // Operators
-            '+' => self.create_token(TokenKind::Add),
-            '-' => self.create_token(TokenKind::Sub),
-            '*' => self.create_token(TokenKind::Mul),
-            '/' => self.create_token(TokenKind::Div),
+            '+' => self.create_token(TokenKind::Plus),
+            '-' => self.create_token(TokenKind::Minus),
+            '*' => self.create_token(TokenKind::Asterisk),
+            '/' => self.create_token(TokenKind::Slash),
             '&' => self.create_token(TokenKind::And),
 
             c => unreachable!("{}", c),

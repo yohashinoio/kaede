@@ -70,7 +70,7 @@ fn span() {
 
     let t = r.next().unwrap();
 
-    assert_eq!(t.kind, TokenKind::Add);
+    assert_eq!(t.kind, TokenKind::Plus);
     assert_eq!(
         t.span,
         Span::new(
@@ -84,7 +84,7 @@ fn span() {
 fn auto_insert_semi() {
     lex_test(
         "48 +\n 10\n",
-        vec![Int(48.to_string()), Add, Int(10.to_string()), Semi, Eoi],
+        vec![Int(48.to_string()), Plus, Int(10.to_string()), Semi, Eoi],
     );
 
     lex_test("return", vec![Return, Semi, Eoi]);

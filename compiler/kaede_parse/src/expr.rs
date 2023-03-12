@@ -19,7 +19,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         let mut node = self.add()?;
 
         loop {
-            if let Ok(span) = self.consume(&TokenKind::Eq) {
+            if let Ok(span) = self.consume(&TokenKind::DoubleEq) {
                 node = Expr {
                     kind: ExprKind::Binary(Binary::new(
                         Box::new(node),
@@ -39,7 +39,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         let mut node = self.mul()?;
 
         loop {
-            if let Ok(span) = self.consume(&TokenKind::Add) {
+            if let Ok(span) = self.consume(&TokenKind::Plus) {
                 node = Expr {
                     kind: ExprKind::Binary(Binary::new(
                         Box::new(node),
@@ -48,7 +48,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                     )),
                     span,
                 };
-            } else if let Ok(span) = self.consume(&TokenKind::Sub) {
+            } else if let Ok(span) = self.consume(&TokenKind::Minus) {
                 node = Expr {
                     kind: ExprKind::Binary(Binary::new(
                         Box::new(node),
@@ -68,7 +68,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         let mut node = self.unary()?;
 
         loop {
-            if let Ok(span) = self.consume(&TokenKind::Mul) {
+            if let Ok(span) = self.consume(&TokenKind::Asterisk) {
                 node = Expr {
                     kind: ExprKind::Binary(Binary::new(
                         Box::new(node),
@@ -77,7 +77,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                     )),
                     span,
                 };
-            } else if let Ok(span) = self.consume(&TokenKind::Div) {
+            } else if let Ok(span) = self.consume(&TokenKind::Slash) {
                 node = Expr {
                     kind: ExprKind::Binary(Binary::new(
                         Box::new(node),
@@ -94,11 +94,11 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
     /// Unary operators
     fn unary(&mut self) -> ParseResult<Expr> {
-        if self.consume_b(&TokenKind::Add) {
+        if self.consume_b(&TokenKind::Plus) {
             return self.field_access();
         }
 
-        if let Ok(span) = self.consume(&TokenKind::Sub) {
+        if let Ok(span) = self.consume(&TokenKind::Minus) {
             // Subtracting a number from 0 inverts the sign
             let zero = Box::new(Expr {
                 kind: ExprKind::Int(Int {
