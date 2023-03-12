@@ -497,3 +497,16 @@ fn borrow() -> anyhow::Result<()> {
 fn assign_to_immutable_reference() {
     todo!()
 }
+
+#[test]
+fn borrow_temporary_value() -> anyhow::Result<()> {
+    let program = r"fn test() i32 {
+        let r = &58
+
+        return *r
+    }";
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}

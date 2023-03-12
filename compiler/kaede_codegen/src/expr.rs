@@ -94,9 +94,22 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
 
     fn borrow(&self, node: &Borrow) -> CodegenResult<Value<'ctx>> {
         let (ptr, ty) = match &node.operand.kind {
-            ExprKind::Ident(ident) => self.scope.find(ident)?,
+            ExprKind::Ident(ident) => {
+                let var = self.scope.find(ident)?;
+                (var.0, var.1.clone())
+            }
 
-            _kind => unimplemented!(), /* alloca */
+            // Create a variable to take an address since the reference is to a temporary value
+            _ => {
+                let operand = build_expression(self.ctx, &node.operand, self.scope)?;
+
+                let ty = operand.get_type();
+
+                let alloca = self.ctx.create_entry_block_alloca("temp", &ty);
+                self.ctx.builder.build_store(alloca, operand.get_value());
+
+                (alloca, ty)
+            }
         };
 
         Ok(Value::new(
