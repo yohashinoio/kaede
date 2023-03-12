@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use inkwell::{
     context::Context,
     types::{BasicType, BasicTypeEnum},
@@ -54,6 +56,8 @@ pub enum TyKind {
 
     UDType(UDType),
 
+    Reference(Rc<Ty>),
+
     /// If a type is not yet known
     Unknown,
 }
@@ -63,6 +67,7 @@ impl TyKind {
         match &self {
             Self::Fundamental(fty) => fty.is_signed(),
             Self::UDType(_) => todo!(),
+            Self::Reference(ty) => ty.kind.is_signed(),
 
             Self::Str => panic!("Cannot get sign information of Str type!"),
             Self::Unknown => panic!("Cannot get sign information of Unknown type!"),

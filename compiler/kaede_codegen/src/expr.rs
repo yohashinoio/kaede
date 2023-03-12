@@ -55,12 +55,24 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
             ExprKind::True => self.boolean_literal(true),
             ExprKind::False => self.boolean_literal(false),
 
-            ExprKind::Borrow(node) => self.borrow(node),
+            ExprKind::Borrow(node) => self.borrow(node)?,
         })
     }
 
-    fn borrow(&self, _node: &Borrow) -> Value<'ctx> {
-        unimplemented!()
+    fn borrow(&self, node: &Borrow) -> CodegenResult<Value<'ctx>> {
+        let (ptr, ty) = match &node.operand.kind {
+            ExprKind::Ident(ident) => self.scope.find(ident)?,
+
+            _kind => unimplemented!(), /* alloca */
+        };
+
+        Ok(Value::new(
+            ptr.as_basic_value_enum(),
+            Rc::new(Ty {
+                kind: TyKind::Reference(ty.clone()),
+                mutability: Mutability::Not,
+            }),
+        ))
     }
 
     fn boolean_literal(&self, value: bool) -> Value<'ctx> {

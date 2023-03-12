@@ -452,7 +452,7 @@ fn shared_borrow() -> anyhow::Result<()> {
     let program = r"fn test() i32 {
         let s = 58
         let r = &s
-        return r
+        return *r
     }";
 
     assert_eq!(run_test(program)?, 58);
@@ -466,7 +466,7 @@ fn mutable_borrow_and_deref() -> anyhow::Result<()> {
         let mut s = 58
         let m = &mut s
         *m = 58
-        return m
+        return s
     }";
 
     assert_eq!(run_test(program)?, 58);
