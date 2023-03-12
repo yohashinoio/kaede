@@ -25,7 +25,7 @@ mod tests;
 pub fn as_llvm_type<'ctx>(ctx: &CGCtx<'ctx, '_>, ty: &Ty) -> BasicTypeEnum<'ctx> {
     let context = ctx.context;
 
-    match &ty.kind {
+    match ty.kind.as_ref() {
         TyKind::Fundamental(t) => t.as_llvm_type(ctx.context),
 
         TyKind::Str => {

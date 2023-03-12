@@ -24,6 +24,9 @@ pub enum CodegenError {
     #[error("{}:{} Has no fields", span.start.line, span.start.column)]
     HasNoFields { span: Span },
 
+    #[error("{}:{} Type `{}` cannot be dereferenced", span.start.line, span.start.column, ty)]
+    CannotDeref { ty: String, span: Span },
+
     /// Error issued by LLVM
     #[error("{}", .what)]
     LLVMError { what: String },

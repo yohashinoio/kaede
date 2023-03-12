@@ -209,7 +209,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         let ty = match self.ty() {
             Ok(ty) => ty,
-            Err(_) => Ty::new(TyKind::Unknown, mutability),
+            Err(_) => Ty::new(TyKind::Unknown.into(), mutability),
         };
 
         if self.consume_b(&TokenKind::Eq) {

@@ -7,12 +7,12 @@ use inkwell::{
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Ty {
-    pub kind: TyKind,
+    pub kind: Rc<TyKind>,
     pub mutability: Mutability,
 }
 
 impl Ty {
-    pub fn new(kind: TyKind, mutability: Mutability) -> Self {
+    pub fn new(kind: Rc<TyKind>, mutability: Mutability) -> Self {
         Self { kind, mutability }
     }
 }
@@ -44,7 +44,7 @@ pub enum FundamentalTypeKind {
 
 pub fn make_fundamental_type(kind: FundamentalTypeKind, mutability: Mutability) -> Ty {
     Ty {
-        kind: TyKind::Fundamental(FundamentalType { kind }),
+        kind: TyKind::Fundamental(FundamentalType { kind }).into(),
         mutability,
     }
 }
@@ -60,6 +60,22 @@ pub enum TyKind {
 
     /// If a type is not yet known
     Unknown,
+}
+
+impl std::fmt::Display for TyKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Fundamental(fty) => write!(f, "{}", fty),
+
+            Self::Str => write!(f, "str"),
+
+            Self::UDType(udt) => write!(f, "{}", udt.0),
+
+            Self::Reference(refee) => write!(f, "&{}", refee.kind),
+
+            Self::Unknown => write!(f, "unknown"),
+        }
+    }
 }
 
 impl TyKind {
@@ -82,6 +98,16 @@ impl TyKind {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct FundamentalType {
     kind: FundamentalTypeKind,
+}
+
+impl std::fmt::Display for FundamentalType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.kind {
+            FundamentalTypeKind::I32 => write!(f, "i32"),
+
+            FundamentalTypeKind::Bool => write!(f, "bool"),
+        }
+    }
 }
 
 impl FundamentalType {

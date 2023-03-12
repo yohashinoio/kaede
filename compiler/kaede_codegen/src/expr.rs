@@ -8,7 +8,9 @@ use crate::{
 };
 
 use inkwell::{values::BasicValue, IntPredicate};
-use kaede_ast::expr::{Binary, BinaryKind, Borrow, Expr, ExprKind, FnCall, Ident, StructLiteral};
+use kaede_ast::expr::{
+    Binary, BinaryKind, Borrow, Deref, Expr, ExprKind, FnCall, Ident, StructLiteral,
+};
 use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability, Ty, TyKind, UDType};
 
 pub fn build_expression<'a, 'ctx>(
@@ -56,7 +58,38 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
             ExprKind::False => self.boolean_literal(false),
 
             ExprKind::Borrow(node) => self.borrow(node)?,
+
+            ExprKind::Deref(node) => self.deref(node)?,
         })
+    }
+
+    fn deref(&self, node: &Deref) -> CodegenResult<Value<'ctx>> {
+        let operand = build_expression(self.ctx, &node.operand, self.scope)?;
+
+        let pointee_ty = match operand.get_type().kind.as_ref() {
+            TyKind::Reference(pointee_ty) => pointee_ty.clone(),
+
+            kind => {
+                return Err(CodegenError::CannotDeref {
+                    ty: kind.to_string(),
+                    span: node.span,
+                })
+            }
+        };
+
+        let loaded_operand = self.ctx.builder.build_load(
+            as_llvm_type(self.ctx, &pointee_ty),
+            operand.get_value().into_pointer_value(),
+            "",
+        );
+
+        Ok(Value::new(
+            loaded_operand,
+            Rc::new(Ty {
+                kind: pointee_ty.kind.clone(),
+                mutability: Mutability::Not,
+            }),
+        ))
     }
 
     fn borrow(&self, node: &Borrow) -> CodegenResult<Value<'ctx>> {
@@ -69,7 +102,7 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
         Ok(Value::new(
             ptr.as_basic_value_enum(),
             Rc::new(Ty {
-                kind: TyKind::Reference(ty.clone()),
+                kind: TyKind::Reference(ty.clone()).into(),
                 mutability: Mutability::Not,
             }),
         ))
@@ -122,7 +155,7 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
         Ok(Value::new(
             self.ctx.context.const_struct(&inits, true).into(),
             Rc::new(Ty::new(
-                TyKind::UDType(UDType(node.struct_name.name.clone())),
+                TyKind::UDType(UDType(node.struct_name.name.clone())).into(),
                 Mutability::Not,
             )),
         ))
@@ -146,7 +179,7 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
                     true,
                 )
                 .into(),
-            Rc::new(Ty::new(TyKind::Str, Mutability::Not)),
+            Rc::new(Ty::new(TyKind::Str.into(), Mutability::Not)),
         )
     }
 
@@ -258,7 +291,7 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
             }
         };
 
-        let struct_name = match &struct_ty.kind {
+        let struct_name = match struct_ty.kind.as_ref() {
             TyKind::UDType(n) => &n.0,
             _ => todo!(),
         };

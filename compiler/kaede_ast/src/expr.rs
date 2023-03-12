@@ -87,6 +87,12 @@ pub struct Borrow {
 }
 
 #[derive(Debug, PartialEq, Eq)]
+pub struct Deref {
+    pub operand: Box<Expr>,
+    pub span: Span,
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub struct Expr {
     pub kind: ExprKind,
     pub span: Span,
@@ -103,4 +109,5 @@ pub enum ExprKind {
     True,
     False,
     Borrow(Borrow),
+    Deref(Deref),
 }
