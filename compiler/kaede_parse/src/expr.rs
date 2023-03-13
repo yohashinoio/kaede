@@ -220,12 +220,18 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     fn borrow(&mut self) -> ParseResult<Expr> {
         let start = self.consume(&TokenKind::And).unwrap().start;
 
+        let mutability = self.consume_b(&TokenKind::Mut).into();
+
         let operand = Box::new(self.expr()?);
 
         let span = Span::new(start, operand.span.finish);
 
         Ok(Expr {
-            kind: ExprKind::Borrow(Borrow { span, operand }),
+            kind: ExprKind::Borrow(Borrow {
+                span,
+                operand,
+                mutability,
+            }),
             span,
         })
     }
@@ -286,7 +292,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
             Some(Expr {
                 span: token.span,
-                kind: ExprKind::StirngLiteral(match token.kind {
+                kind: ExprKind::StringLiteral(match token.kind {
                     TokenKind::StringLiteral(s) => s,
                     _ => unreachable!(),
                 }),

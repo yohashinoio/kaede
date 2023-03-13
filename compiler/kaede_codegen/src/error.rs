@@ -21,6 +21,9 @@ pub enum CodegenError {
     #[error("{}:{} Cannot assign twice to immutable variable `{}`", span.start.line, span.start.column, .name)]
     CannotAssignTwiceToImutable { name: String, span: Span },
 
+    #[error("{}:{} Cannot assign to immutable reference", span.start.line, span.start.column)]
+    CannotAssignToImutableRef { span: Span },
+
     #[error("{}:{} Has no fields", span.start.line, span.start.column)]
     HasNoFields { span: Span },
 

@@ -43,7 +43,7 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
                 Rc::new(int.kind.get_type()),
             ),
 
-            ExprKind::StirngLiteral(s) => self.string_literal(s),
+            ExprKind::StringLiteral(s) => self.string_literal(s),
 
             ExprKind::Ident(name) => self.expr_ident(name)?,
 
@@ -116,7 +116,7 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
             ptr.as_basic_value_enum(),
             Rc::new(Ty {
                 kind: TyKind::Reference(ty).into(),
-                mutability: Mutability::Not,
+                mutability: node.mutability,
             }),
         ))
     }

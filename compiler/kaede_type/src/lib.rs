@@ -24,6 +24,16 @@ pub enum Mutability {
     Mut,
 }
 
+impl From<bool> for Mutability {
+    fn from(value: bool) -> Self {
+        if value {
+            Mutability::Mut
+        } else {
+            Mutability::Not
+        }
+    }
+}
+
 impl Mutability {
     /// Return `true` if self is mutable
     pub fn is_mut(self) -> bool {

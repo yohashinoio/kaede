@@ -5,6 +5,7 @@ use kaede_ast::{
     expr::{Expr, ExprKind},
     stmt::{Assign, AssignKind, Block, Break, Else, If, Let, Loop, Return, Stmt, StmtKind},
 };
+use kaede_type::TyKind;
 
 use crate::{
     error::{CodegenError, CodegenResult},
@@ -111,6 +112,18 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
                 }
 
                 Ok(Value::new((*ptr).into(), ty.clone()))
+            }
+
+            ExprKind::Deref(deref) => {
+                let opr = build_expression(self.ctx, &deref.operand, self.scope)?;
+
+                dbg!(&opr);
+
+                if opr.get_type().mutability.is_not() {
+                    return Err(CodegenError::CannotAssignToImutableRef { span: deref.span });
+                }
+
+                Ok(opr)
             }
 
             ExprKind::FnCall(_) => unimplemented!(),
@@ -236,7 +249,17 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
             let alloca = if node.ty.kind.is_unknown() {
                 // No type information was available, so infer from an initializer
                 let mut ty = (*init.get_type()).clone();
-                ty.mutability = node.ty.mutability;
+
+                ty.mutability = {
+                    match ty.kind.as_ref() {
+                        // If &mut value is an initializer, a variable is also mutable
+                        TyKind::Reference(_) => {
+                            (node.ty.mutability.is_mut() || ty.mutability.is_mut()).into()
+                        }
+
+                        _ => node.ty.mutability,
+                    }
+                };
 
                 let alloca = self.ctx.create_entry_block_alloca(node.name.as_str(), &ty);
 
