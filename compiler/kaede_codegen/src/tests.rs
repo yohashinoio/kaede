@@ -461,6 +461,22 @@ fn shared_borrow() -> anyhow::Result<()> {
 }
 
 #[test]
+fn reference_type_argument() -> anyhow::Result<()> {
+    let program = r"fn dref(r &i32) i32 {
+        return *r
+    }
+
+    fn test() i32 {
+        let n = 58
+        return dref(&n)
+    }";
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
 fn mutable_borrow_and_deref() -> anyhow::Result<()> {
     let program = r"fn test() i32 {
         let mut s = 58
