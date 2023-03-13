@@ -96,6 +96,14 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
         let (ptr, ty) = match &node.operand.kind {
             ExprKind::Ident(ident) => {
                 let var = self.scope.find(ident)?;
+
+                if var.1.mutability.is_not() && node.mutability.is_mut() {
+                    return Err(CodegenError::MutableBorrowingFromImmutable {
+                        immutable_var: ident.name.clone(),
+                        span: node.span,
+                    });
+                }
+
                 (var.0, var.1.clone())
             }
 

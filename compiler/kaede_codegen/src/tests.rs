@@ -532,10 +532,27 @@ fn borrow_temporary_value() -> anyhow::Result<()> {
     let program = r"fn test() i32 {
         let r = &58
 
-        return *r
+        let mr = &mut 58
+        *mr = *mr + *r
+
+        return *mr
     }";
 
     assert_eq!(run_test(program)?, 58);
 
     Ok(())
+}
+
+#[test]
+fn mutable_references_to_immutable_variables() {
+    let program = r"fn test() i32 {
+        let n = 123
+        let r = &mut n;
+        return *r
+    }";
+
+    assert!(matches!(
+        run_test(program),
+        Err(CodegenError::MutableBorrowingFromImmutable { .. })
+    ));
 }

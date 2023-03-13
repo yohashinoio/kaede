@@ -30,6 +30,10 @@ pub enum CodegenError {
     #[error("{}:{} Type `{}` cannot be dereferenced", span.start.line, span.start.column, ty)]
     CannotDeref { ty: String, span: Span },
 
+    #[error("{}:{} Cannot borrow `{}` as mutable, as it is not declared as mutable",
+    span.start.line, span.start.column, immutable_var)]
+    MutableBorrowingFromImmutable { immutable_var: String, span: Span },
+
     /// Error issued by LLVM
     #[error("{}", .what)]
     LLVMError { what: String },
