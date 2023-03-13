@@ -39,7 +39,7 @@ pub fn as_llvm_type<'ctx>(ctx: &CGCtx<'ctx, '_>, ty: &Ty) -> BasicTypeEnum<'ctx>
 
         TyKind::UDType(name) => ctx.struct_table[&name.0].0.into(),
 
-        TyKind::Reference(refee_ty) => as_llvm_type(ctx, refee_ty)
+        TyKind::Reference((refee_ty, _)) => as_llvm_type(ctx, refee_ty)
             .ptr_type(AddressSpace::default())
             .into(),
 

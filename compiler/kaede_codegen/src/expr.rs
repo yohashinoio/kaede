@@ -67,7 +67,7 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
         let operand = build_expression(self.ctx, &node.operand, self.scope)?;
 
         let pointee_ty = match operand.get_type().kind.as_ref() {
-            TyKind::Reference(pointee_ty) => pointee_ty.clone(),
+            TyKind::Reference(pointee_ty) => pointee_ty.0.clone(),
 
             kind => {
                 return Err(CodegenError::CannotDeref {
@@ -115,8 +115,9 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
         Ok(Value::new(
             ptr.as_basic_value_enum(),
             Rc::new(Ty {
-                kind: TyKind::Reference(ty).into(),
-                mutability: node.mutability,
+                kind: TyKind::Reference((ty, node.mutability)).into(),
+                // Pointers to references are always immutable!
+                mutability: Mutability::Not,
             }),
         ))
     }

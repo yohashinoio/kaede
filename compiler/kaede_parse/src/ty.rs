@@ -8,7 +8,8 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     pub fn ty(&mut self) -> ParseResult<Ty> {
         use FundamentalTypeKind::*;
 
-        let is_reference_ty = self.consume_b(&TokenKind::And);
+        let is_ref_ty = self.consume_b(&TokenKind::And);
+        let ref_mutability = self.consume_b(&TokenKind::Mut).into();
 
         let ty = self.ident()?;
 
@@ -19,9 +20,9 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             _ => unimplemented!(),
         };
 
-        if is_reference_ty {
+        if is_ref_ty {
             Ok(Ty {
-                kind: TyKind::Reference(ty.into()).into(),
+                kind: TyKind::Reference((ty.into(), ref_mutability)).into(),
                 mutability: Mutability::Not,
             })
         } else {

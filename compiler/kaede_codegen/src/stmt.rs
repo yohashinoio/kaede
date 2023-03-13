@@ -117,10 +117,12 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
             ExprKind::Deref(deref) => {
                 let opr = build_expression(self.ctx, &deref.operand, self.scope)?;
 
-                dbg!(&opr);
-
-                if opr.get_type().mutability.is_not() {
-                    return Err(CodegenError::CannotAssignToImutableRef { span: deref.span });
+                // Check if mutable
+                assert!(matches!(opr.get_type().kind.as_ref(), TyKind::Reference(_)));
+                if let TyKind::Reference((_, mutability)) = opr.get_type().kind.as_ref() {
+                    if mutability.is_not() {
+                        return Err(CodegenError::CannotAssignToImutableRef { span: deref.span });
+                    }
                 }
 
                 Ok(opr)
@@ -249,17 +251,7 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
             let alloca = if node.ty.kind.is_unknown() {
                 // No type information was available, so infer from an initializer
                 let mut ty = (*init.get_type()).clone();
-
-                ty.mutability = {
-                    match ty.kind.as_ref() {
-                        // If &mut value is an initializer, a variable is also mutable
-                        TyKind::Reference(_) => {
-                            (node.ty.mutability.is_mut() || ty.mutability.is_mut()).into()
-                        }
-
-                        _ => node.ty.mutability,
-                    }
-                };
+                ty.mutability = node.ty.mutability;
 
                 let alloca = self.ctx.create_entry_block_alloca(node.name.as_str(), &ty);
 

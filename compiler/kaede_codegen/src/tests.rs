@@ -493,13 +493,13 @@ fn mutable_borrow_and_deref() -> anyhow::Result<()> {
 #[test]
 fn borrow() -> anyhow::Result<()> {
     let program = r"fn to_58(n &mut i32) {
-        n = 58
+        *n = 58
     }
 
     fn test() i32 {
         let mut a = 123
 
-        to_58(&a)
+        to_58(&mut a)
 
         return a
     }";

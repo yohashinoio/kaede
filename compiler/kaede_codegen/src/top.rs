@@ -83,10 +83,11 @@ impl<'a, 'ctx, 'c> TopLevelBuilder<'a, 'ctx, 'c> {
         // Allocate parameters
         let mut param_table = self.create_param_table(param_info, fn_value);
 
-        if node.body.body.is_empty() {
+        build_block(self.ctx, &mut StmtCtx::new(), &mut param_table, node.body)?;
+
+        if fn_type.get_return_type().is_none() && self.ctx.no_terminator() {
+            // If return type is void and there is no termination, insert return
             self.ctx.builder.build_return(None);
-        } else {
-            build_block(self.ctx, &mut StmtCtx::new(), &mut param_table, node.body)?;
         }
 
         Ok(())

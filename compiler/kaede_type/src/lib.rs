@@ -66,7 +66,7 @@ pub enum TyKind {
 
     UDType(UDType),
 
-    Reference(Rc<Ty>),
+    Reference((Rc<Ty>, Mutability)),
 
     /// If a type is not yet known
     Unknown,
@@ -81,7 +81,7 @@ impl std::fmt::Display for TyKind {
 
             Self::UDType(udt) => write!(f, "{}", udt.0),
 
-            Self::Reference(refee) => write!(f, "&{}", refee.kind),
+            Self::Reference(refee) => write!(f, "&{}", refee.0.kind),
 
             Self::Unknown => write!(f, "unknown"),
         }
@@ -93,7 +93,7 @@ impl TyKind {
         match &self {
             Self::Fundamental(fty) => fty.is_signed(),
             Self::UDType(_) => todo!(),
-            Self::Reference(ty) => ty.kind.is_signed(),
+            Self::Reference(ty) => ty.0.kind.is_signed(),
 
             Self::Str => panic!("Cannot get sign information of Str type!"),
             Self::Unknown => panic!("Cannot get sign information of Unknown type!"),
