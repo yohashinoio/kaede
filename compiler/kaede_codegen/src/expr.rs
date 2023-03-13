@@ -115,7 +115,7 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
         Ok(Value::new(
             ptr.as_basic_value_enum(),
             Rc::new(Ty {
-                kind: TyKind::Reference(ty.clone()).into(),
+                kind: TyKind::Reference(ty).into(),
                 mutability: Mutability::Not,
             }),
         ))
