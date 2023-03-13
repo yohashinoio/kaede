@@ -319,7 +319,7 @@ fn break_outside_of_loop() {
 
     assert!(matches!(
         run_test(program),
-        Err(CodegenError::BreakOutsideOfLoop { span: _ })
+        Err(CodegenError::BreakOutsideOfLoop { .. })
     ));
 }
 
@@ -348,7 +348,7 @@ fn assign_to_immutable() {
 
     assert!(matches!(
         run_test(program),
-        Err(CodegenError::CannotAssignTwiceToImutable { name: _, span: _ })
+        Err(CodegenError::CannotAssignTwiceToImutable { .. })
     ));
 }
 
@@ -443,7 +443,7 @@ fn has_no_fields() {
 
     assert!(matches!(
         run_test(program),
-        Err(CodegenError::HasNoFields { span: _ })
+        Err(CodegenError::HasNoFields { .. })
     ));
 }
 
@@ -511,7 +511,20 @@ fn borrow() -> anyhow::Result<()> {
 
 #[test]
 fn assign_to_immutable_reference() {
-    todo!()
+    let program = r"fn test() i32 {
+        let mut n = 58
+
+        let r = &n;
+
+        *r = 123
+
+        return n
+    }";
+
+    assert!(matches!(
+        run_test(program),
+        Err(CodegenError::CannotAssignToImutableRef { .. })
+    ));
 }
 
 #[test]
