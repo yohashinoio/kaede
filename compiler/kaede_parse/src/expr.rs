@@ -122,11 +122,44 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             return self.borrow();
         }
 
+        // Dereference
         if self.check(&TokenKind::Asterisk) {
             return self.deref();
         }
 
         self.field_access()
+    }
+
+    fn deref(&mut self) -> ParseResult<Expr> {
+        let start = self.consume(&TokenKind::Asterisk).unwrap().start;
+
+        let operand = Box::new(self.field_access()?);
+
+        let span = Span::new(start, operand.span.finish);
+
+        Ok(Expr {
+            kind: ExprKind::Deref(Deref { span, operand }),
+            span,
+        })
+    }
+
+    fn borrow(&mut self) -> ParseResult<Expr> {
+        let start = self.consume(&TokenKind::And).unwrap().start;
+
+        let mutability = self.consume_b(&TokenKind::Mut).into();
+
+        let operand = Box::new(self.field_access()?);
+
+        let span = Span::new(start, operand.span.finish);
+
+        Ok(Expr {
+            kind: ExprKind::Borrow(Borrow {
+                span,
+                operand,
+                mutability,
+            }),
+            span,
+        })
     }
 
     fn field_access(&mut self) -> ParseResult<Expr> {
@@ -201,38 +234,6 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         Ok(Expr {
             span: int.span,
             kind: ExprKind::Int(int),
-        })
-    }
-
-    fn deref(&mut self) -> ParseResult<Expr> {
-        let start = self.consume(&TokenKind::Asterisk).unwrap().start;
-
-        let operand = Box::new(self.expr()?);
-
-        let span = Span::new(start, operand.span.finish);
-
-        Ok(Expr {
-            kind: ExprKind::Deref(Deref { span, operand }),
-            span,
-        })
-    }
-
-    fn borrow(&mut self) -> ParseResult<Expr> {
-        let start = self.consume(&TokenKind::And).unwrap().start;
-
-        let mutability = self.consume_b(&TokenKind::Mut).into();
-
-        let operand = Box::new(self.expr()?);
-
-        let span = Span::new(start, operand.span.finish);
-
-        Ok(Expr {
-            kind: ExprKind::Borrow(Borrow {
-                span,
-                operand,
-                mutability,
-            }),
-            span,
         })
     }
 

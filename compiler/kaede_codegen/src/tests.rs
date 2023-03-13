@@ -530,9 +530,9 @@ fn assign_to_immutable_reference() {
 #[test]
 fn borrow_temporary_value() -> anyhow::Result<()> {
     let program = r"fn test() i32 {
-        let r = &58
+        let r = &(58 / 2)
 
-        let mr = &mut 58
+        let mr = &mut 29
         *mr = *mr + *r
 
         return *mr
