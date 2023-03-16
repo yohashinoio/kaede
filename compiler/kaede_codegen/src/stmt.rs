@@ -11,42 +11,43 @@ use crate::{
     error::{CodegenError, CodegenResult},
     expr::build_expression,
     value::Value,
-    CGCtx, SymbolTable,
+    CodegenContext, SymbolTable,
 };
 
 pub fn build_block<'a, 'ctx>(
-    ctx: &'a CGCtx<'ctx, '_>,
-    stmt_ctx: &'a mut StmtCtx<'ctx>,
+    ctx: &'a CodegenContext<'ctx, '_>,
+    scx: &'a mut StmtContext<'ctx>,
     scope: &'a mut SymbolTable<'ctx>,
     block: Block,
 ) -> CodegenResult<()> {
     for stmt in block.body {
-        build_statement(ctx, stmt_ctx, scope, stmt)?;
+        build_statement(ctx, scx, scope, stmt)?;
     }
 
     Ok(())
 }
 
 pub fn build_statement<'a, 'ctx>(
-    ctx: &'a CGCtx<'ctx, '_>,
-    stmt_ctx: &'a mut StmtCtx<'ctx>,
+    ctx: &'a CodegenContext<'ctx, '_>,
+    scx: &'a mut StmtContext<'ctx>,
     scope: &'a mut SymbolTable<'ctx>,
     node: Stmt,
 ) -> CodegenResult<()> {
-    let mut builder = StmtBuilder::new(ctx, stmt_ctx, scope);
+    let mut builder = StmtBuilder::new(ctx, scx, scope);
 
     builder.build(node)?;
 
     Ok(())
 }
 
-pub struct StmtCtx<'ctx> {
-    /// Jump at break (statement)
+pub struct StmtContext<'ctx> {
+    /// Block to jump to when a `break` is executed
+    ///
     /// None if not in a loop
     pub loop_break_bb: Option<BasicBlock<'ctx>>,
 }
 
-impl StmtCtx<'_> {
+impl StmtContext<'_> {
     /// Fields of type `Option<T>` will be `None`
     pub fn new() -> Self {
         Self {
@@ -56,22 +57,18 @@ impl StmtCtx<'_> {
 }
 
 struct StmtBuilder<'a, 'ctx, 'c> {
-    ctx: &'a CGCtx<'ctx, 'c>,
-    stmt_ctx: &'a mut StmtCtx<'ctx>,
+    ctx: &'a CodegenContext<'ctx, 'c>,
+    scx: &'a mut StmtContext<'ctx>,
     scope: &'a mut SymbolTable<'ctx>,
 }
 
 impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
     fn new(
-        ctx: &'a CGCtx<'ctx, 'c>,
-        stmt_ctx: &'a mut StmtCtx<'ctx>,
+        ctx: &'a CodegenContext<'ctx, 'c>,
+        scx: &'a mut StmtContext<'ctx>,
         scope: &'a mut SymbolTable<'ctx>,
     ) -> Self {
-        Self {
-            ctx,
-            stmt_ctx,
-            scope,
-        }
+        Self { ctx, scx, scope }
     }
 
     /// Generate statement code
@@ -150,7 +147,7 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
     }
 
     fn break_(&mut self, node: Break) -> CodegenResult<()> {
-        match self.stmt_ctx.loop_break_bb {
+        match self.scx.loop_break_bb {
             Some(bb) => {
                 self.ctx.builder.build_unconditional_branch(bb);
                 Ok(())
@@ -168,12 +165,12 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
         let cont_bb = self.ctx.context.append_basic_block(parent, "loopcont");
 
         // Setup for break statement
-        self.stmt_ctx.loop_break_bb = Some(cont_bb);
+        self.scx.loop_break_bb = Some(cont_bb);
 
         // Build body block
         self.ctx.builder.build_unconditional_branch(body_bb);
         self.ctx.builder.position_at_end(body_bb);
-        build_block(self.ctx, self.stmt_ctx, self.scope, node.body)?;
+        build_block(self.ctx, self.scx, self.scope, node.body)?;
 
         // Loop!
         if self.ctx.no_terminator() {
@@ -207,7 +204,7 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
 
         // Build then block
         self.ctx.builder.position_at_end(then_bb);
-        build_block(self.ctx, self.stmt_ctx, self.scope, node.then)?;
+        build_block(self.ctx, self.scx, self.scope, node.then)?;
         // Since there can be no more than one terminator per block
         if self.ctx.no_terminator() {
             self.ctx.builder.build_unconditional_branch(cont_bb);
@@ -218,7 +215,7 @@ impl<'a, 'ctx, 'c> StmtBuilder<'a, 'ctx, 'c> {
         if let Some(else_) = node.else_ {
             match *else_ {
                 Else::If(if_) => self.if_(if_)?,
-                Else::Block(block) => build_block(self.ctx, self.stmt_ctx, self.scope, block)?,
+                Else::Block(block) => build_block(self.ctx, self.scx, self.scope, block)?,
             }
         }
         // Since there can be no more than one terminator per block

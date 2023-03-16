@@ -7,11 +7,12 @@ use kaede_type::Ty;
 use crate::{
     as_llvm_type,
     error::CodegenResult,
-    stmt::{build_block, StmtCtx},
-    CGCtx, StructFieldInfo, StructInfo, SymbolTable,
+    stmt::{build_block, StmtContext},
+    tcx::{StructFieldInfo, StructInfo},
+    CodegenContext, SymbolTable,
 };
 
-pub fn build_top_level(ctx: &mut CGCtx, node: TopLevel) -> CodegenResult<()> {
+pub fn build_top_level(ctx: &mut CodegenContext, node: TopLevel) -> CodegenResult<()> {
     let mut builder = TopLevelBuilder::new(ctx);
 
     builder.build(node)?;
@@ -20,11 +21,11 @@ pub fn build_top_level(ctx: &mut CGCtx, node: TopLevel) -> CodegenResult<()> {
 }
 
 struct TopLevelBuilder<'a, 'ctx, 'c> {
-    ctx: &'a mut CGCtx<'ctx, 'c>,
+    ctx: &'a mut CodegenContext<'ctx, 'c>,
 }
 
 impl<'a, 'ctx, 'c> TopLevelBuilder<'a, 'ctx, 'c> {
-    fn new(ctx: &'a mut CGCtx<'ctx, 'c>) -> Self {
+    fn new(ctx: &'a mut CodegenContext<'ctx, 'c>) -> Self {
         Self { ctx }
     }
 
@@ -72,18 +73,25 @@ impl<'a, 'ctx, 'c> TopLevelBuilder<'a, 'ctx, 'c> {
 
         // Store return type information in table
         self.ctx
+            .tcx
             .return_ty_table
             .insert(fn_value, node.return_ty.map(Rc::new));
 
         // Store parameter information in table
         self.ctx
+            .tcx
             .param_table
             .insert(fn_value, param_info.iter().map(|e| e.1.clone()).collect());
 
         // Allocate parameters
-        let mut param_table = self.create_param_table(param_info, fn_value);
+        let mut param_table = self.tabling_fn_params(param_info, fn_value);
 
-        build_block(self.ctx, &mut StmtCtx::new(), &mut param_table, node.body)?;
+        build_block(
+            self.ctx,
+            &mut StmtContext::new(),
+            &mut param_table,
+            node.body,
+        )?;
 
         if fn_type.get_return_type().is_none() && self.ctx.no_terminator() {
             // If return type is void and there is no termination, insert return
@@ -93,8 +101,8 @@ impl<'a, 'ctx, 'c> TopLevelBuilder<'a, 'ctx, 'c> {
         Ok(())
     }
 
-    /// Expand function parameters into a symbol table
-    fn create_param_table(
+    /// Expand function parameters into a symbol table for easier handling
+    fn tabling_fn_params(
         &self,
         param_info: Vec<(String, Rc<Ty>)>,
         fn_value: FunctionValue<'ctx>,
@@ -146,6 +154,7 @@ impl<'a, 'ctx, 'c> TopLevelBuilder<'a, 'ctx, 'c> {
             .collect();
 
         self.ctx
+            .tcx
             .struct_table
             .insert(node.name.name, (ty, StructInfo { fields }));
     }

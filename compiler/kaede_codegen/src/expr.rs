@@ -4,7 +4,7 @@ use crate::{
     as_llvm_type,
     error::{CodegenError, CodegenResult},
     value::Value,
-    CGCtx, SymbolTable,
+    CodegenContext, SymbolTable,
 };
 
 use inkwell::{values::BasicValue, IntPredicate};
@@ -14,7 +14,7 @@ use kaede_ast::expr::{
 use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability, Ty, TyKind, UDType};
 
 pub fn build_expression<'a, 'ctx>(
-    ctx: &'a CGCtx<'ctx, '_>,
+    ctx: &'a CodegenContext<'ctx, '_>,
     node: &Expr,
     scope: &'a SymbolTable<'ctx>,
 ) -> CodegenResult<Value<'ctx>> {
@@ -24,14 +24,14 @@ pub fn build_expression<'a, 'ctx>(
 }
 
 struct ExprBuilder<'a, 'ctx, 'c> {
-    ctx: &'a CGCtx<'ctx, 'c>,
+    ctx: &'a CodegenContext<'ctx, 'c>,
 
     // Variables
     scope: &'a SymbolTable<'ctx>,
 }
 
 impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
-    fn new(ctx: &'a CGCtx<'ctx, 'c>, scope: &'a SymbolTable<'ctx>) -> Self {
+    fn new(ctx: &'a CodegenContext<'ctx, 'c>, scope: &'a SymbolTable<'ctx>) -> Self {
         Self { ctx, scope }
     }
 
@@ -145,7 +145,7 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
     }
 
     fn struct_literal(&self, node: &StructLiteral) -> CodegenResult<Value<'ctx>> {
-        let (_ty, info) = match self.ctx.struct_table.get(node.struct_name.as_str()) {
+        let (_ty, info) = match self.ctx.tcx.struct_table.get(node.struct_name.as_str()) {
             Some(value) => value,
 
             None => {
@@ -323,7 +323,7 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
             _ => unreachable!(),
         };
 
-        let (_, struct_info) = &self.ctx.struct_table[struct_name];
+        let (_, struct_info) = &self.ctx.tcx.struct_table[struct_name];
 
         let field_info = &struct_info.fields[field_name];
         let field_llvm_ty = as_llvm_type(self.ctx, &field_info.ty);
@@ -378,7 +378,9 @@ impl<'a, 'ctx, 'c> ExprBuilder<'a, 'ctx, 'c> {
                     .left();
 
                 Ok(match return_value {
-                    Some(val) => Value::new(val, self.ctx.return_ty_table[&func].clone().unwrap()),
+                    Some(val) => {
+                        Value::new(val, self.ctx.tcx.return_ty_table[&func].clone().unwrap())
+                    }
                     None => Value::new_void(),
                 })
             }
