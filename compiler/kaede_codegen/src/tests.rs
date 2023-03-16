@@ -20,7 +20,9 @@ fn run_test(program: &str) -> CodegenResult<i32> {
     let context = Context::create();
     let module = context.create_module("test");
 
-    codegen(&context, &module, parse(lex(program)).unwrap())?;
+    let cgcx = CodegenContext::new(&context)?;
+
+    codegen(&cgcx, &module, parse(lex(program)).unwrap())?;
 
     Ok(jit_compile_test(&module))
 }

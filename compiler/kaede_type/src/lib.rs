@@ -121,6 +121,10 @@ impl std::fmt::Display for FundamentalType {
 }
 
 impl FundamentalType {
+    pub fn kind(&self) -> FundamentalTypeKind {
+        self.kind
+    }
+
     pub fn as_llvm_type<'ctx>(&self, context: &'ctx Context) -> BasicTypeEnum<'ctx> {
         use FundamentalTypeKind::*;
 

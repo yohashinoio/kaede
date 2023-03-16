@@ -3,7 +3,7 @@ use std::{fs, path::PathBuf};
 use anyhow::anyhow;
 use clap::Parser;
 use inkwell::context::Context;
-use kaede_codegen::codegen;
+use kaede_codegen::{codegen, CodegenContext};
 use kaede_lex::lex;
 use kaede_parse::parse;
 
@@ -26,7 +26,9 @@ fn compile(module_name: &str, program: &str) -> anyhow::Result<()> {
 
     let context = Context::create();
     let module = context.create_module(module_name);
-    codegen(&context, &module, ast)?;
+
+    let cgcx = CodegenContext::new(&context)?;
+    codegen(&cgcx, &module, ast)?;
 
     println!("{}", module.to_string());
 
