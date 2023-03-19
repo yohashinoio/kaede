@@ -11,11 +11,11 @@ use crate::{
     error::{CodegenError, CodegenResult},
     expr::build_expression,
     value::Value,
-    SymbolTable, TranslUnitContext,
+    CompileUnitContext, SymbolTable,
 };
 
 pub fn build_block<'a, 'ctx>(
-    ctx: &'a TranslUnitContext<'ctx, '_, '_>,
+    ctx: &'a CompileUnitContext<'ctx, '_, '_>,
     scx: &'a mut StmtContext<'ctx>,
     scope: &'a mut SymbolTable<'ctx>,
     block: Block,
@@ -28,7 +28,7 @@ pub fn build_block<'a, 'ctx>(
 }
 
 pub fn build_statement<'a, 'ctx>(
-    ctx: &'a TranslUnitContext<'ctx, '_, '_>,
+    ctx: &'a CompileUnitContext<'ctx, '_, '_>,
     scx: &'a mut StmtContext<'ctx>,
     scope: &'a mut SymbolTable<'ctx>,
     node: Stmt,
@@ -56,26 +56,26 @@ impl StmtContext<'_> {
     }
 }
 
-struct StmtBuilder<'a, 'ctx, 'modl, 'cgcx> {
-    tucx: &'a TranslUnitContext<'ctx, 'modl, 'cgcx>,
+struct StmtBuilder<'a, 'ctx, 'm, 'c> {
+    cucx: &'a CompileUnitContext<'ctx, 'm, 'c>,
     scx: &'a mut StmtContext<'ctx>,
     scope: &'a mut SymbolTable<'ctx>,
 }
 
-impl<'a, 'ctx, 'modl, 'cgcx> StmtBuilder<'a, 'ctx, 'modl, 'cgcx> {
+impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
     fn new(
-        tucx: &'a TranslUnitContext<'ctx, 'modl, 'cgcx>,
+        cucx: &'a CompileUnitContext<'ctx, 'm, 'c>,
         scx: &'a mut StmtContext<'ctx>,
         scope: &'a mut SymbolTable<'ctx>,
     ) -> Self {
-        Self { tucx, scx, scope }
+        Self { cucx, scx, scope }
     }
 
     /// Generate statement code
     fn build(&mut self, stmt: Stmt) -> CodegenResult<()> {
         match stmt.kind {
             StmtKind::Expr(e) => {
-                build_expression(self.tucx, &e, self.scope)?;
+                build_expression(self.cucx, &e, self.scope)?;
             }
 
             StmtKind::Return(node) => self.return_(node)?,
@@ -112,7 +112,7 @@ impl<'a, 'ctx, 'modl, 'cgcx> StmtBuilder<'a, 'ctx, 'modl, 'cgcx> {
             }
 
             ExprKind::Deref(deref) => {
-                let opr = build_expression(self.tucx, &deref.operand, self.scope)?;
+                let opr = build_expression(self.cucx, &deref.operand, self.scope)?;
 
                 // Check if mutable
                 assert!(matches!(opr.get_type().kind.as_ref(), TyKind::Reference(_)));
@@ -134,11 +134,11 @@ impl<'a, 'ctx, 'modl, 'cgcx> StmtBuilder<'a, 'ctx, 'modl, 'cgcx> {
     fn assign(&mut self, node: Assign) -> CodegenResult<()> {
         let lhs = self.build_assignable(node.lhs)?;
 
-        let rhs = build_expression(self.tucx, &node.rhs, self.scope)?;
+        let rhs = build_expression(self.cucx, &node.rhs, self.scope)?;
 
         match node.kind {
             AssignKind::Simple => self
-                .tucx
+                .cucx
                 .builder
                 .build_store(lhs.get_value().into_pointer_value(), rhs.get_value()),
         };
@@ -149,7 +149,7 @@ impl<'a, 'ctx, 'modl, 'cgcx> StmtBuilder<'a, 'ctx, 'modl, 'cgcx> {
     fn break_(&mut self, node: Break) -> CodegenResult<()> {
         match self.scx.loop_break_bb {
             Some(bb) => {
-                self.tucx.builder.build_unconditional_branch(bb);
+                self.cucx.builder.build_unconditional_branch(bb);
                 Ok(())
             }
 
@@ -158,84 +158,84 @@ impl<'a, 'ctx, 'modl, 'cgcx> StmtBuilder<'a, 'ctx, 'modl, 'cgcx> {
     }
 
     fn loop_(&mut self, node: Loop) -> CodegenResult<()> {
-        let parent = self.tucx.get_current_fn();
+        let parent = self.cucx.get_current_fn();
 
-        let body_bb = self.tucx.context().append_basic_block(parent, "body");
+        let body_bb = self.cucx.context().append_basic_block(parent, "body");
 
-        let cont_bb = self.tucx.context().append_basic_block(parent, "loopcont");
+        let cont_bb = self.cucx.context().append_basic_block(parent, "loopcont");
 
         // Setup for break statement
         self.scx.loop_break_bb = Some(cont_bb);
 
         // Build body block
-        self.tucx.builder.build_unconditional_branch(body_bb);
-        self.tucx.builder.position_at_end(body_bb);
-        build_block(self.tucx, self.scx, self.scope, node.body)?;
+        self.cucx.builder.build_unconditional_branch(body_bb);
+        self.cucx.builder.position_at_end(body_bb);
+        build_block(self.cucx, self.scx, self.scope, node.body)?;
 
         // Loop!
-        if self.tucx.no_terminator() {
-            self.tucx.builder.build_unconditional_branch(body_bb);
+        if self.cucx.no_terminator() {
+            self.cucx.builder.build_unconditional_branch(body_bb);
         }
 
-        self.tucx.builder.position_at_end(cont_bb);
+        self.cucx.builder.position_at_end(cont_bb);
 
         Ok(())
     }
 
     fn if_(&mut self, node: If) -> CodegenResult<()> {
-        let parent = self.tucx.get_current_fn();
-        let zero_const = self.tucx.context().bool_type().const_zero();
+        let parent = self.cucx.get_current_fn();
+        let zero_const = self.cucx.context().bool_type().const_zero();
 
-        let cond = build_expression(self.tucx, &node.cond, self.scope)?;
-        let cond = self.tucx.builder.build_int_compare(
+        let cond = build_expression(self.cucx, &node.cond, self.scope)?;
+        let cond = self.cucx.builder.build_int_compare(
             IntPredicate::NE,
             cond.get_value().into_int_value(),
             zero_const,
             "ifcond",
         );
 
-        let then_bb = self.tucx.context().append_basic_block(parent, "then");
-        let else_bb = self.tucx.context().append_basic_block(parent, "else");
-        let cont_bb = self.tucx.context().append_basic_block(parent, "ifcont");
+        let then_bb = self.cucx.context().append_basic_block(parent, "then");
+        let else_bb = self.cucx.context().append_basic_block(parent, "else");
+        let cont_bb = self.cucx.context().append_basic_block(parent, "ifcont");
 
-        self.tucx
+        self.cucx
             .builder
             .build_conditional_branch(cond, then_bb, else_bb);
 
         // Build then block
-        self.tucx.builder.position_at_end(then_bb);
-        build_block(self.tucx, self.scx, self.scope, node.then)?;
+        self.cucx.builder.position_at_end(then_bb);
+        build_block(self.cucx, self.scx, self.scope, node.then)?;
         // Since there can be no more than one terminator per block
-        if self.tucx.no_terminator() {
-            self.tucx.builder.build_unconditional_branch(cont_bb);
+        if self.cucx.no_terminator() {
+            self.cucx.builder.build_unconditional_branch(cont_bb);
         }
 
         // Build else block
-        self.tucx.builder.position_at_end(else_bb);
+        self.cucx.builder.position_at_end(else_bb);
         if let Some(else_) = node.else_ {
             match *else_ {
                 Else::If(if_) => self.if_(if_)?,
-                Else::Block(block) => build_block(self.tucx, self.scx, self.scope, block)?,
+                Else::Block(block) => build_block(self.cucx, self.scx, self.scope, block)?,
             }
         }
         // Since there can be no more than one terminator per block
-        if self.tucx.no_terminator() {
-            self.tucx.builder.build_unconditional_branch(cont_bb);
+        if self.cucx.no_terminator() {
+            self.cucx.builder.build_unconditional_branch(cont_bb);
         }
 
         // Build continue block
-        self.tucx.builder.position_at_end(cont_bb);
+        self.cucx.builder.position_at_end(cont_bb);
 
         Ok(())
     }
 
     fn return_(&mut self, node: Return) -> CodegenResult<()> {
         match node.val {
-            Some(val) => self.tucx.builder.build_return(Some(
-                &build_expression(self.tucx, &val, self.scope)?.get_value(),
+            Some(val) => self.cucx.builder.build_return(Some(
+                &build_expression(self.cucx, &val, self.scope)?.get_value(),
             )),
 
-            None => self.tucx.builder.build_return(None),
+            None => self.cucx.builder.build_return(None),
         };
 
         Ok(())
@@ -243,14 +243,14 @@ impl<'a, 'ctx, 'modl, 'cgcx> StmtBuilder<'a, 'ctx, 'modl, 'cgcx> {
 
     fn let_(&mut self, node: Let) -> CodegenResult<()> {
         if let Some(init) = node.init {
-            let init = build_expression(self.tucx, &init, self.scope)?;
+            let init = build_expression(self.cucx, &init, self.scope)?;
 
             let alloca = if node.ty.kind.is_unknown() {
                 // No type information was available, so infer from an initializer
                 let mut ty = (*init.get_type()).clone();
                 ty.mutability = node.ty.mutability;
 
-                let alloca = self.tucx.create_entry_block_alloca(node.name.as_str(), &ty);
+                let alloca = self.cucx.create_entry_block_alloca(node.name.as_str(), &ty);
 
                 self.scope.0.insert(node.name.name, (alloca, Rc::new(ty)));
 
@@ -264,7 +264,7 @@ impl<'a, 'ctx, 'modl, 'cgcx> StmtBuilder<'a, 'ctx, 'modl, 'cgcx> {
                 }
 
                 let alloca = self
-                    .tucx
+                    .cucx
                     .create_entry_block_alloca(node.name.as_str(), &node.ty);
 
                 self.scope
@@ -275,7 +275,7 @@ impl<'a, 'ctx, 'modl, 'cgcx> StmtBuilder<'a, 'ctx, 'modl, 'cgcx> {
             };
 
             // Initialization
-            self.tucx.builder.build_store(alloca, init.get_value());
+            self.cucx.builder.build_store(alloca, init.get_value());
 
             return Ok(());
         }

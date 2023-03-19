@@ -1,5 +1,6 @@
 use std::{collections::HashMap, rc::Rc};
 
+use debug::DebugInfo;
 use error::{CodegenError, CodegenResult};
 use inkwell::{
     builder::Builder,
@@ -10,7 +11,7 @@ use inkwell::{
     values::{FunctionValue, PointerValue},
     AddressSpace, OptimizationLevel,
 };
-use kaede_ast::{expr::Ident, TranslationUnit};
+use kaede_ast::{expr::Ident, CompileUnit};
 use kaede_type::{Ty, TyKind};
 use tcx::TypeContext;
 use top::build_top_level;
@@ -53,11 +54,11 @@ impl<'ctx> Default for SymbolTable<'ctx> {
     }
 }
 
-pub fn as_llvm_type<'ctx>(tucx: &TranslUnitContext<'ctx, '_, '_>, ty: &Ty) -> BasicTypeEnum<'ctx> {
-    let context = tucx.context();
+pub fn as_llvm_type<'ctx>(cucx: &CompileUnitContext<'ctx, '_, '_>, ty: &Ty) -> BasicTypeEnum<'ctx> {
+    let context = cucx.context();
 
     match ty.kind.as_ref() {
-        TyKind::Fundamental(t) => t.as_llvm_type(tucx.context()),
+        TyKind::Fundamental(t) => t.as_llvm_type(cucx.context()),
 
         TyKind::Str => {
             let str_ty = context.i8_type().ptr_type(AddressSpace::default());
@@ -68,9 +69,9 @@ pub fn as_llvm_type<'ctx>(tucx: &TranslUnitContext<'ctx, '_, '_>, ty: &Ty) -> Ba
                 .into()
         }
 
-        TyKind::UDType(name) => tucx.tcx.struct_table[&name.0].0.into(),
+        TyKind::UDType(name) => cucx.tcx.struct_table[&name.0].0.into(),
 
-        TyKind::Reference((refee_ty, _)) => as_llvm_type(tucx, refee_ty)
+        TyKind::Reference((refee_ty, _)) => as_llvm_type(cucx, refee_ty)
             .ptr_type(AddressSpace::default())
             .into(),
 
@@ -81,9 +82,9 @@ pub fn as_llvm_type<'ctx>(tucx: &TranslUnitContext<'ctx, '_, '_>, ty: &Ty) -> Ba
 pub fn codegen<'ctx>(
     ctx: &CodegenContext<'ctx>,
     module: &Module<'ctx>,
-    ast: TranslationUnit,
+    ast: CompileUnit,
 ) -> CodegenResult<()> {
-    TranslUnitContext::new(ctx, module)?.codegen(ast)?;
+    CompileUnitContext::new(ctx, module)?.codegen(ast)?;
 
     Ok(())
 }
@@ -137,25 +138,23 @@ impl<'ctx> CodegenContext<'ctx> {
     }
 }
 
-/// Translation unit context
-pub struct TranslUnitContext<'ctx, 'modl, 'cgcx> {
-    pub cgcx: &'cgcx CodegenContext<'ctx>,
+pub struct CompileUnitContext<'ctx, 'm, 'c> {
+    pub cgcx: &'c CodegenContext<'ctx>,
 
-    pub module: &'modl Module<'ctx>,
+    pub module: &'m Module<'ctx>,
     pub builder: Builder<'ctx>,
+    pub di: DebugInfo<'ctx>,
 
     pub tcx: TypeContext<'ctx>,
 }
 
-impl<'ctx, 'modl, 'cgcx> TranslUnitContext<'ctx, 'modl, 'cgcx> {
-    pub fn new(
-        ctx: &'cgcx CodegenContext<'ctx>,
-        module: &'modl Module<'ctx>,
-    ) -> CodegenResult<Self> {
+impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
+    pub fn new(ctx: &'c CodegenContext<'ctx>, module: &'m Module<'ctx>) -> CodegenResult<Self> {
         Ok(Self {
             builder: ctx.context.create_builder(),
             cgcx: ctx,
             module,
+            di: DebugInfo::new(module),
             tcx: Default::default(),
         })
     }
@@ -199,7 +198,7 @@ impl<'ctx, 'modl, 'cgcx> TranslUnitContext<'ctx, 'modl, 'cgcx> {
             .is_none()
     }
 
-    pub fn codegen(&mut self, ast: TranslationUnit) -> CodegenResult<()> {
+    pub fn codegen(&mut self, ast: CompileUnit) -> CodegenResult<()> {
         for top in ast {
             build_top_level(self, top)?;
         }

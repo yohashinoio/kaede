@@ -4,7 +4,7 @@ use crate::{
     as_llvm_type,
     error::{CodegenError, CodegenResult},
     value::Value,
-    SymbolTable, TranslUnitContext,
+    CompileUnitContext, SymbolTable,
 };
 
 use inkwell::{values::BasicValue, IntPredicate};
@@ -14,32 +14,32 @@ use kaede_ast::expr::{
 use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability, Ty, TyKind, UDType};
 
 pub fn build_expression<'a, 'ctx>(
-    tucx: &'a TranslUnitContext<'ctx, '_, '_>,
+    cucx: &'a CompileUnitContext<'ctx, '_, '_>,
     node: &Expr,
     scope: &'a SymbolTable<'ctx>,
 ) -> CodegenResult<Value<'ctx>> {
-    let builder = ExprBuilder::new(tucx, scope);
+    let builder = ExprBuilder::new(cucx, scope);
 
     builder.build(node)
 }
 
-struct ExprBuilder<'a, 'ctx, 'modl, 'cgcx> {
-    tucx: &'a TranslUnitContext<'ctx, 'modl, 'cgcx>,
+struct ExprBuilder<'a, 'ctx, 'm, 'c> {
+    cucx: &'a CompileUnitContext<'ctx, 'm, 'c>,
 
     // Variables
     scope: &'a SymbolTable<'ctx>,
 }
 
-impl<'a, 'ctx, 'modl, 'cgcx> ExprBuilder<'a, 'ctx, 'modl, 'cgcx> {
-    fn new(ctx: &'a TranslUnitContext<'ctx, 'modl, 'cgcx>, scope: &'a SymbolTable<'ctx>) -> Self {
-        Self { tucx: ctx, scope }
+impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
+    fn new(ctx: &'a CompileUnitContext<'ctx, 'm, 'c>, scope: &'a SymbolTable<'ctx>) -> Self {
+        Self { cucx: ctx, scope }
     }
 
     /// Generate expression code
     fn build(&self, node: &Expr) -> CodegenResult<Value<'ctx>> {
         Ok(match &node.kind {
             ExprKind::Int(int) => Value::new(
-                int.kind.as_llvm_int(self.tucx.context()).into(),
+                int.kind.as_llvm_int(self.cucx.context()).into(),
                 Rc::new(int.kind.get_type()),
             ),
 
@@ -64,7 +64,7 @@ impl<'a, 'ctx, 'modl, 'cgcx> ExprBuilder<'a, 'ctx, 'modl, 'cgcx> {
     }
 
     fn deref(&self, node: &Deref) -> CodegenResult<Value<'ctx>> {
-        let operand = build_expression(self.tucx, &node.operand, self.scope)?;
+        let operand = build_expression(self.cucx, &node.operand, self.scope)?;
 
         let pointee_ty = match operand.get_type().kind.as_ref() {
             TyKind::Reference(pointee_ty) => pointee_ty.0.clone(),
@@ -77,8 +77,8 @@ impl<'a, 'ctx, 'modl, 'cgcx> ExprBuilder<'a, 'ctx, 'modl, 'cgcx> {
             }
         };
 
-        let loaded_operand = self.tucx.builder.build_load(
-            as_llvm_type(self.tucx, &pointee_ty),
+        let loaded_operand = self.cucx.builder.build_load(
+            as_llvm_type(self.cucx, &pointee_ty),
             operand.get_value().into_pointer_value(),
             "",
         );
@@ -109,12 +109,12 @@ impl<'a, 'ctx, 'modl, 'cgcx> ExprBuilder<'a, 'ctx, 'modl, 'cgcx> {
 
             // Create a variable to take an address since the reference is to a temporary value
             _ => {
-                let operand = build_expression(self.tucx, &node.operand, self.scope)?;
+                let operand = build_expression(self.cucx, &node.operand, self.scope)?;
 
                 let ty = operand.get_type();
 
-                let alloca = self.tucx.create_entry_block_alloca("temp", &ty);
-                self.tucx.builder.build_store(alloca, operand.get_value());
+                let alloca = self.cucx.create_entry_block_alloca("temp", &ty);
+                self.cucx.builder.build_store(alloca, operand.get_value());
 
                 (alloca, ty)
             }
@@ -132,7 +132,7 @@ impl<'a, 'ctx, 'modl, 'cgcx> ExprBuilder<'a, 'ctx, 'modl, 'cgcx> {
 
     fn boolean_literal(&self, value: bool) -> Value<'ctx> {
         Value::new(
-            self.tucx
+            self.cucx
                 .context()
                 .bool_type()
                 .const_int(value as u64, false)
@@ -145,7 +145,7 @@ impl<'a, 'ctx, 'modl, 'cgcx> ExprBuilder<'a, 'ctx, 'modl, 'cgcx> {
     }
 
     fn struct_literal(&self, node: &StructLiteral) -> CodegenResult<Value<'ctx>> {
-        let (_ty, info) = match self.tucx.tcx.struct_table.get(node.struct_name.as_str()) {
+        let (_ty, info) = match self.cucx.tcx.struct_table.get(node.struct_name.as_str()) {
             Some(value) => value,
 
             None => {
@@ -164,7 +164,7 @@ impl<'a, 'ctx, 'modl, 'cgcx> ExprBuilder<'a, 'ctx, 'modl, 'cgcx> {
             // To sort by offset, store offset
             values.push((
                 field_info.offset,
-                build_expression(self.tucx, &value.1, self.scope)?.get_value(),
+                build_expression(self.cucx, &value.1, self.scope)?.get_value(),
             ));
         }
 
@@ -175,7 +175,7 @@ impl<'a, 'ctx, 'modl, 'cgcx> ExprBuilder<'a, 'ctx, 'modl, 'cgcx> {
         let inits: Vec<_> = values.iter().map(|e| e.1).collect();
 
         Ok(Value::new(
-            self.tucx.context().const_struct(&inits, true).into(),
+            self.cucx.context().const_struct(&inits, true).into(),
             Rc::new(Ty::new(
                 TyKind::UDType(UDType(node.struct_name.name.clone())).into(),
                 Mutability::Not,
@@ -184,15 +184,15 @@ impl<'a, 'ctx, 'modl, 'cgcx> ExprBuilder<'a, 'ctx, 'modl, 'cgcx> {
     }
 
     fn string_literal(&self, s: &str) -> Value<'ctx> {
-        let global_s = self.tucx.builder.build_global_string_ptr(s, "str");
+        let global_s = self.cucx.builder.build_global_string_ptr(s, "str");
 
         Value::new(
-            self.tucx
+            self.cucx
                 .context()
                 .const_struct(
                     &[
                         global_s.as_basic_value_enum(),
-                        self.tucx
+                        self.cucx
                             .context()
                             .i64_type()
                             .const_int(s.len() as u64, false)
@@ -209,9 +209,9 @@ impl<'a, 'ctx, 'modl, 'cgcx> ExprBuilder<'a, 'ctx, 'modl, 'cgcx> {
         let (ptr, ty) = self.scope.find(ident)?;
 
         Ok(Value::new(
-            self.tucx
+            self.cucx
                 .builder
-                .build_load(as_llvm_type(self.tucx, ty), *ptr, ""),
+                .build_load(as_llvm_type(self.cucx, ty), *ptr, ""),
             ty.clone(),
         ))
     }
@@ -237,7 +237,7 @@ impl<'a, 'ctx, 'modl, 'cgcx> ExprBuilder<'a, 'ctx, 'modl, 'cgcx> {
 
         Ok(match node.kind {
             Add => Value::new(
-                self.tucx
+                self.cucx
                     .builder
                     .build_int_add(left_int, right_int, "")
                     .into(),
@@ -245,7 +245,7 @@ impl<'a, 'ctx, 'modl, 'cgcx> ExprBuilder<'a, 'ctx, 'modl, 'cgcx> {
             ),
 
             Sub => Value::new(
-                self.tucx
+                self.cucx
                     .builder
                     .build_int_sub(left_int, right_int, "")
                     .into(),
@@ -253,7 +253,7 @@ impl<'a, 'ctx, 'modl, 'cgcx> ExprBuilder<'a, 'ctx, 'modl, 'cgcx> {
             ),
 
             Mul => Value::new(
-                self.tucx
+                self.cucx
                     .builder
                     .build_int_mul(left_int, right_int, "")
                     .into(),
@@ -263,7 +263,7 @@ impl<'a, 'ctx, 'modl, 'cgcx> ExprBuilder<'a, 'ctx, 'modl, 'cgcx> {
             Div => {
                 if left.get_type().kind.is_signed() || right.get_type().kind.is_signed() {
                     Value::new(
-                        self.tucx
+                        self.cucx
                             .builder
                             .build_int_signed_div(left_int, right_int, "")
                             .into(),
@@ -271,7 +271,7 @@ impl<'a, 'ctx, 'modl, 'cgcx> ExprBuilder<'a, 'ctx, 'modl, 'cgcx> {
                     )
                 } else {
                     Value::new(
-                        self.tucx
+                        self.cucx
                             .builder
                             .build_int_unsigned_div(left_int, right_int, "")
                             .into(),
@@ -281,7 +281,7 @@ impl<'a, 'ctx, 'modl, 'cgcx> ExprBuilder<'a, 'ctx, 'modl, 'cgcx> {
             }
 
             Eq => Value::new(
-                self.tucx
+                self.cucx
                     .builder
                     .build_int_compare(IntPredicate::EQ, left_int, right_int, "")
                     .into(),
@@ -323,33 +323,33 @@ impl<'a, 'ctx, 'modl, 'cgcx> ExprBuilder<'a, 'ctx, 'modl, 'cgcx> {
             _ => unreachable!(),
         };
 
-        let (_, struct_info) = &self.tucx.tcx.struct_table[struct_name];
+        let (_, struct_info) = &self.cucx.tcx.struct_table[struct_name];
 
         let field_info = &struct_info.fields[field_name];
-        let field_llvm_ty = as_llvm_type(self.tucx, &field_info.ty);
+        let field_llvm_ty = as_llvm_type(self.cucx, &field_info.ty);
 
         let offset = field_info.offset;
 
         let gep = unsafe {
-            self.tucx.builder.build_in_bounds_gep(
-                as_llvm_type(self.tucx, struct_ty),
+            self.cucx.builder.build_in_bounds_gep(
+                as_llvm_type(self.cucx, struct_ty),
                 *p,
                 &[
-                    self.tucx.context().i32_type().const_zero(),
-                    self.tucx.context().i32_type().const_int(offset, false),
+                    self.cucx.context().i32_type().const_zero(),
+                    self.cucx.context().i32_type().const_int(offset, false),
                 ],
                 "",
             )
         };
 
         Ok(Value::new(
-            self.tucx.builder.build_load(field_llvm_ty, gep, ""),
+            self.cucx.builder.build_load(field_llvm_ty, gep, ""),
             struct_ty.clone(),
         ))
     }
 
     fn call_fn(&self, node: &FnCall) -> CodegenResult<Value<'ctx>> {
-        let func = self.tucx.module.get_function(node.name.as_str());
+        let func = self.cucx.module.get_function(node.name.as_str());
 
         let args = {
             let mut args = Vec::new();
@@ -364,7 +364,7 @@ impl<'a, 'ctx, 'modl, 'cgcx> ExprBuilder<'a, 'ctx, 'modl, 'cgcx> {
         match func {
             Some(func) => {
                 let return_value = self
-                    .tucx
+                    .cucx
                     .builder
                     .build_call(
                         func,
@@ -379,7 +379,7 @@ impl<'a, 'ctx, 'modl, 'cgcx> ExprBuilder<'a, 'ctx, 'modl, 'cgcx> {
 
                 Ok(match return_value {
                     Some(val) => {
-                        Value::new(val, self.tucx.tcx.return_ty_table[&func].clone().unwrap())
+                        Value::new(val, self.cucx.tcx.return_ty_table[&func].clone().unwrap())
                     }
                     None => Value::new_void(),
                 })

@@ -9,10 +9,10 @@ use crate::{
     error::CodegenResult,
     stmt::{build_block, StmtContext},
     tcx::{StructFieldInfo, StructInfo},
-    SymbolTable, TranslUnitContext,
+    CompileUnitContext, SymbolTable,
 };
 
-pub fn build_top_level(ctx: &mut TranslUnitContext, node: TopLevel) -> CodegenResult<()> {
+pub fn build_top_level(ctx: &mut CompileUnitContext, node: TopLevel) -> CodegenResult<()> {
     let mut builder = TopLevelBuilder::new(ctx);
 
     builder.build(node)?;
@@ -20,13 +20,13 @@ pub fn build_top_level(ctx: &mut TranslUnitContext, node: TopLevel) -> CodegenRe
     Ok(())
 }
 
-struct TopLevelBuilder<'a, 'ctx, 'modl, 'cgcx> {
-    tucx: &'a mut TranslUnitContext<'ctx, 'modl, 'cgcx>,
+struct TopLevelBuilder<'a, 'ctx, 'm, 'c> {
+    cucx: &'a mut CompileUnitContext<'ctx, 'm, 'c>,
 }
 
-impl<'a, 'ctx, 'modl, 'cgcx> TopLevelBuilder<'a, 'ctx, 'modl, 'cgcx> {
-    fn new(ctx: &'a mut TranslUnitContext<'ctx, 'modl, 'cgcx>) -> Self {
-        Self { tucx: ctx }
+impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
+    fn new(ctx: &'a mut CompileUnitContext<'ctx, 'm, 'c>) -> Self {
+        Self { cucx: ctx }
     }
 
     /// Generate top-level code.
@@ -44,26 +44,26 @@ impl<'a, 'ctx, 'modl, 'cgcx> TopLevelBuilder<'a, 'ctx, 'modl, 'cgcx> {
         let param_llvm_tys = node
             .params
             .iter()
-            .map(|e| as_llvm_type(self.tucx, &e.1).into())
+            .map(|e| as_llvm_type(self.cucx, &e.1).into())
             .collect::<Vec<_>>();
 
         let fn_type = match &node.return_ty {
-            Some(ty) => as_llvm_type(self.tucx, ty).fn_type(param_llvm_tys.as_slice(), false),
+            Some(ty) => as_llvm_type(self.cucx, ty).fn_type(param_llvm_tys.as_slice(), false),
 
             None => self
-                .tucx
+                .cucx
                 .context()
                 .void_type()
                 .fn_type(param_llvm_tys.as_slice(), false),
         };
 
         let fn_value = self
-            .tucx
+            .cucx
             .module
             .add_function(node.name.as_str(), fn_type, None);
 
-        let basic_block = self.tucx.context().append_basic_block(fn_value, "entry");
-        self.tucx.builder.position_at_end(basic_block);
+        let basic_block = self.cucx.context().append_basic_block(fn_value, "entry");
+        self.cucx.builder.position_at_end(basic_block);
 
         let param_info = node
             .params
@@ -72,13 +72,13 @@ impl<'a, 'ctx, 'modl, 'cgcx> TopLevelBuilder<'a, 'ctx, 'modl, 'cgcx> {
             .collect::<Vec<_>>();
 
         // Store return type information in table
-        self.tucx
+        self.cucx
             .tcx
             .return_ty_table
             .insert(fn_value, node.return_ty.map(Rc::new));
 
         // Store parameter information in table
-        self.tucx
+        self.cucx
             .tcx
             .param_table
             .insert(fn_value, param_info.iter().map(|e| e.1.clone()).collect());
@@ -87,15 +87,15 @@ impl<'a, 'ctx, 'modl, 'cgcx> TopLevelBuilder<'a, 'ctx, 'modl, 'cgcx> {
         let mut param_table = self.tabling_fn_params(param_info, fn_value);
 
         build_block(
-            self.tucx,
+            self.cucx,
             &mut StmtContext::new(),
             &mut param_table,
             node.body,
         )?;
 
-        if fn_type.get_return_type().is_none() && self.tucx.no_terminator() {
+        if fn_type.get_return_type().is_none() && self.cucx.no_terminator() {
             // If return type is void and there is no termination, insert return
-            self.tucx.builder.build_return(None);
+            self.cucx.builder.build_return(None);
         }
 
         Ok(())
@@ -113,11 +113,11 @@ impl<'a, 'ctx, 'modl, 'cgcx> TopLevelBuilder<'a, 'ctx, 'modl, 'cgcx> {
 
         for (idx, (name, ty)) in param_info.into_iter().enumerate() {
             let alloca = self
-                .tucx
+                .cucx
                 .builder
-                .build_alloca(as_llvm_type(self.tucx, &ty), &name);
+                .build_alloca(as_llvm_type(self.cucx, &ty), &name);
 
-            self.tucx
+            self.cucx
                 .builder
                 .build_store(alloca, fn_value.get_nth_param(idx as u32).unwrap());
 
@@ -131,10 +131,10 @@ impl<'a, 'ctx, 'modl, 'cgcx> TopLevelBuilder<'a, 'ctx, 'modl, 'cgcx> {
         let field_tys: Vec<_> = node
             .fields
             .iter()
-            .map(|f| as_llvm_type(self.tucx, &f.ty))
+            .map(|f| as_llvm_type(self.cucx, &f.ty))
             .collect();
 
-        let ty = self.tucx.context().opaque_struct_type(node.name.as_str());
+        let ty = self.cucx.context().opaque_struct_type(node.name.as_str());
 
         ty.set_body(&field_tys, true);
 
@@ -153,7 +153,7 @@ impl<'a, 'ctx, 'modl, 'cgcx> TopLevelBuilder<'a, 'ctx, 'modl, 'cgcx> {
             })
             .collect();
 
-        self.tucx
+        self.cucx
             .tcx
             .struct_table
             .insert(node.name.name, (ty, StructInfo { fields }));

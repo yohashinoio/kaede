@@ -1,11 +1,15 @@
 use std::{collections::HashMap, rc::Rc};
 
-use inkwell::debug_info::{
-    DICompileUnit, DIFlagsConstants, DIType, DebugInfoBuilder, LLVMDWARFTypeEncoding,
+use inkwell::{
+    debug_info::{
+        DICompileUnit, DIFlagsConstants, DIType, DWARFEmissionKind, DWARFSourceLanguage,
+        DebugInfoBuilder, LLVMDWARFTypeEncoding,
+    },
+    module::Module,
 };
 use kaede_type::{FundamentalTypeKind, Ty, TyKind};
 
-use crate::{as_llvm_type, error::CodegenResult, TranslUnitContext};
+use crate::{as_llvm_type, error::CodegenResult, CompileUnitContext};
 
 /// From libdwarf
 ///
@@ -15,6 +19,7 @@ use crate::{as_llvm_type, error::CodegenResult, TranslUnitContext};
 /// Chapter 5. Type Entries
 /// Table 5.1: Encoding attribute values
 #[allow(non_camel_case_types)]
+#[allow(dead_code)]
 #[allow(clippy::upper_case_acronyms)]
 enum DW_ATE {
     address = 0x01,
@@ -44,23 +49,61 @@ fn get_dwarf_encoding(fty_k: &FundamentalTypeKind) -> LLVMDWARFTypeEncoding {
     }) as LLVMDWARFTypeEncoding
 }
 
-pub struct DebugInfo<'ctx, 'module, 'a, 'cgcx> {
-    ctx: &'a TranslUnitContext<'ctx, 'module, 'cgcx>,
-    builder: &'a DebugInfoBuilder<'ctx>,
-    cu: DICompileUnit<'ctx>,
+pub struct DebugInfo<'ctx> {
+    dibuilder: DebugInfoBuilder<'ctx>,
+    _cu: DICompileUnit<'ctx>,
 
-    type_cache: HashMap<Rc<Ty>, DIType<'ctx>>,
+    // Type cache
+    ty_cache: HashMap<String, DIType<'ctx>>,
 }
 
-impl<'ctx, 'module, 'a, 'cgcx> DebugInfo<'ctx, 'module, 'a, 'cgcx> {
-    pub fn get_type(&self, ty: &Rc<Ty>) -> CodegenResult<DIType<'ctx>> {
-        let size_in_bits = self.ctx.get_size_in_bits(&as_llvm_type(self.ctx, ty));
+impl<'ctx> DebugInfo<'ctx> {
+    pub fn new(module: &Module<'ctx>) -> Self {
+        let (dibuilder, cu) = module.create_debug_info_builder(
+            true,
+            DWARFSourceLanguage::C,
+            module.get_source_file_name().to_str().unwrap(),
+            ".",
+            "Kaede Compiler",
+            false,
+            "",
+            0,
+            "",
+            DWARFEmissionKind::Full,
+            0,
+            false,
+            false,
+            "",
+            "",
+        );
 
-        Ok(match ty.kind.as_ref() {
+        Self {
+            dibuilder,
+            _cu: cu,
+            ty_cache: HashMap::new(),
+        }
+    }
+
+    pub fn get_type(
+        &mut self,
+        cucx: &CompileUnitContext,
+        ty: &Rc<Ty>,
+    ) -> CodegenResult<DIType<'ctx>> {
+        let size_in_bits = cucx.get_size_in_bits(&as_llvm_type(cucx, ty));
+
+        let ty_str = ty.kind.to_string();
+
+        // Check if the type is cached
+        if let Some(di_ty) = self.ty_cache.get(&ty_str) {
+            return Ok(*di_ty);
+        }
+
+        // Create debug info type
+        let di_ty = match ty.kind.as_ref() {
             TyKind::Fundamental(fty) => self
-                .builder
+                .dibuilder
                 .create_basic_type(
-                    &ty.kind.to_string(),
+                    &ty_str,
                     size_in_bits,
                     get_dwarf_encoding(&fty.kind()),
                     DIFlagsConstants::PUBLIC,
@@ -69,6 +112,11 @@ impl<'ctx, 'module, 'a, 'cgcx> DebugInfo<'ctx, 'module, 'a, 'cgcx> {
                 .as_type(),
 
             _ => unimplemented!(),
-        })
+        };
+
+        // Cache type
+        self.ty_cache.insert(ty_str, di_ty);
+
+        Ok(di_ty)
     }
 }

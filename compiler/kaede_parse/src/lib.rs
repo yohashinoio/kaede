@@ -4,7 +4,7 @@ mod stmt;
 mod top;
 mod ty;
 
-pub fn parse(tokens: impl Iterator<Item = Token>) -> ParseResult<TranslationUnit> {
+pub fn parse(tokens: impl Iterator<Item = Token>) -> ParseResult<CompileUnit> {
     let mut parser = Parser::new(tokens.peekable());
 
     parser.parse()
@@ -13,7 +13,7 @@ pub fn parse(tokens: impl Iterator<Item = Token>) -> ParseResult<TranslationUnit
 use std::iter::Peekable;
 
 use error::{ParseError, ParseResult};
-use kaede_ast::TranslationUnit;
+use kaede_ast::CompileUnit;
 use kaede_lex::token::{Token, TokenKind};
 use kaede_span::Span;
 
@@ -34,8 +34,8 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
     }
 
-    pub fn parse(&mut self) -> ParseResult<TranslationUnit> {
-        let mut unit = TranslationUnit::new();
+    pub fn parse(&mut self) -> ParseResult<CompileUnit> {
+        let mut unit = CompileUnit::new();
 
         while !self.is_eof() {
             let top = self.top()?;
