@@ -43,7 +43,7 @@ pub fn build_statement<'a, 'ctx>(
 pub struct StmtContext<'ctx> {
     /// Block to jump to when a `break` is executed
     ///
-    /// None if not in a loop
+    /// None if **not** in a loop
     pub loop_break_bb: Option<BasicBlock<'ctx>>,
 }
 

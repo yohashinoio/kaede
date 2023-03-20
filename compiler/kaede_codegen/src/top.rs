@@ -25,8 +25,8 @@ struct TopLevelBuilder<'a, 'ctx, 'm, 'c> {
 }
 
 impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
-    fn new(ctx: &'a mut CompileUnitContext<'ctx, 'm, 'c>) -> Self {
-        Self { cucx: ctx }
+    fn new(cucx: &'a mut CompileUnitContext<'ctx, 'm, 'c>) -> Self {
+        Self { cucx }
     }
 
     /// Generate top-level code.

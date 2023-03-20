@@ -31,8 +31,8 @@ struct ExprBuilder<'a, 'ctx, 'm, 'c> {
 }
 
 impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
-    fn new(ctx: &'a CompileUnitContext<'ctx, 'm, 'c>, scope: &'a SymbolTable<'ctx>) -> Self {
-        Self { cucx: ctx, scope }
+    fn new(cucx: &'a CompileUnitContext<'ctx, 'm, 'c>, scope: &'a SymbolTable<'ctx>) -> Self {
+        Self { cucx, scope }
     }
 
     /// Generate expression code
