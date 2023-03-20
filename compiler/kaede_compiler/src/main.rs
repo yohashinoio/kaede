@@ -16,7 +16,7 @@ struct Args {
     #[arg(
         short,
         long,
-        help = "Instead of a file, we receive a program on the command line."
+        help = "Instead of a file, we receive a program on the command line"
     )]
     program: Option<String>,
 }
@@ -46,7 +46,7 @@ fn main() -> anyhow::Result<()> {
     }
 
     if files.is_empty() {
-        return Err(anyhow!("No input files."));
+        return Err(anyhow!("No input files"));
     }
 
     for file in files {
