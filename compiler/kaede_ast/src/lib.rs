@@ -1,7 +1,11 @@
+use expr::Ident;
 use top::TopLevel;
 
 pub mod expr;
 pub mod stmt;
 pub mod top;
 
-pub type CompileUnit = Vec<TopLevel>;
+pub struct CompileUnit {
+    pub top_levels: Vec<TopLevel>,
+    pub package_name: Ident,
+}

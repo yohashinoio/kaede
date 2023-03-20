@@ -101,7 +101,7 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
 
                 if ty.mutability.is_not() {
                     return Err(CodegenError::CannotAssignTwiceToImutable {
-                        name: ident.name,
+                        name: ident.s,
                         span: ident.span,
                     });
                 }
@@ -251,9 +251,7 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
 
                 let alloca = self.cucx.create_entry_block_alloca(node.name.as_str(), &ty);
 
-                self.cucx
-                    .tcx
-                    .add_symbol(node.name.name, (alloca, Rc::new(ty)));
+                self.cucx.tcx.add_symbol(node.name.s, (alloca, Rc::new(ty)));
 
                 alloca
             } else {
@@ -270,7 +268,7 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
 
                 self.cucx
                     .tcx
-                    .add_symbol(node.name.name, (alloca, Rc::new(node.ty)));
+                    .add_symbol(node.name.s, (alloca, Rc::new(node.ty)));
 
                 alloca
             };

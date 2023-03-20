@@ -365,7 +365,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         if matches!(self.first().kind, TokenKind::Ident(_)) {
             if let TokenKind::Ident(ident) = self.bump().unwrap().kind {
                 return Ok(Ident {
-                    name: ident,
+                    s: ident,
                     span: self.first().span,
                 });
             }

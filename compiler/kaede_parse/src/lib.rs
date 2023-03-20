@@ -13,7 +13,7 @@ pub fn parse(tokens: impl Iterator<Item = Token>) -> ParseResult<CompileUnit> {
 use std::iter::Peekable;
 
 use error::{ParseError, ParseResult};
-use kaede_ast::CompileUnit;
+use kaede_ast::{expr::Ident, CompileUnit};
 use kaede_lex::token::{Token, TokenKind};
 use kaede_span::Span;
 
@@ -35,15 +35,29 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     }
 
     pub fn parse(&mut self) -> ParseResult<CompileUnit> {
-        let mut unit = CompileUnit::new();
+        let mut compile_unit = CompileUnit {
+            top_levels: Vec::new(),
+            package_name: self.package()?,
+        };
 
         while !self.is_eof() {
-            let top = self.top()?;
+            let top = self.top_level()?;
 
-            unit.push(top);
+            compile_unit.top_levels.push(top);
         }
 
-        Ok(unit)
+        Ok(compile_unit)
+    }
+
+    /// Return the package name
+    pub fn package(&mut self) -> ParseResult<Ident> {
+        self.consume(&TokenKind::Package)?;
+
+        let name = self.ident()?;
+
+        self.consume_semi()?;
+
+        Ok(name)
     }
 
     fn is_eof(&mut self) -> bool {

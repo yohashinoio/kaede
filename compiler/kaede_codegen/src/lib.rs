@@ -8,7 +8,7 @@ use inkwell::{
     values::{FunctionValue, PointerValue},
     AddressSpace, OptimizationLevel,
 };
-use kaede_ast::CompileUnit;
+use kaede_ast::{expr::Ident, top::TopLevel, CompileUnit};
 use kaede_type::{Ty, TyKind};
 use tcx::TypeContext;
 use top::build_top_level;
@@ -51,9 +51,9 @@ pub fn as_llvm_type<'ctx>(cucx: &CompileUnitContext<'ctx, '_, '_>, ty: &Ty) -> B
 pub fn codegen<'ctx>(
     ctx: &CodegenContext<'ctx>,
     module: &Module<'ctx>,
-    ast: CompileUnit,
+    cu: CompileUnit,
 ) -> CodegenResult<()> {
-    CompileUnitContext::new(ctx, module)?.codegen(ast)?;
+    CompileUnitContext::new(ctx, module, cu.package_name)?.codegen(cu.top_levels)?;
 
     Ok(())
 }
@@ -114,15 +114,22 @@ pub struct CompileUnitContext<'ctx, 'm, 'c> {
     pub builder: Builder<'ctx>,
 
     pub tcx: TypeContext<'ctx>,
+
+    pub package_name: Ident,
 }
 
 impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
-    pub fn new(ctx: &'c CodegenContext<'ctx>, module: &'m Module<'ctx>) -> CodegenResult<Self> {
+    pub fn new(
+        ctx: &'c CodegenContext<'ctx>,
+        module: &'m Module<'ctx>,
+        package_name: Ident,
+    ) -> CodegenResult<Self> {
         Ok(Self {
             builder: ctx.context.create_builder(),
             cgcx: ctx,
             module,
             tcx: Default::default(),
+            package_name,
         })
     }
 
@@ -165,8 +172,8 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
             .is_none()
     }
 
-    pub fn codegen(&mut self, ast: CompileUnit) -> CodegenResult<()> {
-        for top in ast {
+    pub fn codegen(&mut self, top_levels: Vec<TopLevel>) -> CodegenResult<()> {
+        for top in top_levels {
             build_top_level(self, top)?;
         }
 

@@ -46,6 +46,7 @@ pub struct Fn {
     pub span: Span,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct TopLevel {
     pub kind: TopLevelKind,
     pub span: Span,

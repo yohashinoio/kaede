@@ -29,42 +29,60 @@ fn run_test(program: &str) -> CodegenResult<i32> {
 
 #[test]
 fn add() -> anyhow::Result<()> {
-    assert_eq!(run_test("fn test() i32 { return 48 + 10 }")?, 58);
+    assert_eq!(
+        run_test("package main\n fn test() i32 { return 48 + 10 }")?,
+        58
+    );
 
     Ok(())
 }
 
 #[test]
 fn sub() -> anyhow::Result<()> {
-    assert_eq!(run_test("fn test() i32 { return 68 - 10 }")?, 58);
+    assert_eq!(
+        run_test("package main\n fn test() i32 { return 68 - 10 }")?,
+        58
+    );
 
     Ok(())
 }
 
 #[test]
 fn mul() -> anyhow::Result<()> {
-    assert_eq!(run_test("fn test() i32 { return 48 * 10 }")?, 480);
+    assert_eq!(
+        run_test("package main\n fn test() i32 { return 48 * 10 }")?,
+        480
+    );
 
     Ok(())
 }
 
 #[test]
 fn div() -> anyhow::Result<()> {
-    assert_eq!(run_test("fn test() i32 { return 580 / 10 }")?, 58);
+    assert_eq!(
+        run_test("package main\n fn test() i32 { return 580 / 10 }")?,
+        58
+    );
 
     Ok(())
 }
 
 #[test]
 fn mul_precedence() -> anyhow::Result<()> {
-    assert_eq!(run_test("fn test() i32 { return 48 + 10 * 2 }")?, 68);
+    assert_eq!(
+        run_test("package main\n fn test() i32 { return 48 + 10 * 2 }")?,
+        68
+    );
 
     Ok(())
 }
 
 #[test]
 fn div_precedence() -> anyhow::Result<()> {
-    assert_eq!(run_test("fn test() i32 { return 48 + 20 / 2 }")?, 58);
+    assert_eq!(
+        run_test("package main\n fn test() i32 { return 48 + 20 / 2 }")?,
+        58
+    );
 
     Ok(())
 }
@@ -72,7 +90,7 @@ fn div_precedence() -> anyhow::Result<()> {
 #[test]
 fn four_arithmetic_precedence() -> anyhow::Result<()> {
     assert_eq!(
-        run_test("fn test() i32 { return (48 -10/ 2) + 58 * 2 }")?,
+        run_test("package main\n fn test() i32 { return (48 -10/ 2) + 58 * 2 }")?,
         159
     );
 
@@ -81,14 +99,18 @@ fn four_arithmetic_precedence() -> anyhow::Result<()> {
 
 #[test]
 fn unary_plus_and_minus() -> anyhow::Result<()> {
-    assert_eq!(run_test("fn test() i32 { return +(-(-58)) }")?, 58);
+    assert_eq!(
+        run_test("package main\n fn test() i32 { return +(-(-58)) }")?,
+        58
+    );
 
     Ok(())
 }
 
 #[test]
 fn empty_function() -> anyhow::Result<()> {
-    let program = r"fn f() {
+    let program = r"package main
+    fn f() {
     }
 
     fn test() i32 {
@@ -103,14 +125,18 @@ fn empty_function() -> anyhow::Result<()> {
 
 #[test]
 fn return_stmt() -> anyhow::Result<()> {
-    assert_eq!(run_test("fn test() i32 { return (48*2 +10 * 2) / 2}")?, 58);
+    assert_eq!(
+        run_test("package main\n fn test() i32 { return (48*2 +10 * 2) / 2}")?,
+        58
+    );
 
     Ok(())
 }
 
 #[test]
 fn empty_return_stmt() -> anyhow::Result<()> {
-    let program = r"fn f() {
+    let program = r"package main
+    fn f() {
         return
     }
 
@@ -127,7 +153,8 @@ fn empty_return_stmt() -> anyhow::Result<()> {
 #[test]
 fn let_statement() -> anyhow::Result<()> {
     // Type inference
-    let program = r"fn test() i32 {
+    let program = r"package main
+    fn test() i32 {
         let yoha = 48
         let io = 10
         return yoha + io
@@ -136,7 +163,8 @@ fn let_statement() -> anyhow::Result<()> {
     assert_eq!(run_test(program)?, 58);
 
     // Mutable, Type inference
-    let program = r"fn test() i32 {
+    let program = r"package main
+    fn test() i32 {
         let mut yohaio = 58
         return yohaio
     }";
@@ -144,7 +172,8 @@ fn let_statement() -> anyhow::Result<()> {
     assert_eq!(run_test(program)?, 58);
 
     // Specified type
-    let program = r"fn test() i32 {
+    let program = r"package main
+    fn test() i32 {
         let yohaio i32 = 58
         return yohaio
     }";
@@ -152,7 +181,8 @@ fn let_statement() -> anyhow::Result<()> {
     assert_eq!(run_test(program)?, 58);
 
     // Mutable, Specified type
-    let program = r"fn test() i32 {
+    let program = r"package main
+    fn test() i32 {
         let mut yohaio i32 = 58
         return yohaio
     }";
@@ -164,7 +194,8 @@ fn let_statement() -> anyhow::Result<()> {
 
 #[test]
 fn call_func() -> anyhow::Result<()> {
-    let program = r"fn f1() i32 {
+    let program = r"package main
+    fn f1() i32 {
         return 48
     }
 
@@ -183,7 +214,8 @@ fn call_func() -> anyhow::Result<()> {
 
 #[test]
 fn fn_params() -> anyhow::Result<()> {
-    let program = r"fn f(n i32) i32 {
+    let program = r"package main
+    fn f(n i32) i32 {
         return n
     }
 
@@ -198,7 +230,8 @@ fn fn_params() -> anyhow::Result<()> {
 
 #[test]
 fn fn_call_one_arg() -> anyhow::Result<()> {
-    let program = r"fn f(n i32) i32 {
+    let program = r"package main
+    fn f(n i32) i32 {
         return n
     }
 
@@ -213,7 +246,8 @@ fn fn_call_one_arg() -> anyhow::Result<()> {
 
 #[test]
 fn fn_call_multi_args() -> anyhow::Result<()> {
-    let program = r"fn f(x i32, y i32) i32 {
+    let program = r"package main
+    fn f(x i32, y i32) i32 {
         return x + y
     }
 
@@ -228,7 +262,8 @@ fn fn_call_multi_args() -> anyhow::Result<()> {
 
 #[test]
 fn simple_if_statement() -> anyhow::Result<()> {
-    let program = r"fn test() i32 {
+    let program = r"package main
+    fn test() i32 {
         if 58 == 58 {
             return 58
         }
@@ -243,7 +278,8 @@ fn simple_if_statement() -> anyhow::Result<()> {
 
 #[test]
 fn if_else_statement() -> anyhow::Result<()> {
-    let program = r"fn test() i32 {
+    let program = r"package main
+    fn test() i32 {
         if 48 == 10 {
             return 48
         } else if
@@ -264,7 +300,8 @@ fn if_else_statement() -> anyhow::Result<()> {
 
 #[test]
 fn equality_operation() -> anyhow::Result<()> {
-    let program = r"fn test() i32 {
+    let program = r"package main
+    fn test() i32 {
         if 4810 == 4810 {
             return 58
         }
@@ -279,7 +316,8 @@ fn equality_operation() -> anyhow::Result<()> {
 
 #[test]
 fn loop_statement() -> anyhow::Result<()> {
-    let program = r"fn test() i32 {
+    let program = r"package main
+    fn test() i32 {
         let mut n = 0
 
         loop {
@@ -300,7 +338,8 @@ fn loop_statement() -> anyhow::Result<()> {
 
 #[test]
 fn break_statement() -> anyhow::Result<()> {
-    let program = r"fn test() i32 {
+    let program = r"package main
+    fn test() i32 {
         loop {
             break
         }
@@ -315,7 +354,8 @@ fn break_statement() -> anyhow::Result<()> {
 
 #[test]
 fn break_outside_of_loop() {
-    let program = r"fn test() i32 {
+    let program = r"package main
+    fn test() i32 {
         break
     }";
 
@@ -327,7 +367,8 @@ fn break_outside_of_loop() {
 
 #[test]
 fn simple_assignment() -> anyhow::Result<()> {
-    let program = r"fn test() i32 {
+    let program = r"package main
+    fn test() i32 {
         let mut n = 0
 
         n = 58
@@ -342,7 +383,8 @@ fn simple_assignment() -> anyhow::Result<()> {
 
 #[test]
 fn assign_to_immutable() {
-    let program = r"fn test() i32 {
+    let program = r"package main
+    fn test() i32 {
         let n = 58
         n = 4810
         return n
@@ -356,7 +398,8 @@ fn assign_to_immutable() {
 
 #[test]
 fn string_literal() -> anyhow::Result<()> {
-    let program = r#"fn test() i32 {
+    let program = r#"package main
+    fn test() i32 {
         let s1 = "yohaio"
         let s2 = "よはいお"
 
@@ -370,7 +413,8 @@ fn string_literal() -> anyhow::Result<()> {
 
 #[test]
 fn define_struct() -> anyhow::Result<()> {
-    let program = r"struct A {
+    let program = r"package main
+    struct A {
         a i32
         b bool
     }
@@ -386,7 +430,8 @@ fn define_struct() -> anyhow::Result<()> {
 
 #[test]
 fn use_struct() -> anyhow::Result<()> {
-    let program = r"struct Person {
+    let program = r"package main
+    struct Person {
         age i32
         stature i32
         is_male bool
@@ -405,7 +450,8 @@ fn use_struct() -> anyhow::Result<()> {
 
 #[test]
 fn true_() -> anyhow::Result<()> {
-    let program = r"fn test() i32 {
+    let program = r"package main
+    fn test() i32 {
         let b = true
 
         if b {
@@ -422,7 +468,8 @@ fn true_() -> anyhow::Result<()> {
 
 #[test]
 fn false_() -> anyhow::Result<()> {
-    let program = r"fn test() i32 {
+    let program = r"package main
+    fn test() i32 {
         let b = false
 
         if b {
@@ -439,7 +486,8 @@ fn false_() -> anyhow::Result<()> {
 
 #[test]
 fn has_no_fields() {
-    let program = r"fn test() i32 {
+    let program = r"package main
+    fn test() i32 {
         4810.shino
     }";
 
@@ -451,7 +499,8 @@ fn has_no_fields() {
 
 #[test]
 fn shared_borrow() -> anyhow::Result<()> {
-    let program = r"fn test() i32 {
+    let program = r"package main
+    fn test() i32 {
         let s = 58
         let r = &s
         return *r
@@ -464,7 +513,8 @@ fn shared_borrow() -> anyhow::Result<()> {
 
 #[test]
 fn reference_type_argument() -> anyhow::Result<()> {
-    let program = r"fn dref(r &i32) i32 {
+    let program = r"package main
+    fn dref(r &i32) i32 {
         return *r
     }
 
@@ -480,7 +530,8 @@ fn reference_type_argument() -> anyhow::Result<()> {
 
 #[test]
 fn mutable_borrow_and_deref() -> anyhow::Result<()> {
-    let program = r"fn test() i32 {
+    let program = r"package main
+    fn test() i32 {
         let mut s = 58
         let m = &mut s
         *m = 58
@@ -494,7 +545,8 @@ fn mutable_borrow_and_deref() -> anyhow::Result<()> {
 
 #[test]
 fn borrow() -> anyhow::Result<()> {
-    let program = r"fn to_58(n &mut i32) {
+    let program = r"package main
+    fn to_58(n &mut i32) {
         *n = 58
     }
 
@@ -513,7 +565,8 @@ fn borrow() -> anyhow::Result<()> {
 
 #[test]
 fn assign_to_immutable_reference() {
-    let program = r"fn test() i32 {
+    let program = r"package main
+    fn test() i32 {
         let mut n = 58
 
         let r = &n;
@@ -531,7 +584,8 @@ fn assign_to_immutable_reference() {
 
 #[test]
 fn borrow_temporary_value() -> anyhow::Result<()> {
-    let program = r"fn test() i32 {
+    let program = r"package main
+    fn test() i32 {
         let r = &(58 / 2)
 
         let mr = &mut 29
@@ -547,7 +601,8 @@ fn borrow_temporary_value() -> anyhow::Result<()> {
 
 #[test]
 fn mutable_references_to_immutable_variables() {
-    let program = r"fn test() i32 {
+    let program = r"package main
+    fn test() i32 {
         let n = 123
         let r = &mut n;
         return *r

@@ -63,6 +63,8 @@ pub enum TokenKind {
     Break,
     /// "struct"
     Struct,
+    /// "package"
+    Package,
 
     /// "true"
     True,
@@ -109,6 +111,7 @@ impl std::fmt::Display for TokenKind {
             Loop => write!(f, "'loop'"),
             Break => write!(f, "'break'"),
             Struct => write!(f, "'struct'"),
+            Package => write!(f, "'package'"),
 
             True => write!(f, "'true'"),
             False => write!(f, "'false'"),

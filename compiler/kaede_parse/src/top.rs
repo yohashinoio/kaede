@@ -5,19 +5,13 @@ use kaede_span::Span;
 use crate::{error::ParseResult, Parser};
 
 impl<T: Iterator<Item = Token>> Parser<T> {
-    pub fn top(&mut self) -> ParseResult<TopLevel> {
+    pub fn top_level(&mut self) -> ParseResult<TopLevel> {
         let token = self.first();
 
         let top = match token.kind {
-            TokenKind::Fn => {
-                // Because the semicolon is consumed before the value is returned, ? is required
-                self.func()?
-            }
+            TokenKind::Fn => self.func()?,
 
-            TokenKind::Struct => {
-                // Because the semicolon is consumed before the value is returned, ? is required
-                self.struct_()?
-            }
+            TokenKind::Struct => self.struct_()?,
 
             _ => unreachable!("{:?}", token.kind),
         };
@@ -70,7 +64,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
 
         loop {
-            params.push((self.ident()?.name, self.ty()?));
+            params.push((self.ident()?.s, self.ty()?));
 
             if !self.consume_b(&TokenKind::Comma) {
                 break;

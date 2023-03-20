@@ -32,7 +32,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
     /// Generate top-level code.
     fn build(&mut self, node: TopLevel) -> CodegenResult<()> {
         match node.kind {
-            TopLevelKind::Fn(func) => self.define_func(func)?,
+            TopLevelKind::Fn(node) => self.define_func(node)?,
 
             TopLevelKind::Struct(node) => self.define_struct(node),
         }
@@ -143,7 +143,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
             .into_iter()
             .map(|f| {
                 (
-                    f.name.name,
+                    f.name.s,
                     StructFieldInfo {
                         ty: f.ty,
                         access: f.access,
@@ -156,6 +156,6 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
         self.cucx
             .tcx
             .struct_table
-            .insert(node.name.name, (ty, StructInfo { fields }));
+            .insert(node.name.s, (ty, StructInfo { fields }));
     }
 }
