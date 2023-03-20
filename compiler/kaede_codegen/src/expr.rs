@@ -3,6 +3,7 @@ use std::rc::Rc;
 use crate::{
     as_llvm_type,
     error::{CodegenError, CodegenResult},
+    mangle::mangle_name,
     value::Value,
     CompileUnitContext,
 };
@@ -345,7 +346,10 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
     }
 
     fn call_fn(&self, node: &FnCall) -> CodegenResult<Value<'ctx>> {
-        let func = self.cucx.module.get_function(node.name.as_str());
+        let func = self
+            .cucx
+            .module
+            .get_function(&mangle_name(self.cucx, node.name.as_str()));
 
         let args = {
             let mut args = Vec::new();

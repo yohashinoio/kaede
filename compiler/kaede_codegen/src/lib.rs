@@ -15,6 +15,7 @@ use top::build_top_level;
 
 mod error;
 mod expr;
+mod mangle;
 mod stmt;
 mod tcx;
 mod top;

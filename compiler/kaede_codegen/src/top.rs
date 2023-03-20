@@ -7,6 +7,7 @@ use kaede_type::Ty;
 use crate::{
     as_llvm_type,
     error::CodegenResult,
+    mangle::mangle_name,
     stmt::{build_block, StmtContext},
     tcx::{StructFieldInfo, StructInfo, SymbolTable},
     CompileUnitContext,
@@ -32,7 +33,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
     /// Generate top-level code.
     fn build(&mut self, node: TopLevel) -> CodegenResult<()> {
         match node.kind {
-            TopLevelKind::Fn(node) => self.define_func(node)?,
+            TopLevelKind::Fn(node) => self.define_fn(node)?,
 
             TopLevelKind::Struct(node) => self.define_struct(node),
         }
@@ -40,7 +41,9 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
         Ok(())
     }
 
-    fn define_func(&mut self, node: Fn) -> CodegenResult<()> {
+    fn define_fn(&mut self, node: Fn) -> CodegenResult<()> {
+        let mangled_name = mangle_name(self.cucx, node.name.as_str());
+
         let param_llvm_tys = node
             .params
             .iter()
@@ -57,10 +60,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
                 .fn_type(param_llvm_tys.as_slice(), false),
         };
 
-        let fn_value = self
-            .cucx
-            .module
-            .add_function(node.name.as_str(), fn_type, None);
+        let fn_value = self.cucx.module.add_function(&mangled_name, fn_type, None);
 
         let basic_block = self.cucx.context().append_basic_block(fn_value, "entry");
         self.cucx.builder.position_at_end(basic_block);
@@ -128,13 +128,15 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
     }
 
     fn define_struct(&mut self, node: Struct) {
+        let mangled_name = mangle_name(self.cucx, node.name.as_str());
+
         let field_tys: Vec<_> = node
             .fields
             .iter()
             .map(|f| as_llvm_type(self.cucx, &f.ty))
             .collect();
 
-        let ty = self.cucx.context().opaque_struct_type(node.name.as_str());
+        let ty = self.cucx.context().opaque_struct_type(&mangled_name);
 
         ty.set_body(&field_tys, true);
 

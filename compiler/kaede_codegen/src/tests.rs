@@ -13,7 +13,7 @@ fn jit_compile_test(module: &Module) -> i32 {
         .create_jit_execution_engine(OptimizationLevel::Default)
         .unwrap();
 
-    unsafe { ee.get_function::<TestFunc>("test").unwrap().call() }
+    unsafe { ee.get_function::<TestFunc>("main.test").unwrap().call() }
 }
 
 fn run_test(program: &str) -> CodegenResult<i32> {
