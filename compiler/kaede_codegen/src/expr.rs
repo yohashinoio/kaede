@@ -4,7 +4,7 @@ use crate::{
     as_llvm_type,
     error::{CodegenError, CodegenResult},
     value::Value,
-    CompileUnitContext, SymbolTable,
+    CompileUnitContext,
 };
 
 use inkwell::{values::BasicValue, IntPredicate};
@@ -13,26 +13,22 @@ use kaede_ast::expr::{
 };
 use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability, Ty, TyKind, UDType};
 
-pub fn build_expression<'a, 'ctx>(
-    cucx: &'a CompileUnitContext<'ctx, '_, '_>,
+pub fn build_expression<'ctx>(
+    cucx: &CompileUnitContext<'ctx, '_, '_>,
     node: &Expr,
-    scope: &'a SymbolTable<'ctx>,
 ) -> CodegenResult<Value<'ctx>> {
-    let builder = ExprBuilder::new(cucx, scope);
+    let builder = ExprBuilder::new(cucx);
 
     builder.build(node)
 }
 
 struct ExprBuilder<'a, 'ctx, 'm, 'c> {
     cucx: &'a CompileUnitContext<'ctx, 'm, 'c>,
-
-    // Variables
-    scope: &'a SymbolTable<'ctx>,
 }
 
 impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
-    fn new(cucx: &'a CompileUnitContext<'ctx, 'm, 'c>, scope: &'a SymbolTable<'ctx>) -> Self {
-        Self { cucx, scope }
+    fn new(cucx: &'a CompileUnitContext<'ctx, 'm, 'c>) -> Self {
+        Self { cucx }
     }
 
     /// Generate expression code
@@ -64,7 +60,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
     }
 
     fn deref(&self, node: &Deref) -> CodegenResult<Value<'ctx>> {
-        let operand = build_expression(self.cucx, &node.operand, self.scope)?;
+        let operand = build_expression(self.cucx, &node.operand)?;
 
         let pointee_ty = match operand.get_type().kind.as_ref() {
             TyKind::Reference(pointee_ty) => pointee_ty.0.clone(),
@@ -95,7 +91,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
     fn borrow(&self, node: &Borrow) -> CodegenResult<Value<'ctx>> {
         let (ptr, ty) = match &node.operand.kind {
             ExprKind::Ident(ident) => {
-                let var = self.scope.find(ident)?;
+                let var = self.cucx.tcx.lookup_var(ident)?;
 
                 if var.1.mutability.is_not() && node.mutability.is_mut() {
                     return Err(CodegenError::MutableBorrowingFromImmutable {
@@ -109,7 +105,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
 
             // Create a variable to take an address since the reference is to a temporary value
             _ => {
-                let operand = build_expression(self.cucx, &node.operand, self.scope)?;
+                let operand = build_expression(self.cucx, &node.operand)?;
 
                 let ty = operand.get_type();
 
@@ -164,7 +160,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             // To sort by offset, store offset
             values.push((
                 field_info.offset,
-                build_expression(self.cucx, &value.1, self.scope)?.get_value(),
+                build_expression(self.cucx, &value.1)?.get_value(),
             ));
         }
 
@@ -206,7 +202,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
     }
 
     fn expr_ident(&self, ident: &Ident) -> CodegenResult<Value<'ctx>> {
-        let (ptr, ty) = self.scope.find(ident)?;
+        let (ptr, ty) = self.cucx.tcx.lookup_var(ident)?;
 
         Ok(Value::new(
             self.cucx
@@ -301,7 +297,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         // Pointer to left value (struct)
         let (p, struct_ty) = {
             match &node.lhs.kind {
-                ExprKind::Ident(name) => self.scope.find(name)?,
+                ExprKind::Ident(name) => self.cucx.tcx.lookup_var(name)?,
 
                 ExprKind::FnCall(_) => todo!(),
 

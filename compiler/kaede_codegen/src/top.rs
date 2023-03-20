@@ -8,8 +8,8 @@ use crate::{
     as_llvm_type,
     error::CodegenResult,
     stmt::{build_block, StmtContext},
-    tcx::{StructFieldInfo, StructInfo},
-    CompileUnitContext, SymbolTable,
+    tcx::{StructFieldInfo, StructInfo, SymbolTable},
+    CompileUnitContext,
 };
 
 pub fn build_top_level(ctx: &mut CompileUnitContext, node: TopLevel) -> CodegenResult<()> {
@@ -84,14 +84,14 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
             .insert(fn_value, param_info.iter().map(|e| e.1.clone()).collect());
 
         // Allocate parameters
-        let mut param_table = self.tabling_fn_params(param_info, fn_value);
+        let param_table = self.tabling_fn_params(param_info, fn_value);
 
-        build_block(
-            self.cucx,
-            &mut StmtContext::new(),
-            &mut param_table,
-            node.body,
-        )?;
+        // Push parameter table
+        self.cucx.tcx.push_symbol_table(param_table);
+
+        build_block(self.cucx, &mut StmtContext::new(), node.body)?;
+
+        self.cucx.tcx.pop_symbol_table();
 
         if fn_type.get_return_type().is_none() && self.cucx.no_terminator() {
             // If return type is void and there is no termination, insert return
@@ -121,7 +121,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
                 .builder
                 .build_store(alloca, fn_value.get_nth_param(idx as u32).unwrap());
 
-            params.0.insert(name, (alloca, ty));
+            params.add(name, (alloca, ty));
         }
 
         params

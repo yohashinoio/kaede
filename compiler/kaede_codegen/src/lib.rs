@@ -1,5 +1,3 @@
-use std::{collections::HashMap, rc::Rc};
-
 use error::{CodegenError, CodegenResult};
 use inkwell::{
     builder::Builder,
@@ -10,7 +8,7 @@ use inkwell::{
     values::{FunctionValue, PointerValue},
     AddressSpace, OptimizationLevel,
 };
-use kaede_ast::{expr::Ident, CompileUnit};
+use kaede_ast::CompileUnit;
 use kaede_type::{Ty, TyKind};
 use tcx::TypeContext;
 use top::build_top_level;
@@ -24,33 +22,6 @@ mod value;
 
 #[cfg(test)]
 mod tests;
-
-type Symbol<'ctx> = (PointerValue<'ctx>, Rc<Ty>);
-
-pub struct SymbolTable<'ctx>(pub HashMap<String, Symbol<'ctx>>);
-
-impl<'ctx> SymbolTable<'ctx> {
-    pub fn new() -> Self {
-        Self(HashMap::new())
-    }
-
-    pub fn find(&self, ident: &Ident) -> CodegenResult<&Symbol<'ctx>> {
-        match self.0.get(ident.as_str()) {
-            Some(result) => Ok(result),
-
-            None => Err(CodegenError::Undeclared {
-                name: ident.name.clone(),
-                span: ident.span,
-            }),
-        }
-    }
-}
-
-impl<'ctx> Default for SymbolTable<'ctx> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 
 pub fn as_llvm_type<'ctx>(cucx: &CompileUnitContext<'ctx, '_, '_>, ty: &Ty) -> BasicTypeEnum<'ctx> {
     let context = cucx.context();

@@ -10,30 +10,33 @@ use kaede_type::TyKind;
 use crate::{
     error::{CodegenError, CodegenResult},
     expr::build_expression,
+    tcx::SymbolTable,
     value::Value,
-    CompileUnitContext, SymbolTable,
+    CompileUnitContext,
 };
 
 pub fn build_block<'a, 'ctx>(
-    ctx: &'a CompileUnitContext<'ctx, '_, '_>,
+    cucx: &'a mut CompileUnitContext<'ctx, '_, '_>,
     scx: &'a mut StmtContext<'ctx>,
-    scope: &'a mut SymbolTable<'ctx>,
     block: Block,
 ) -> CodegenResult<()> {
+    cucx.tcx.push_symbol_table(SymbolTable::new());
+
     for stmt in block.body {
-        build_statement(ctx, scx, scope, stmt)?;
+        build_statement(cucx, scx, stmt)?;
     }
+
+    cucx.tcx.pop_symbol_table();
 
     Ok(())
 }
 
 pub fn build_statement<'a, 'ctx>(
-    ctx: &'a CompileUnitContext<'ctx, '_, '_>,
+    cucx: &'a mut CompileUnitContext<'ctx, '_, '_>,
     scx: &'a mut StmtContext<'ctx>,
-    scope: &'a mut SymbolTable<'ctx>,
     node: Stmt,
 ) -> CodegenResult<()> {
-    let mut builder = StmtBuilder::new(ctx, scx, scope);
+    let mut builder = StmtBuilder::new(cucx, scx);
 
     builder.build(node)?;
 
@@ -57,25 +60,20 @@ impl StmtContext<'_> {
 }
 
 struct StmtBuilder<'a, 'ctx, 'm, 'c> {
-    cucx: &'a CompileUnitContext<'ctx, 'm, 'c>,
+    cucx: &'a mut CompileUnitContext<'ctx, 'm, 'c>,
     scx: &'a mut StmtContext<'ctx>,
-    scope: &'a mut SymbolTable<'ctx>,
 }
 
 impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
-    fn new(
-        cucx: &'a CompileUnitContext<'ctx, 'm, 'c>,
-        scx: &'a mut StmtContext<'ctx>,
-        scope: &'a mut SymbolTable<'ctx>,
-    ) -> Self {
-        Self { cucx, scx, scope }
+    fn new(cucx: &'a mut CompileUnitContext<'ctx, 'm, 'c>, scx: &'a mut StmtContext<'ctx>) -> Self {
+        Self { cucx, scx }
     }
 
     /// Generate statement code
     fn build(&mut self, stmt: Stmt) -> CodegenResult<()> {
         match stmt.kind {
             StmtKind::Expr(e) => {
-                build_expression(self.cucx, &e, self.scope)?;
+                build_expression(self.cucx, &e)?;
             }
 
             StmtKind::Return(node) => self.return_(node)?,
@@ -99,7 +97,7 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
     fn build_assignable(&mut self, node: Expr) -> CodegenResult<Value<'ctx>> {
         match node.kind {
             ExprKind::Ident(ident) => {
-                let (ptr, ty) = self.scope.find(&ident)?;
+                let (ptr, ty) = self.cucx.tcx.lookup_var(&ident)?;
 
                 if ty.mutability.is_not() {
                     return Err(CodegenError::CannotAssignTwiceToImutable {
@@ -112,7 +110,7 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
             }
 
             ExprKind::Deref(deref) => {
-                let opr = build_expression(self.cucx, &deref.operand, self.scope)?;
+                let opr = build_expression(self.cucx, &deref.operand)?;
 
                 // Check if mutable
                 assert!(matches!(opr.get_type().kind.as_ref(), TyKind::Reference(_)));
@@ -134,7 +132,7 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
     fn assign(&mut self, node: Assign) -> CodegenResult<()> {
         let lhs = self.build_assignable(node.lhs)?;
 
-        let rhs = build_expression(self.cucx, &node.rhs, self.scope)?;
+        let rhs = build_expression(self.cucx, &node.rhs)?;
 
         match node.kind {
             AssignKind::Simple => self
@@ -170,7 +168,7 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
         // Build body block
         self.cucx.builder.build_unconditional_branch(body_bb);
         self.cucx.builder.position_at_end(body_bb);
-        build_block(self.cucx, self.scx, self.scope, node.body)?;
+        build_block(self.cucx, self.scx, node.body)?;
 
         // Loop!
         if self.cucx.no_terminator() {
@@ -186,7 +184,7 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
         let parent = self.cucx.get_current_fn();
         let zero_const = self.cucx.context().bool_type().const_zero();
 
-        let cond = build_expression(self.cucx, &node.cond, self.scope)?;
+        let cond = build_expression(self.cucx, &node.cond)?;
         let cond = self.cucx.builder.build_int_compare(
             IntPredicate::NE,
             cond.get_value().into_int_value(),
@@ -204,7 +202,7 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
 
         // Build then block
         self.cucx.builder.position_at_end(then_bb);
-        build_block(self.cucx, self.scx, self.scope, node.then)?;
+        build_block(self.cucx, self.scx, node.then)?;
         // Since there can be no more than one terminator per block
         if self.cucx.no_terminator() {
             self.cucx.builder.build_unconditional_branch(cont_bb);
@@ -215,7 +213,7 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
         if let Some(else_) = node.else_ {
             match *else_ {
                 Else::If(if_) => self.if_(if_)?,
-                Else::Block(block) => build_block(self.cucx, self.scx, self.scope, block)?,
+                Else::Block(block) => build_block(self.cucx, self.scx, block)?,
             }
         }
         // Since there can be no more than one terminator per block
@@ -231,9 +229,10 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
 
     fn return_(&mut self, node: Return) -> CodegenResult<()> {
         match node.val {
-            Some(val) => self.cucx.builder.build_return(Some(
-                &build_expression(self.cucx, &val, self.scope)?.get_value(),
-            )),
+            Some(val) => self
+                .cucx
+                .builder
+                .build_return(Some(&build_expression(self.cucx, &val)?.get_value())),
 
             None => self.cucx.builder.build_return(None),
         };
@@ -243,7 +242,7 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
 
     fn let_(&mut self, node: Let) -> CodegenResult<()> {
         if let Some(init) = node.init {
-            let init = build_expression(self.cucx, &init, self.scope)?;
+            let init = build_expression(self.cucx, &init)?;
 
             let alloca = if node.ty.kind.is_unknown() {
                 // No type information was available, so infer from an initializer
@@ -252,7 +251,9 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
 
                 let alloca = self.cucx.create_entry_block_alloca(node.name.as_str(), &ty);
 
-                self.scope.0.insert(node.name.name, (alloca, Rc::new(ty)));
+                self.cucx
+                    .tcx
+                    .add_symbol(node.name.name, (alloca, Rc::new(ty)));
 
                 alloca
             } else {
@@ -267,9 +268,9 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
                     .cucx
                     .create_entry_block_alloca(node.name.as_str(), &node.ty);
 
-                self.scope
-                    .0
-                    .insert(node.name.name, (alloca, Rc::new(node.ty)));
+                self.cucx
+                    .tcx
+                    .add_symbol(node.name.name, (alloca, Rc::new(node.ty)));
 
                 alloca
             };
