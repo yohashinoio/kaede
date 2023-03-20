@@ -1,6 +1,5 @@
 use std::{collections::HashMap, rc::Rc};
 
-use debug::DebugInfo;
 use error::{CodegenError, CodegenResult};
 use inkwell::{
     builder::Builder,
@@ -16,7 +15,6 @@ use kaede_type::{Ty, TyKind};
 use tcx::TypeContext;
 use top::build_top_level;
 
-mod debug;
 mod error;
 mod expr;
 mod stmt;
@@ -143,7 +141,6 @@ pub struct CompileUnitContext<'ctx, 'm, 'c> {
 
     pub module: &'m Module<'ctx>,
     pub builder: Builder<'ctx>,
-    pub di: DebugInfo<'ctx>,
 
     pub tcx: TypeContext<'ctx>,
 }
@@ -154,7 +151,6 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
             builder: ctx.context.create_builder(),
             cgcx: ctx,
             module,
-            di: DebugInfo::new(module),
             tcx: Default::default(),
         })
     }
