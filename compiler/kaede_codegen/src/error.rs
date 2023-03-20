@@ -34,7 +34,7 @@ pub enum CodegenError {
     span.start.line, span.start.column, immutable_var)]
     MutableBorrowingFromImmutable { immutable_var: String, span: Span },
 
-    #[error("Failed to loopup target '{}': {}", triple, what)]
+    #[error("Failed to lookup target '{}': {}", triple, what)]
     FailedToLookupTarget { triple: String, what: String },
 
     #[error("Failed to create target machine")]
