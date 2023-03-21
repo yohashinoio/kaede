@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use inkwell::{types::BasicType, values::FunctionValue};
-use kaede_ast::top::{Fn, Struct, TopLevel, TopLevelKind};
+use kaede_ast::top::{Fn, Module, Struct, TopLevel, TopLevelKind};
 use kaede_type::Ty;
 
 use crate::{
@@ -33,12 +33,18 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
     /// Generate top-level code.
     fn build(&mut self, node: TopLevel) -> CodegenResult<()> {
         match node.kind {
+            TopLevelKind::Module(node) => self.module(node),
+
             TopLevelKind::Fn(node) => self.define_fn(node)?,
 
             TopLevelKind::Struct(node) => self.define_struct(node),
         }
 
         Ok(())
+    }
+
+    fn module(&mut self, _node: Module) {
+        unimplemented!()
     }
 
     fn define_fn(&mut self, node: Fn) -> CodegenResult<()> {

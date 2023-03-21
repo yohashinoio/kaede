@@ -13,7 +13,7 @@ fn jit_compile_test(module: &Module) -> i32 {
         .create_jit_execution_engine(OptimizationLevel::Default)
         .unwrap();
 
-    unsafe { ee.get_function::<TestFunc>("main.test").unwrap().call() }
+    unsafe { ee.get_function::<TestFunc>("test.test").unwrap().call() }
 }
 
 fn run_test(program: &str) -> CodegenResult<i32> {
@@ -22,7 +22,14 @@ fn run_test(program: &str) -> CodegenResult<i32> {
 
     let cgcx = CodegenContext::new(&context)?;
 
-    codegen(&cgcx, &module, "main", parse(lex(program)).unwrap())?;
+    codegen(
+        &cgcx,
+        &module,
+        PathBuf::from("test"),
+        parse(lex(program)).unwrap(),
+    )?;
+
+    module.print_to_stderr();
 
     Ok(jit_compile_test(&module))
 }

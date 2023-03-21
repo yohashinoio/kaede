@@ -21,14 +21,16 @@ struct Args {
     program: Option<String>,
 }
 
-fn compile(module_name: &str, program: &str) -> anyhow::Result<()> {
+fn compile(file_path: PathBuf, program: &str) -> anyhow::Result<()> {
     let ast = parse(lex(program))?;
+
+    let module_name = file_path.file_stem().unwrap().to_str().unwrap();
 
     let context = Context::create();
     let module = context.create_module(module_name);
 
     let cgcx = CodegenContext::new(&context)?;
-    codegen(&cgcx, &module, module_name, ast)?;
+    codegen(&cgcx, &module, file_path, ast)?;
 
     println!("{}", module.to_string());
 
@@ -41,7 +43,7 @@ fn main() -> anyhow::Result<()> {
     let files = args.files;
 
     if let Some(prog) = args.program.as_deref() {
-        compile("commandline", prog)?;
+        compile(PathBuf::from("commandline"), prog)?;
         return Ok(());
     }
 
@@ -50,7 +52,8 @@ fn main() -> anyhow::Result<()> {
     }
 
     for file in files {
-        compile(file.to_str().unwrap(), &fs::read_to_string(&file)?)?;
+        let prog = fs::read_to_string(&file)?;
+        compile(file, &prog)?;
     }
 
     Ok(())

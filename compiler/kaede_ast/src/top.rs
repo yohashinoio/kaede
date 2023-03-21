@@ -47,6 +47,12 @@ pub struct Fn {
 }
 
 #[derive(Debug, PartialEq, Eq)]
+pub struct Module {
+    pub name: Ident,
+    pub span: Span,
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub struct TopLevel {
     pub kind: TopLevelKind,
     pub span: Span,
@@ -56,4 +62,5 @@ pub struct TopLevel {
 pub enum TopLevelKind {
     Fn(Fn),
     Struct(Struct),
+    Module(Module),
 }

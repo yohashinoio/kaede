@@ -1,4 +1,4 @@
-use kaede_ast::top::{Access, Fn, Params, Struct, StructField, TopLevel, TopLevelKind};
+use kaede_ast::top::{Access, Fn, Module, Params, Struct, StructField, TopLevel, TopLevelKind};
 use kaede_lex::token::{Token, TokenKind};
 use kaede_span::Span;
 
@@ -9,6 +9,8 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         let token = self.first();
 
         let top = match token.kind {
+            TokenKind::Module => self.module()?,
+
             TokenKind::Fn => self.func()?,
 
             TokenKind::Struct => self.struct_()?,
@@ -19,6 +21,19 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         self.consume_semi()?;
 
         Ok(top)
+    }
+
+    fn module(&mut self) -> ParseResult<TopLevel> {
+        let start = self.consume(&TokenKind::Module).unwrap().start;
+
+        let name = self.ident()?;
+
+        let span = Span::new(start, name.span.finish);
+
+        Ok(TopLevel {
+            span,
+            kind: TopLevelKind::Module(Module { name, span }),
+        })
     }
 
     fn func(&mut self) -> ParseResult<TopLevel> {

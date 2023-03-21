@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use error::{CodegenError, CodegenResult};
 use inkwell::{
     builder::Builder,
@@ -52,10 +54,10 @@ pub fn as_llvm_type<'ctx>(cucx: &CompileUnitContext<'ctx, '_, '_>, ty: &Ty) -> B
 pub fn codegen<'ctx>(
     ctx: &CodegenContext<'ctx>,
     module: &Module<'ctx>,
-    module_name: &str,
+    file_path: PathBuf,
     cu: CompileUnit,
 ) -> CodegenResult<()> {
-    CompileUnitContext::new(ctx, module, module_name)?.codegen(cu.top_levels)?;
+    CompileUnitContext::new(ctx, module, file_path)?.codegen(cu.top_levels)?;
 
     Ok(())
 }
@@ -117,21 +119,21 @@ pub struct CompileUnitContext<'ctx, 'm, 'c> {
 
     pub tcx: TypeContext<'ctx>,
 
-    pub module_name: &'c str,
+    pub file_path: PathBuf,
 }
 
 impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
     pub fn new(
         ctx: &'c CodegenContext<'ctx>,
         module: &'m Module<'ctx>,
-        module_name: &'c str,
+        file_path: PathBuf,
     ) -> CodegenResult<Self> {
         Ok(Self {
             builder: ctx.context.create_builder(),
             cgcx: ctx,
             module,
             tcx: Default::default(),
-            module_name,
+            file_path,
         })
     }
 
