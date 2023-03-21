@@ -28,7 +28,7 @@ fn compile(module_name: &str, program: &str) -> anyhow::Result<()> {
     let module = context.create_module(module_name);
 
     let cgcx = CodegenContext::new(&context)?;
-    codegen(&cgcx, &module, ast)?;
+    codegen(&cgcx, &module, module_name, ast)?;
 
     println!("{}", module.to_string());
 

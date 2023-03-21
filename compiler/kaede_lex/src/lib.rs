@@ -159,7 +159,6 @@ impl Cursor<'_> {
                     "struct" => self.create_token(TokenKind::Struct),
                     "true" => self.create_token(TokenKind::True),
                     "false" => self.create_token(TokenKind::False),
-                    "package" => self.create_token(TokenKind::Package),
                     _ => self.create_token(TokenKind::Ident(ident)),
                 }
             }

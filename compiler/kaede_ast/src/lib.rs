@@ -1,4 +1,3 @@
-use expr::Ident;
 use top::TopLevel;
 
 pub mod expr;
@@ -7,5 +6,4 @@ pub mod top;
 
 pub struct CompileUnit {
     pub top_levels: Vec<TopLevel>,
-    pub package_name: Ident,
 }
