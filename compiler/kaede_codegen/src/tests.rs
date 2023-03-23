@@ -29,8 +29,6 @@ fn run_test(program: &str) -> CodegenResult<i32> {
         parse(lex(program)).unwrap(),
     )?;
 
-    module.print_to_stderr();
-
     Ok(jit_compile_test(&module))
 }
 

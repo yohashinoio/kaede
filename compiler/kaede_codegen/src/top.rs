@@ -76,7 +76,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
                     self.declare_fn(
                         &mangle_external_name(import_module_name, func.name.as_str()),
                         &func.params,
-                        &func.return_ty,
+                        func.return_ty,
                         Linkage::External,
                     );
                 }
@@ -86,6 +86,8 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
                 TopLevelKind::Import(_) => todo!(),
             }
         }
+
+        self.cucx.imported_modules.insert(node.module.name);
 
         Ok(())
     }
@@ -112,15 +114,24 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
         &mut self,
         mangled_name: &str,
         params: &Params,
-        return_ty: &Option<Ty>,
+        return_ty: Option<Ty>,
         linkage: Linkage,
     ) -> FunctionValue<'ctx> {
-        let fn_type = self.create_fn_type(&params, &return_ty);
+        let fn_type = self.create_fn_type(params, &return_ty);
 
         // Declaration
-        self.cucx
+        let value = self
+            .cucx
             .module
-            .add_function(mangled_name, fn_type, Some(linkage))
+            .add_function(mangled_name, fn_type, Some(linkage));
+
+        // Store return type information in table
+        self.cucx
+            .tcx
+            .return_ty_table
+            .insert(value, return_ty.map(Rc::new));
+
+        value
     }
 
     fn define_fn(&mut self, node: Fn) -> CodegenResult<()> {
@@ -129,7 +140,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
         let fn_value = self.declare_fn(
             mangled_name.as_str(),
             &node.params,
-            &node.return_ty,
+            node.return_ty,
             Linkage::External,
         );
 
@@ -141,12 +152,6 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
             .into_iter()
             .map(|e| (e.0, Rc::new(e.1)))
             .collect::<Vec<_>>();
-
-        // Store return type information in table
-        self.cucx
-            .tcx
-            .return_ty_table
-            .insert(fn_value, node.return_ty.map(Rc::new));
 
         // Store parameter information in table
         self.cucx

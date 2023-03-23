@@ -28,6 +28,7 @@ fn compile(file_path: PathBuf, program: &str) -> anyhow::Result<()> {
 
     let context = Context::create();
     let module = context.create_module(module_name);
+    module.set_source_file_name(file_path.to_str().unwrap());
 
     let cgcx = CodegenContext::new(&context)?;
     codegen(&cgcx, &module, file_path, ast)?;

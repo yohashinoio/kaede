@@ -96,7 +96,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     /// Unary operators
     fn unary(&mut self) -> ParseResult<Expr> {
         if self.consume_b(&TokenKind::Plus) {
-            return self.field_access();
+            return self.access();
         }
 
         if let Ok(span) = self.consume(&TokenKind::Minus) {
@@ -109,7 +109,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                 span,
             });
 
-            let e = self.field_access()?;
+            let e = self.access()?;
 
             return Ok(Expr {
                 span: Span::new(span.start, e.span.finish),
@@ -127,13 +127,13 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             return self.deref();
         }
 
-        self.field_access()
+        self.access()
     }
 
     fn deref(&mut self) -> ParseResult<Expr> {
         let start = self.consume(&TokenKind::Asterisk).unwrap().start;
 
-        let operand = Box::new(self.field_access()?);
+        let operand = Box::new(self.access()?);
 
         let span = Span::new(start, operand.span.finish);
 
@@ -148,7 +148,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         let mutability = self.consume_b(&TokenKind::Mut).into();
 
-        let operand = Box::new(self.field_access()?);
+        let operand = Box::new(self.access()?);
 
         let span = Span::new(start, operand.span.finish);
 
@@ -162,21 +162,19 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         })
     }
 
-    fn field_access(&mut self) -> ParseResult<Expr> {
+    /// Field access or module item access
+    fn access(&mut self) -> ParseResult<Expr> {
         let mut node = self.primary()?;
 
         loop {
             if let Ok(span) = self.consume(&TokenKind::Dot) {
-                let right = self.ident()?;
+                let right = self.primary()?;
 
                 node = Expr {
                     kind: ExprKind::Binary(Binary::new(
                         Box::new(node),
-                        BinaryKind::FieldAccess,
-                        Box::new(Expr {
-                            span: right.span,
-                            kind: ExprKind::Ident(right),
-                        }),
+                        BinaryKind::Access,
+                        Box::new(right),
                     )),
                     span,
                 };

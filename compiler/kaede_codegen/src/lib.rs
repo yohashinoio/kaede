@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{collections::HashSet, path::PathBuf};
 
 use error::{CodegenError, CodegenResult};
 use inkwell::{
@@ -120,6 +120,9 @@ pub struct CompileUnitContext<'ctx, 'm, 'c> {
     pub tcx: TypeContext<'ctx>,
 
     pub file_path: PathBuf,
+
+    pub modname: String,
+    pub imported_modules: HashSet<String>,
 }
 
 impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
@@ -128,12 +131,16 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
         module: &'m Module<'ctx>,
         file_path: PathBuf,
     ) -> CodegenResult<Self> {
+        let modname = module.get_name().to_str().unwrap().to_string();
+
         Ok(Self {
             builder: ctx.context.create_builder(),
             cgcx: ctx,
             module,
             tcx: Default::default(),
             file_path,
+            modname,
+            imported_modules: HashSet::new(),
         })
     }
 

@@ -217,7 +217,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         use BinaryKind::*;
 
         match node.kind {
-            FieldAccess => self.field_access(node),
+            Access => self.access(node),
 
             _ => self.binary_arithmetic_op(node),
         }
@@ -292,8 +292,24 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         })
     }
 
-    fn field_access(&self, node: &Binary) -> CodegenResult<Value<'ctx>> {
-        assert!(matches!(node.kind, BinaryKind::FieldAccess));
+    /// Field access or module item access
+    fn access(&self, node: &Binary) -> CodegenResult<Value<'ctx>> {
+        assert!(matches!(node.kind, BinaryKind::Access));
+
+        if let ExprKind::Ident(modname) = &node.lhs.kind {
+            if self.cucx.imported_modules.contains(modname.as_str()) {
+                // --- Module item access ---
+                self.cucx.module.set_name(modname.as_str());
+
+                let value = build_expression(self.cucx, &node.rhs);
+
+                // Revert to the current module name
+                self.cucx.module.set_name(&self.cucx.modname);
+                return value;
+            }
+        }
+
+        // --- Field access ---
 
         // Pointer to left value (struct)
         let (p, struct_ty) = {
@@ -317,7 +333,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
 
         let field_name = match &node.rhs.kind {
             ExprKind::Ident(s) => s.as_str(),
-            _ => unreachable!(),
+            kind => unreachable!("{:?}", kind),
         };
 
         let (_, struct_info) = &self.cucx.tcx.struct_table[struct_name];
