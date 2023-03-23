@@ -4,13 +4,13 @@ use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability, Ty};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Ident {
-    pub s: String,
+    pub name: String,
     pub span: Span,
 }
 
 impl Ident {
     pub fn as_str(&self) -> &str {
-        &self.s
+        &self.name
     }
 }
 

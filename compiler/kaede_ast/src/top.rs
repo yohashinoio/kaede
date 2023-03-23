@@ -47,8 +47,8 @@ pub struct Fn {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Module {
-    pub name: Ident,
+pub struct Import {
+    pub module: Ident,
     pub span: Span,
 }
 
@@ -62,5 +62,5 @@ pub struct TopLevel {
 pub enum TopLevelKind {
     Fn(Fn),
     Struct(Struct),
-    Module(Module),
+    Import(Import),
 }

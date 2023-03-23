@@ -1,13 +1,19 @@
-use std::rc::Rc;
+use std::{fs, rc::Rc};
 
-use inkwell::{types::BasicType, values::FunctionValue};
-use kaede_ast::top::{Fn, Module, Struct, TopLevel, TopLevelKind};
+use inkwell::{
+    module::Linkage,
+    types::{BasicType, FunctionType},
+    values::FunctionValue,
+};
+use kaede_ast::top::{Fn, Import, Params, Struct, TopLevel, TopLevelKind};
+use kaede_lex::lex;
+use kaede_parse::parse;
 use kaede_type::Ty;
 
 use crate::{
     as_llvm_type,
-    error::CodegenResult,
-    mangle::mangle_name,
+    error::{CodegenError, CodegenResult},
+    mangle::{mangle_external_name, mangle_name},
     stmt::{build_block, StmtContext},
     tcx::{StructFieldInfo, StructInfo, SymbolTable},
     CompileUnitContext,
@@ -33,7 +39,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
     /// Generate top-level code.
     fn build(&mut self, node: TopLevel) -> CodegenResult<()> {
         match node.kind {
-            TopLevelKind::Module(node) => self.module(node),
+            TopLevelKind::Import(node) => self.import_module(node)?,
 
             TopLevelKind::Fn(node) => self.define_fn(node)?,
 
@@ -43,30 +49,89 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
         Ok(())
     }
 
-    fn module(&mut self, _node: Module) {
-        unimplemented!()
+    fn import_module(&mut self, node: Import) -> CodegenResult<()> {
+        let import_module_name = node.module.as_str();
+
+        let path = self
+            .cucx
+            .file_path
+            .parent()
+            .unwrap()
+            .join(import_module_name)
+            .with_extension("kae");
+
+        if !path.exists() {
+            return Err(CodegenError::FileNotFoundForModule {
+                span: node.span,
+                mod_name: node.module.name,
+            });
+        }
+
+        // TODO: Optimize
+        let psd_module = parse(lex(&fs::read_to_string(&path).unwrap())).unwrap();
+
+        for top_level in psd_module.top_levels {
+            match top_level.kind {
+                TopLevelKind::Fn(func) => {
+                    self.declare_fn(
+                        &mangle_external_name(import_module_name, func.name.as_str()),
+                        &func.params,
+                        &func.return_ty,
+                        Linkage::External,
+                    );
+                }
+
+                TopLevelKind::Struct(_) => todo!(),
+
+                TopLevelKind::Import(_) => todo!(),
+            }
+        }
+
+        Ok(())
     }
 
-    fn define_fn(&mut self, node: Fn) -> CodegenResult<()> {
-        let mangled_name = mangle_name(self.cucx, node.name.as_str());
-
-        let param_llvm_tys = node
-            .params
+    // If return_ty is `None`, treat as void
+    fn create_fn_type(&mut self, params: &Params, return_ty: &Option<Ty>) -> FunctionType<'ctx> {
+        let param_types = params
             .iter()
             .map(|e| as_llvm_type(self.cucx, &e.1).into())
             .collect::<Vec<_>>();
 
-        let fn_type = match &node.return_ty {
-            Some(ty) => as_llvm_type(self.cucx, ty).fn_type(param_llvm_tys.as_slice(), false),
+        match &return_ty {
+            Some(ty) => as_llvm_type(self.cucx, ty).fn_type(param_types.as_slice(), false),
 
             None => self
                 .cucx
                 .context()
                 .void_type()
-                .fn_type(param_llvm_tys.as_slice(), false),
-        };
+                .fn_type(param_types.as_slice(), false),
+        }
+    }
 
-        let fn_value = self.cucx.module.add_function(&mangled_name, fn_type, None);
+    fn declare_fn(
+        &mut self,
+        mangled_name: &str,
+        params: &Params,
+        return_ty: &Option<Ty>,
+        linkage: Linkage,
+    ) -> FunctionValue<'ctx> {
+        let fn_type = self.create_fn_type(&params, &return_ty);
+
+        // Declaration
+        self.cucx
+            .module
+            .add_function(mangled_name, fn_type, Some(linkage))
+    }
+
+    fn define_fn(&mut self, node: Fn) -> CodegenResult<()> {
+        let mangled_name = mangle_name(self.cucx, node.name.as_str());
+
+        let fn_value = self.declare_fn(
+            mangled_name.as_str(),
+            &node.params,
+            &node.return_ty,
+            Linkage::External,
+        );
 
         let basic_block = self.cucx.context().append_basic_block(fn_value, "entry");
         self.cucx.builder.position_at_end(basic_block);
@@ -99,7 +164,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
 
         self.cucx.tcx.pop_symbol_table();
 
-        if fn_type.get_return_type().is_none() && self.cucx.no_terminator() {
+        if fn_value.get_type().get_return_type().is_none() && self.cucx.no_terminator() {
             // If return type is void and there is no termination, insert return
             self.cucx.builder.build_return(None);
         }
@@ -151,7 +216,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
             .into_iter()
             .map(|f| {
                 (
-                    f.name.s,
+                    f.name.name,
                     StructFieldInfo {
                         ty: f.ty,
                         access: f.access,
@@ -164,6 +229,6 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
         self.cucx
             .tcx
             .struct_table
-            .insert(node.name.s, (ty, StructInfo { fields }));
+            .insert(node.name.name, (ty, StructInfo { fields }));
     }
 }

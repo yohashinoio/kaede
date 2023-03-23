@@ -96,7 +96,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
 
                 if var.1.mutability.is_not() && node.mutability.is_mut() {
                     return Err(CodegenError::MutableBorrowingFromImmutable {
-                        immutable_var: ident.s.clone(),
+                        immutable_var: ident.name.clone(),
                         span: node.span,
                     });
                 }
@@ -148,7 +148,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             None => {
                 return Err(CodegenError::Undeclared {
                     span: node.struct_name.span,
-                    name: node.struct_name.s.clone(),
+                    name: node.struct_name.name.clone(),
                 })
             }
         };
@@ -174,7 +174,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         Ok(Value::new(
             self.cucx.context().const_struct(&inits, true).into(),
             Rc::new(Ty::new(
-                TyKind::UDType(UDType(node.struct_name.s.clone())).into(),
+                TyKind::UDType(UDType(node.struct_name.name.clone())).into(),
                 Mutability::Not,
             )),
         ))
@@ -386,7 +386,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             }
 
             None => Err(CodegenError::Undeclared {
-                name: node.name.s.clone(),
+                name: node.name.name.clone(),
                 span: node.span,
             }),
         }

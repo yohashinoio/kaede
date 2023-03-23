@@ -40,6 +40,9 @@ pub enum CodegenError {
     #[error("Failed to create target machine")]
     FailedToCreateTargetMachine,
 
+    #[error("{}:{} File not found for module `{}`", span.start.line, span.start.column, mod_name)]
+    FileNotFoundForModule { span: Span, mod_name: String },
+
     /// Error issued by LLVM
     #[error("{}", .what)]
     LLVMError { what: String },

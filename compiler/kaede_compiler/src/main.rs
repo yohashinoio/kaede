@@ -51,6 +51,10 @@ fn main() -> anyhow::Result<()> {
         return Err(anyhow!("No input files"));
     }
 
+    if 1 < files.len() {
+        return Err(anyhow!("Multiple input filenames provided"));
+    }
+
     for file in files {
         let prog = fs::read_to_string(&file)?;
         compile(file, &prog)?;

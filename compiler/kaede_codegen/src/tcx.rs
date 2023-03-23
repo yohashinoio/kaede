@@ -68,7 +68,7 @@ impl<'ctx> TypeContext<'ctx> {
         }
 
         Err(CodegenError::Undeclared {
-            name: ident.s.clone(),
+            name: ident.name.clone(),
             span: ident.span,
         })
     }
