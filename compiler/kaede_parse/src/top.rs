@@ -32,10 +32,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         Ok(TopLevel {
             span,
-            kind: TopLevelKind::Import(Import {
-                modpath,
-                span,
-            }),
+            kind: TopLevelKind::Import(Import { modpath, span }),
         })
     }
 
