@@ -135,7 +135,12 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
     }
 
     fn define_fn(&mut self, node: Fn) -> CodegenResult<()> {
-        let mangled_name = mangle_name(self.cucx, node.name.as_str());
+        // Suppress mangling of main function
+        let mangled_name = if node.name.as_str() == "main" {
+            node.name.name
+        } else {
+            mangle_name(self.cucx, node.name.as_str())
+        };
 
         let fn_value = self.declare_fn(
             mangled_name.as_str(),
