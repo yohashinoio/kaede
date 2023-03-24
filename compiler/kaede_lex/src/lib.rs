@@ -160,6 +160,7 @@ impl Cursor<'_> {
                     "true" => self.create_token(TokenKind::True),
                     "false" => self.create_token(TokenKind::False),
                     "import" => self.create_token(TokenKind::Import),
+                    "pub" => self.create_token(TokenKind::Pub),
                     _ => self.create_token(TokenKind::Ident(ident)),
                 }
             }

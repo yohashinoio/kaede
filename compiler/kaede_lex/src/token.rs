@@ -65,6 +65,8 @@ pub enum TokenKind {
     Struct,
     /// "mod"
     Import,
+    // "pub"
+    Pub,
 
     /// "true"
     True,
@@ -112,6 +114,7 @@ impl std::fmt::Display for TokenKind {
             Break => write!(f, "'break'"),
             Struct => write!(f, "'struct'"),
             Import => write!(f, "'import'"),
+            Pub => write!(f, "'pub'"),
 
             True => write!(f, "'true'"),
             False => write!(f, "'false'"),

@@ -20,6 +20,16 @@ impl Visibility {
     }
 }
 
+impl From<bool> for Visibility {
+    fn from(value: bool) -> Self {
+        if value {
+            Visibility::Public
+        } else {
+            Visibility::Private
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct StructField {
     pub name: Ident,
@@ -55,6 +65,7 @@ pub struct Import {
 #[derive(Debug, PartialEq, Eq)]
 pub struct TopLevel {
     pub kind: TopLevelKind,
+    pub vis: Visibility,
     pub span: Span,
 }
 

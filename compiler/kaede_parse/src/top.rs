@@ -6,37 +6,45 @@ use crate::{error::ParseResult, Parser};
 
 impl<T: Iterator<Item = Token>> Parser<T> {
     pub fn top_level(&mut self) -> ParseResult<TopLevel> {
+        let vis = self.consume_b(&TokenKind::Pub).into();
+
         let token = self.first();
 
-        let top = match token.kind {
-            TokenKind::Import => self.import()?,
+        let (span, kind) = match token.kind {
+            TokenKind::Import => {
+                let kind = self.import()?;
+                (kind.span, TopLevelKind::Import(kind))
+            }
 
-            TokenKind::Fn => self.func()?,
+            TokenKind::Fn => {
+                let kind = self.func()?;
+                (kind.span, TopLevelKind::Fn(kind))
+            }
 
-            TokenKind::Struct => self.struct_()?,
+            TokenKind::Struct => {
+                let kind = self.struct_()?;
+                (kind.span, TopLevelKind::Struct(kind))
+            }
 
             _ => unreachable!("{:?}", token.kind),
         };
 
         self.consume_semi()?;
 
-        Ok(top)
+        Ok(TopLevel { kind, vis, span })
     }
 
-    fn import(&mut self) -> ParseResult<TopLevel> {
+    fn import(&mut self) -> ParseResult<Import> {
         let start = self.consume(&TokenKind::Import).unwrap().start;
 
         let modpath = self.ident()?;
 
         let span = Span::new(start, modpath.span.finish);
 
-        Ok(TopLevel {
-            span,
-            kind: TopLevelKind::Import(Import { modpath, span }),
-        })
+        Ok(Import { modpath, span })
     }
 
-    fn func(&mut self) -> ParseResult<TopLevel> {
+    fn func(&mut self) -> ParseResult<Fn> {
         let start = self.consume(&TokenKind::Fn).unwrap().start;
 
         let name = self.ident()?;
@@ -59,14 +67,11 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         let span = Span::new(start, body.span.finish);
 
-        Ok(TopLevel {
-            kind: TopLevelKind::Fn(Fn {
-                name,
-                params,
-                body,
-                return_ty,
-                span,
-            }),
+        Ok(Fn {
+            name,
+            params,
+            body,
+            return_ty,
             span,
         })
     }
@@ -89,7 +94,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         Ok(params)
     }
 
-    fn struct_(&mut self) -> ParseResult<TopLevel> {
+    fn struct_(&mut self) -> ParseResult<Struct> {
         let start = self.consume(&TokenKind::Struct).unwrap().start;
 
         let name = self.ident()?;
@@ -102,10 +107,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         let span = Span::new(start, finish);
 
-        Ok(TopLevel {
-            kind: TopLevelKind::Struct(Struct { name, fields, span }),
-            span,
-        })
+        Ok(Struct { name, fields, span })
     }
 
     fn struct_fields(&mut self) -> ParseResult<Vec<StructField>> {

@@ -71,6 +71,11 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
         let psd_module = parse(lex(&fs::read_to_string(&path).unwrap())).unwrap();
 
         for top_level in psd_module.top_levels {
+            // Do not import if private
+            if top_level.vis.is_private() {
+                continue;
+            }
+
             match top_level.kind {
                 TopLevelKind::Fn(func) => {
                     self.declare_fn(
