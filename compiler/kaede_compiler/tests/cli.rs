@@ -32,6 +32,7 @@ fn no_input_files() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Testing under the assumption that `lli` is installed.
 #[test]
 fn import_modules() -> anyhow::Result<()> {
     let tmp_dir = assert_fs::TempDir::new()?;
