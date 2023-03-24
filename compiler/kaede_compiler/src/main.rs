@@ -1,6 +1,6 @@
-use std::{fs, path::PathBuf};
+use std::{fs, path::PathBuf, vec};
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Context as _};
 use clap::Parser;
 use inkwell::context::Context;
 use kaede_codegen::{codegen, CodegenContext};
@@ -21,17 +21,40 @@ struct Args {
     program: Option<String>,
 }
 
-fn compile(file_path: PathBuf, program: &str) -> anyhow::Result<()> {
-    let ast = parse(lex(program))?;
+struct CompileUnitInfo {
+    pub file_path: PathBuf,
+    pub program: String,
+}
 
-    let module_name = file_path.file_stem().unwrap().to_str().unwrap();
-
+fn compile(unit_infos: Vec<CompileUnitInfo>) -> anyhow::Result<()> {
     let context = Context::create();
-    let module = context.create_module(module_name);
-    module.set_source_file_name(file_path.to_str().unwrap());
 
-    let cgcx = CodegenContext::new(&context)?;
-    codegen(&cgcx, &module, file_path, ast)?;
+    let mut compiled_modules = Vec::new();
+
+    for unit_info in unit_infos {
+        let file_path = unit_info.file_path;
+
+        let ast = parse(lex(&unit_info.program))?;
+
+        let module_name = file_path.file_stem().unwrap().to_str().unwrap();
+
+        let module = context.create_module(module_name);
+        module.set_source_file_name(file_path.to_str().unwrap());
+
+        let cgcx = CodegenContext::new(&context)?;
+        codegen(&cgcx, &module, file_path, ast)?;
+
+        compiled_modules.push(module);
+    }
+
+    let module = compiled_modules.pop().unwrap();
+
+    // Link modules
+    for other_module in compiled_modules {
+        module
+            .link_in_module(other_module)
+            .map_err(|e| anyhow!(e.to_string()))?;
+    }
 
     println!("{}", module.to_string());
 
@@ -41,25 +64,34 @@ fn compile(file_path: PathBuf, program: &str) -> anyhow::Result<()> {
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
-    let files = args.files;
+    let file_paths = args.files;
 
-    if let Some(prog) = args.program.as_deref() {
-        compile(PathBuf::from("commandline"), prog)?;
+    if let Some(program) = args.program {
+        compile(vec![CompileUnitInfo {
+            file_path: PathBuf::from("commandline"),
+            program,
+        }])?;
+
         return Ok(());
     }
 
-    if files.is_empty() {
+    if file_paths.is_empty() {
         return Err(anyhow!("No input files"));
     }
 
-    if 1 < files.len() {
-        return Err(anyhow!("Multiple input filenames provided"));
+    // --- Compile ---
+
+    let mut programs = Vec::new();
+
+    for file_path in file_paths {
+        programs.push(CompileUnitInfo {
+            program: fs::read_to_string(&file_path)
+                .with_context(|| format!("Failed to open file: {}", file_path.to_string_lossy()))?,
+            file_path,
+        });
     }
 
-    for file in files {
-        let prog = fs::read_to_string(&file)?;
-        compile(file, &prog)?;
-    }
+    compile(programs)?;
 
     Ok(())
 }
