@@ -14,3 +14,8 @@ kaede_ast = { path = "../kaede_ast" }
 kaede_codegen = { path = "../kaede_codegen" }
 kaede_lex = { path = "../kaede_lex" }
 kaede_parse = { path = "../kaede_parse" }
+
+[dev-dependencies]
+assert_fs = "1.0.12"
+assert_cmd = "2.0.10"
+predicates = "3.0.1"
