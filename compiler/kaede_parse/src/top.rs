@@ -26,13 +26,16 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     fn import(&mut self) -> ParseResult<TopLevel> {
         let start = self.consume(&TokenKind::Import).unwrap().start;
 
-        let module = self.ident()?;
+        let modpath = self.ident()?;
 
-        let span = Span::new(start, module.span.finish);
+        let span = Span::new(start, modpath.span.finish);
 
         Ok(TopLevel {
             span,
-            kind: TopLevelKind::Import(Import { module, span }),
+            kind: TopLevelKind::Import(Import {
+                modpath,
+                span,
+            }),
         })
     }
 

@@ -7,7 +7,7 @@ mod ty;
 pub fn parse(tokens: impl Iterator<Item = Token>) -> ParseResult<CompileUnit> {
     let mut parser = Parser::new(tokens.peekable());
 
-    parser.parse()
+    parser.run()
 }
 
 use std::iter::Peekable;
@@ -34,18 +34,31 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
     }
 
-    pub fn parse(&mut self) -> ParseResult<CompileUnit> {
+    /// The argument specifies the condition under which the parsing is terminated
+    ///
+    /// When using "self", use the argument self
+    ///
+    /// Example:
+    /// |self_| self_.xxx()
+    pub fn compile_unit(
+        &mut self,
+        mut end_predicate: impl FnMut(&mut Self) -> bool,
+    ) -> ParseResult<CompileUnit> {
         let mut compile_unit = CompileUnit {
             top_levels: Vec::new(),
         };
 
-        while !self.is_eof() {
+        while end_predicate(self) {
             let top = self.top_level()?;
 
             compile_unit.top_levels.push(top);
         }
 
         Ok(compile_unit)
+    }
+
+    pub fn run(&mut self) -> ParseResult<CompileUnit> {
+        self.compile_unit(|self_| !self_.is_eof())
     }
 
     fn is_eof(&mut self) -> bool {

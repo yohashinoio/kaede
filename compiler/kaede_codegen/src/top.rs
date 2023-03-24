@@ -36,7 +36,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
         Self { cucx }
     }
 
-    /// Generate top-level code.
+    /// Generate top-level code
     fn build(&mut self, node: TopLevel) -> CodegenResult<()> {
         match node.kind {
             TopLevelKind::Import(node) => self.import_module(node)?,
@@ -50,7 +50,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
     }
 
     fn import_module(&mut self, node: Import) -> CodegenResult<()> {
-        let import_module_name = node.module.as_str();
+        let import_module_name = node.modpath.as_str();
 
         let path = self
             .cucx
@@ -63,7 +63,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
         if !path.exists() {
             return Err(CodegenError::FileNotFoundForModule {
                 span: node.span,
-                mod_name: node.module.name,
+                mod_name: node.modpath.name,
             });
         }
 
@@ -87,7 +87,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
             }
         }
 
-        self.cucx.imported_modules.insert(node.module.name);
+        self.cucx.imported_modules.insert(node.modpath.name);
 
         Ok(())
     }

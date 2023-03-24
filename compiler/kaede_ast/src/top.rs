@@ -48,7 +48,7 @@ pub struct Fn {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Import {
-    pub module: Ident,
+    pub modpath: Ident,
     pub span: Span,
 }
 
