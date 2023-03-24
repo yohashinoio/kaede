@@ -4,7 +4,7 @@ use inkwell::{
     types::StructType,
     values::{FunctionValue, PointerValue},
 };
-use kaede_ast::{expr::Ident, top::Access};
+use kaede_ast::{expr::Ident, top::Visibility};
 use kaede_type::Ty;
 
 use crate::error::{CodegenError, CodegenResult};
@@ -39,7 +39,7 @@ pub type ParamTable<'ctx> = HashMap<FunctionValue<'ctx>, Vec<Rc<Ty>>>;
 
 pub struct StructFieldInfo {
     pub ty: Ty,
-    pub access: Access,
+    pub vis: Visibility,
     pub offset: u64,
 }
 

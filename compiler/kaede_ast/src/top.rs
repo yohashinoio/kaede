@@ -5,12 +5,12 @@ use crate::{expr::Ident, stmt::Block};
 
 /// Accessibility
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Copy)]
-pub enum Access {
+pub enum Visibility {
     Public,
     Private,
 }
 
-impl Access {
+impl Visibility {
     pub fn is_public(self) -> bool {
         self == Self::Public
     }
@@ -24,7 +24,7 @@ impl Access {
 pub struct StructField {
     pub name: Ident,
     pub ty: Ty,
-    pub access: Access,
+    pub vis: Visibility,
     pub offset: u64,
 }
 

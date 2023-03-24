@@ -1,4 +1,4 @@
-use kaede_ast::top::{Access, Fn, Import, Params, Struct, StructField, TopLevel, TopLevelKind};
+use kaede_ast::top::{Fn, Import, Params, Struct, StructField, TopLevel, TopLevelKind, Visibility};
 use kaede_lex::token::{Token, TokenKind};
 use kaede_span::Span;
 
@@ -127,7 +127,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             fields.push(StructField {
                 name,
                 ty,
-                access: Access::Public,
+                vis: Visibility::Public,
                 offset,
             });
 
