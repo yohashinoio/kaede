@@ -635,3 +635,44 @@ fn greater_than_or_equal() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn not_equal_to() -> anyhow::Result<()> {
+    let program = r"fn test() i32 {
+        if 48 != 48 {
+            return 123
+        } else if 48 != 10 {
+            return 58
+        }
+
+        return 124
+    }";
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn logical_not() -> anyhow::Result<()> {
+    let program = r"fn lnot(fl bool) bool {
+        return !fl
+    }
+    fn test() i32 {
+        if !(48 != 10) {
+            return 123
+        }
+
+        let fls = false;
+
+        if lnot(fls) {
+            return 58
+        }
+
+        return 124
+    }";
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}

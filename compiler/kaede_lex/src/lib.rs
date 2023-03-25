@@ -181,6 +181,16 @@ impl Cursor<'_> {
             '.' => self.create_token(TokenKind::Dot),
 
             // Operators
+            '!' => {
+                if self.first() == '=' {
+                    // !=
+                    self.bump().unwrap();
+                    self.create_token(TokenKind::Ne)
+                } else {
+                    // !
+                    self.create_token(TokenKind::LogicalNot)
+                }
+            }
             '+' => self.create_token(TokenKind::Plus),
             '-' => self.create_token(TokenKind::Minus),
             '*' => self.create_token(TokenKind::Asterisk),

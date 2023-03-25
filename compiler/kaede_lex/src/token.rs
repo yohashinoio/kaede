@@ -51,6 +51,10 @@ pub enum TokenKind {
     Gt,
     /// ">="
     Ge,
+    /// "!"
+    LogicalNot,
+    /// "!="
+    Ne,
 
     // Reserved words
     /// "fn"
@@ -115,6 +119,8 @@ impl std::fmt::Display for TokenKind {
             Le => write!(f, "'<='"),
             Gt => write!(f, "'>'"),
             Ge => write!(f, "'>='"),
+            LogicalNot => write!(f, "'!'"),
+            Ne => write!(f, "'!='"),
 
             Fn => write!(f, "'fn'"),
             Return => write!(f, "'return'"),

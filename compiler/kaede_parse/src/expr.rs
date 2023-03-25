@@ -1,6 +1,6 @@
 use kaede_ast::expr::{
     Args, Binary, BinaryKind, Borrow, Deref, Expr, ExprKind, FnCall, Ident, Int, IntKind,
-    StructLiteral,
+    LogicalNot, StructLiteral,
 };
 use kaede_lex::token::{Token, TokenKind};
 use kaede_span::Span;
@@ -25,6 +25,15 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                     kind: ExprKind::Binary(Binary::new(
                         Box::new(node),
                         BinaryKind::Eq,
+                        Box::new(self.lt_or_gt_e()?),
+                    )),
+                    span,
+                };
+            } else if let Ok(span) = self.consume(&TokenKind::Ne) {
+                node = Expr {
+                    kind: ExprKind::Binary(Binary::new(
+                        Box::new(node),
+                        BinaryKind::Ne,
                         Box::new(self.lt_or_gt_e()?),
                     )),
                     span,
@@ -161,6 +170,20 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             return Ok(Expr {
                 span: Span::new(span.start, e.span.finish),
                 kind: ExprKind::Binary(Binary::new(zero, BinaryKind::Sub, Box::new(e))),
+            });
+        }
+
+        // Logical not
+        if let Ok(span) = self.consume(&TokenKind::LogicalNot) {
+            let operand = self.access()?;
+            let span = Span::new(span.start, operand.span.finish);
+
+            return Ok(Expr {
+                kind: ExprKind::LogicalNot(LogicalNot {
+                    operand: Box::new(operand),
+                    span,
+                }),
+                span,
             });
         }
 

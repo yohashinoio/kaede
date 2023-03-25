@@ -10,7 +10,7 @@ use crate::{
 
 use inkwell::{values::BasicValue, IntPredicate};
 use kaede_ast::expr::{
-    Binary, BinaryKind, Borrow, Deref, Expr, ExprKind, FnCall, Ident, StructLiteral,
+    Binary, BinaryKind, Borrow, Deref, Expr, ExprKind, FnCall, Ident, LogicalNot, StructLiteral,
 };
 use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability, Ty, TyKind, UDType};
 
@@ -44,9 +44,11 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
 
             ExprKind::Ident(name) => self.expr_ident(name)?,
 
-            ExprKind::Binary(b) => self.binary_op(b)?,
+            ExprKind::Binary(node) => self.binary_op(node)?,
 
-            ExprKind::FnCall(fcall) => self.call_fn(fcall)?,
+            ExprKind::LogicalNot(node) => self.logical_not(node)?,
+
+            ExprKind::FnCall(node) => self.call_fn(node)?,
 
             ExprKind::StructLiteral(node) => self.struct_literal(node)?,
 
@@ -58,6 +60,29 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
 
             ExprKind::Deref(node) => self.deref(node)?,
         })
+    }
+
+    fn logical_not(&self, node: &LogicalNot) -> CodegenResult<Value<'ctx>> {
+        let operand = build_expression(self.cucx, &node.operand)?;
+
+        let zero = as_llvm_type(self.cucx, &operand.get_type()).const_zero();
+
+        // Compared to zero, it would be equivalent to 'logical not'
+        Ok(Value::new(
+            self.cucx
+                .builder
+                .build_int_compare(
+                    IntPredicate::EQ,
+                    operand.get_value().into_int_value(),
+                    zero.into_int_value(),
+                    "",
+                )
+                .into(),
+            Rc::new(make_fundamental_type(
+                FundamentalTypeKind::Bool,
+                Mutability::Not,
+            )),
+        ))
     }
 
     fn deref(&self, node: &Deref) -> CodegenResult<Value<'ctx>> {
@@ -281,6 +306,17 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
                 self.cucx
                     .builder
                     .build_int_compare(IntPredicate::EQ, left_int, right_int, "")
+                    .into(),
+                Rc::new(make_fundamental_type(
+                    FundamentalTypeKind::Bool,
+                    Mutability::Not,
+                )),
+            ),
+
+            Ne => Value::new(
+                self.cucx
+                    .builder
+                    .build_int_compare(IntPredicate::NE, left_int, right_int, "")
                     .into(),
                 Rc::new(make_fundamental_type(
                     FundamentalTypeKind::Bool,

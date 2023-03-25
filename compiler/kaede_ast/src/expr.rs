@@ -63,18 +63,21 @@ pub enum BinaryKind {
     Sub,
     Mul,
     Div,
+
     Eq,
+    /// Not equal to
+    Ne,
 
     /// Field access or module item access
     Access,
 
-    // Less than
+    /// Less than
     Lt,
-    // Less than or equal
+    /// Less than or equal
     Le,
-    // Greater than
+    /// Greater than
     Gt,
-    // Greater than or equal
+    /// Greater than or equal
     Ge,
 }
 
@@ -89,6 +92,12 @@ impl Binary {
     pub fn new(lhs: Box<Expr>, op: BinaryKind, rhs: Box<Expr>) -> Self {
         Self { lhs, kind: op, rhs }
     }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct LogicalNot {
+    pub operand: Box<Expr>,
+    pub span: Span,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -122,4 +131,5 @@ pub enum ExprKind {
     False,
     Borrow(Borrow),
     Deref(Deref),
+    LogicalNot(LogicalNot),
 }
