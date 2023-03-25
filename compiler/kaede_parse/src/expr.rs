@@ -17,7 +17,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
     /// Same precedence of equal
     fn equal(&mut self) -> ParseResult<Expr> {
-        let mut node = self.add()?;
+        let mut node = self.lt_or_gt()?;
 
         loop {
             if let Ok(span) = self.consume(&TokenKind::DoubleEq) {
@@ -25,6 +25,35 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                     kind: ExprKind::Binary(Binary::new(
                         Box::new(node),
                         BinaryKind::Eq,
+                        Box::new(self.lt_or_gt()?),
+                    )),
+                    span,
+                };
+            } else {
+                return Ok(node);
+            }
+        }
+    }
+
+    /// Same precedence of less than and greater than
+    fn lt_or_gt(&mut self) -> ParseResult<Expr> {
+        let mut node = self.add()?;
+
+        loop {
+            if let Ok(span) = self.consume(&TokenKind::Lt) {
+                node = Expr {
+                    kind: ExprKind::Binary(Binary::new(
+                        Box::new(node),
+                        BinaryKind::Lt,
+                        Box::new(self.add()?),
+                    )),
+                    span,
+                };
+            } else if let Ok(span) = self.consume(&TokenKind::Gt) {
+                node = Expr {
+                    kind: ExprKind::Binary(Binary::new(
+                        Box::new(node),
+                        BinaryKind::Gt,
                         Box::new(self.add()?),
                     )),
                     span,

@@ -43,6 +43,10 @@ pub enum TokenKind {
     DoubleEq,
     /// "&"
     And,
+    /// "<"
+    Lt,
+    /// ">"
+    Gt,
 
     // Reserved words
     /// "fn"
@@ -103,6 +107,8 @@ impl std::fmt::Display for TokenKind {
             Eq => write!(f, "'='"),
             DoubleEq => write!(f, "'=='"),
             And => write!(f, "'&'"),
+            Lt => write!(f, "'<'"),
+            Gt => write!(f, "'>'"),
 
             Fn => write!(f, "'fn'"),
             Return => write!(f, "'return'"),

@@ -179,6 +179,15 @@ impl Cursor<'_> {
             ',' => self.create_token(TokenKind::Comma),
             ';' => self.create_token(TokenKind::Semi),
             '.' => self.create_token(TokenKind::Dot),
+
+            // Operators
+            '+' => self.create_token(TokenKind::Plus),
+            '-' => self.create_token(TokenKind::Minus),
+            '*' => self.create_token(TokenKind::Asterisk),
+            '/' => self.create_token(TokenKind::Slash),
+            '&' => self.create_token(TokenKind::And),
+            '<' => self.create_token(TokenKind::Lt),
+            '>' => self.create_token(TokenKind::Gt),
             '=' => {
                 if self.first() == '=' {
                     // ==
@@ -189,13 +198,6 @@ impl Cursor<'_> {
                     self.create_token(TokenKind::Eq)
                 }
             }
-
-            // Operators
-            '+' => self.create_token(TokenKind::Plus),
-            '-' => self.create_token(TokenKind::Minus),
-            '*' => self.create_token(TokenKind::Asterisk),
-            '/' => self.create_token(TokenKind::Slash),
-            '&' => self.create_token(TokenKind::And),
 
             c => unreachable!("{}", c),
         }

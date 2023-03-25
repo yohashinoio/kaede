@@ -40,3 +40,7 @@ impl<'ctx> Value<'ctx> {
         self.ty.as_ref().unwrap().clone()
     }
 }
+
+pub fn has_signed(left: &Value, right: &Value) -> bool {
+    left.get_type().kind.is_signed() || right.get_type().kind.is_signed()
+}

@@ -563,3 +563,37 @@ fn mutable_references_to_immutable_variables() {
         Err(CodegenError::MutableBorrowingFromImmutable { .. })
     ));
 }
+
+#[test]
+fn less_than() -> anyhow::Result<()> {
+    let program = r"fn test() i32 {
+        if 48 < 10 {
+            return 123
+        } else if 10 < 48 {
+            return 58
+        }
+
+        return 123
+    }";
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn greater_than() -> anyhow::Result<()> {
+    let program = r"fn test() i32 {
+        if 10 > 48 {
+            return 123
+        } else if 48 > 10 {
+            return 58
+        }
+
+        return 123
+    }";
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}

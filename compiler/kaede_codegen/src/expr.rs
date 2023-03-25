@@ -4,7 +4,7 @@ use crate::{
     as_llvm_type,
     error::{CodegenError, CodegenResult},
     mangle::mangle_name,
-    value::Value,
+    value::{has_signed, Value},
     CompileUnitContext,
 };
 
@@ -258,7 +258,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             ),
 
             Div => {
-                if left.get_type().kind.is_signed() || right.get_type().kind.is_signed() {
+                if has_signed(&left, &right) {
                     Value::new(
                         self.cucx
                             .builder
@@ -288,7 +288,59 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
                 )),
             ),
 
-            _ => unreachable!(),
+            Lt => {
+                if has_signed(&left, &right) {
+                    Value::new(
+                        self.cucx
+                            .builder
+                            .build_int_compare(IntPredicate::SLT, left_int, right_int, "")
+                            .into(),
+                        Rc::new(make_fundamental_type(
+                            FundamentalTypeKind::Bool,
+                            Mutability::Not,
+                        )),
+                    )
+                } else {
+                    Value::new(
+                        self.cucx
+                            .builder
+                            .build_int_compare(IntPredicate::ULT, left_int, right_int, "")
+                            .into(),
+                        Rc::new(make_fundamental_type(
+                            FundamentalTypeKind::Bool,
+                            Mutability::Not,
+                        )),
+                    )
+                }
+            }
+
+            Gt => {
+                if has_signed(&left, &right) {
+                    Value::new(
+                        self.cucx
+                            .builder
+                            .build_int_compare(IntPredicate::SGT, left_int, right_int, "")
+                            .into(),
+                        Rc::new(make_fundamental_type(
+                            FundamentalTypeKind::Bool,
+                            Mutability::Not,
+                        )),
+                    )
+                } else {
+                    Value::new(
+                        self.cucx
+                            .builder
+                            .build_int_compare(IntPredicate::UGT, left_int, right_int, "")
+                            .into(),
+                        Rc::new(make_fundamental_type(
+                            FundamentalTypeKind::Bool,
+                            Mutability::Not,
+                        )),
+                    )
+                }
+            }
+
+            Access => unreachable!(),
         })
     }
 

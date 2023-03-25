@@ -64,8 +64,12 @@ pub enum BinaryKind {
     Mul,
     Div,
     Eq,
+
     /// Field access or module item access
     Access,
+
+    Lt,
+    Gt,
 }
 
 #[derive(Debug, PartialEq, Eq)]
