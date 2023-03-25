@@ -57,6 +57,10 @@ pub enum TokenKind {
     Ne,
     /// "%"
     Percent,
+    /// "&&"
+    LogicalAnd,
+    /// "||"
+    LogicalOr,
 
     // Reserved words
     /// "fn"
@@ -124,6 +128,8 @@ impl std::fmt::Display for TokenKind {
             LogicalNot => write!(f, "'!'"),
             Ne => write!(f, "'!='"),
             Percent => write!(f, "'%'"),
+            LogicalAnd => write!(f, "'&&'"),
+            LogicalOr => write!(f, "'||'"),
 
             Fn => write!(f, "'fn'"),
             Return => write!(f, "'return'"),

@@ -12,7 +12,47 @@ use crate::{
 
 impl<T: Iterator<Item = Token>> Parser<T> {
     pub fn expr(&mut self) -> ParseResult<Expr> {
-        self.eq_or_ne()
+        self.logical_or()
+    }
+
+    fn logical_or(&mut self) -> ParseResult<Expr> {
+        let mut node = self.logical_and()?;
+
+        loop {
+            if self.consume_b(&TokenKind::LogicalOr) {
+                let right = self.logical_and()?;
+                node = Expr {
+                    span: Span::new(node.span.start, right.span.finish),
+                    kind: ExprKind::Binary(Binary::new(
+                        Box::new(node),
+                        BinaryKind::LogicalOr,
+                        Box::new(right),
+                    )),
+                };
+            } else {
+                return Ok(node);
+            }
+        }
+    }
+
+    fn logical_and(&mut self) -> ParseResult<Expr> {
+        let mut node = self.eq_or_ne()?;
+
+        loop {
+            if self.consume_b(&TokenKind::LogicalAnd) {
+                let right = self.eq_or_ne()?;
+                node = Expr {
+                    span: Span::new(node.span.start, right.span.finish),
+                    kind: ExprKind::Binary(Binary::new(
+                        Box::new(node),
+                        BinaryKind::LogicalAnd,
+                        Box::new(right),
+                    )),
+                };
+            } else {
+                return Ok(node);
+            }
+        }
     }
 
     fn eq_or_ne(&mut self) -> ParseResult<Expr> {

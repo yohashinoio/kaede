@@ -687,3 +687,51 @@ fn remainder() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn logical_or() -> anyhow::Result<()> {
+    let program = r"fn test() i32 {
+        if false || false {
+            return 123
+        }
+        if false || true {
+            if true || false {
+                if true || true {
+                    if 48 < 10 || 48 != 10 {
+                        return 58
+                    }
+                }
+            }
+        }
+        return 124
+    }";
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn logical_and() -> anyhow::Result<()> {
+    let program = r"fn test() i32 {
+        if false && true {
+            return 123
+        }
+        if true && false {
+            return 124
+        }
+        if false && false {
+            return 125
+        }
+        if true && true {
+            if 48 > 10 && 48 != 10 {
+                return 58
+            }
+        }
+        return 126
+    }";
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}

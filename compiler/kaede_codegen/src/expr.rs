@@ -8,7 +8,10 @@ use crate::{
     CompileUnitContext,
 };
 
-use inkwell::{values::BasicValue, IntPredicate};
+use inkwell::{
+    values::{BasicValue, IntValue},
+    IntPredicate,
+};
 use kaede_ast::expr::{
     Binary, BinaryKind, Borrow, Deref, Expr, ExprKind, FnCall, Ident, LogicalNot, StructLiteral,
 };
@@ -248,6 +251,54 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         }
     }
 
+    fn build_logical_or(&self, b1: IntValue<'ctx>, b2: IntValue<'ctx>) -> Value<'ctx> {
+        let bool_type = self.cucx.context().bool_type();
+
+        let result = self.cucx.builder.build_or(b1, b2, "");
+
+        let zero = bool_type.const_zero();
+        let cmp = self
+            .cucx
+            .builder
+            .build_int_compare(inkwell::IntPredicate::EQ, result, zero, "");
+        let result = self
+            .cucx
+            .builder
+            .build_select(cmp, zero, bool_type.const_all_ones(), "");
+
+        Value::new(
+            result,
+            Rc::new(make_fundamental_type(
+                FundamentalTypeKind::Bool,
+                Mutability::Not,
+            )),
+        )
+    }
+
+    fn build_logical_and(&self, b1: IntValue<'ctx>, b2: IntValue<'ctx>) -> Value<'ctx> {
+        let bool_type = self.cucx.context().bool_type();
+
+        let result = self.cucx.builder.build_and(b1, b2, "");
+
+        let zero = bool_type.const_zero();
+        let cmp = self
+            .cucx
+            .builder
+            .build_int_compare(inkwell::IntPredicate::EQ, result, zero, "");
+        let result = self
+            .cucx
+            .builder
+            .build_select(cmp, zero, bool_type.const_all_ones(), "");
+
+        Value::new(
+            result,
+            Rc::new(make_fundamental_type(
+                FundamentalTypeKind::Bool,
+                Mutability::Not,
+            )),
+        )
+    }
+
     fn binary_arithmetic_op(&self, node: &Binary) -> CodegenResult<Value<'ctx>> {
         use BinaryKind::*;
 
@@ -258,6 +309,10 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         let right_int = right.get_value().into_int_value();
 
         Ok(match node.kind {
+            LogicalOr => self.build_logical_or(left_int, right_int),
+
+            LogicalAnd => self.build_logical_and(left_int, right_int),
+
             Add => Value::new(
                 self.cucx
                     .builder

@@ -86,6 +86,9 @@ pub enum BinaryKind {
     Gt,
     /// Greater than or equal
     Ge,
+
+    LogicalOr,
+    LogicalAnd,
 }
 
 #[derive(Debug, PartialEq, Eq)]
