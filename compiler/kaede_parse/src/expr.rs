@@ -12,31 +12,32 @@ use crate::{
 
 impl<T: Iterator<Item = Token>> Parser<T> {
     pub fn expr(&mut self) -> ParseResult<Expr> {
-        self.equal()
+        self.eq_or_ne()
     }
 
-    /// Same precedence of equal
-    fn equal(&mut self) -> ParseResult<Expr> {
-        let mut node = self.lt_or_gt_e()?;
+    fn eq_or_ne(&mut self) -> ParseResult<Expr> {
+        let mut node = self.lt_gt_le_ge()?;
 
         loop {
-            if let Ok(span) = self.consume(&TokenKind::DoubleEq) {
+            if self.consume_b(&TokenKind::DoubleEq) {
+                let right = self.lt_gt_le_ge()?;
                 node = Expr {
+                    span: Span::new(node.span.start, right.span.finish),
                     kind: ExprKind::Binary(Binary::new(
                         Box::new(node),
                         BinaryKind::Eq,
-                        Box::new(self.lt_or_gt_e()?),
+                        Box::new(right),
                     )),
-                    span,
                 };
-            } else if let Ok(span) = self.consume(&TokenKind::Ne) {
+            } else if self.consume_b(&TokenKind::Ne) {
+                let right = self.lt_gt_le_ge()?;
                 node = Expr {
+                    span: Span::new(node.span.start, right.span.finish),
                     kind: ExprKind::Binary(Binary::new(
                         Box::new(node),
                         BinaryKind::Ne,
-                        Box::new(self.lt_or_gt_e()?),
+                        Box::new(right),
                     )),
-                    span,
                 };
             } else {
                 return Ok(node);
@@ -44,46 +45,49 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
     }
 
-    /// Same precedence of lt(e) and gt(e)
-    fn lt_or_gt_e(&mut self) -> ParseResult<Expr> {
-        let mut node = self.add()?;
+    fn lt_gt_le_ge(&mut self) -> ParseResult<Expr> {
+        let mut node = self.add_or_sub()?;
 
         loop {
-            if let Ok(span) = self.consume(&TokenKind::Lt) {
+            if self.consume_b(&TokenKind::Lt) {
+                let right = self.add_or_sub()?;
                 node = Expr {
+                    span: Span::new(node.span.start, right.span.finish),
                     kind: ExprKind::Binary(Binary::new(
                         Box::new(node),
                         BinaryKind::Lt,
-                        Box::new(self.add()?),
+                        Box::new(right),
                     )),
-                    span,
                 };
-            } else if let Ok(span) = self.consume(&TokenKind::Le) {
+            } else if self.consume_b(&TokenKind::Le) {
+                let right = self.add_or_sub()?;
                 node = Expr {
+                    span: Span::new(node.span.start, right.span.finish),
                     kind: ExprKind::Binary(Binary::new(
                         Box::new(node),
                         BinaryKind::Le,
-                        Box::new(self.add()?),
+                        Box::new(right),
                     )),
-                    span,
                 };
-            } else if let Ok(span) = self.consume(&TokenKind::Gt) {
+            } else if self.consume_b(&TokenKind::Gt) {
+                let right = self.add_or_sub()?;
                 node = Expr {
+                    span: Span::new(node.span.start, right.span.finish),
                     kind: ExprKind::Binary(Binary::new(
                         Box::new(node),
                         BinaryKind::Gt,
-                        Box::new(self.add()?),
+                        Box::new(right),
                     )),
-                    span,
                 };
-            } else if let Ok(span) = self.consume(&TokenKind::Ge) {
+            } else if self.consume_b(&TokenKind::Ge) {
+                let right = self.add_or_sub()?;
                 node = Expr {
+                    span: Span::new(node.span.start, right.span.finish),
                     kind: ExprKind::Binary(Binary::new(
                         Box::new(node),
                         BinaryKind::Ge,
-                        Box::new(self.add()?),
+                        Box::new(right),
                     )),
-                    span,
                 };
             } else {
                 return Ok(node);
@@ -91,28 +95,29 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
     }
 
-    /// Same precedence of addition
-    fn add(&mut self) -> ParseResult<Expr> {
-        let mut node = self.mul()?;
+    fn add_or_sub(&mut self) -> ParseResult<Expr> {
+        let mut node = self.mul_or_div()?;
 
         loop {
-            if let Ok(span) = self.consume(&TokenKind::Plus) {
+            if self.consume_b(&TokenKind::Plus) {
+                let right = self.mul_or_div()?;
                 node = Expr {
+                    span: Span::new(node.span.start, right.span.finish),
                     kind: ExprKind::Binary(Binary::new(
                         Box::new(node),
                         BinaryKind::Add,
-                        Box::new(self.mul()?),
+                        Box::new(right),
                     )),
-                    span,
                 };
-            } else if let Ok(span) = self.consume(&TokenKind::Minus) {
+            } else if self.consume_b(&TokenKind::Minus) {
+                let right = self.mul_or_div()?;
                 node = Expr {
+                    span: Span::new(node.span.start, right.span.finish),
                     kind: ExprKind::Binary(Binary::new(
                         Box::new(node),
                         BinaryKind::Sub,
-                        Box::new(self.mul()?),
+                        Box::new(right),
                     )),
-                    span,
                 };
             } else {
                 return Ok(node);
@@ -120,28 +125,29 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
     }
 
-    /// Same precedence of multiplication
-    fn mul(&mut self) -> ParseResult<Expr> {
+    fn mul_or_div(&mut self) -> ParseResult<Expr> {
         let mut node = self.unary()?;
 
         loop {
-            if let Ok(span) = self.consume(&TokenKind::Asterisk) {
+            if self.consume_b(&TokenKind::Asterisk) {
+                let right = self.unary()?;
                 node = Expr {
+                    span: Span::new(node.span.start, right.span.finish),
                     kind: ExprKind::Binary(Binary::new(
                         Box::new(node),
                         BinaryKind::Mul,
-                        Box::new(self.unary()?),
+                        Box::new(right),
                     )),
-                    span,
                 };
-            } else if let Ok(span) = self.consume(&TokenKind::Slash) {
+            } else if self.consume_b(&TokenKind::Slash) {
+                let right = self.unary()?;
                 node = Expr {
+                    span: Span::new(node.span.start, right.span.finish),
                     kind: ExprKind::Binary(Binary::new(
                         Box::new(node),
                         BinaryKind::Div,
-                        Box::new(self.unary()?),
+                        Box::new(right),
                     )),
-                    span,
                 };
             } else {
                 return Ok(node);
@@ -149,7 +155,6 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
     }
 
-    /// Unary operators
     fn unary(&mut self) -> ParseResult<Expr> {
         if self.consume_b(&TokenKind::Plus) {
             return self.access();
@@ -237,16 +242,15 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         let mut node = self.primary()?;
 
         loop {
-            if let Ok(span) = self.consume(&TokenKind::Dot) {
+            if self.consume_b(&TokenKind::Dot) {
                 let right = self.primary()?;
-
                 node = Expr {
+                    span: Span::new(node.span.start, right.span.finish),
                     kind: ExprKind::Binary(Binary::new(
                         Box::new(node),
                         BinaryKind::Access,
                         Box::new(right),
                     )),
-                    span,
                 };
             } else {
                 return Ok(node);
