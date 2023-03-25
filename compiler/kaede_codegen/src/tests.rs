@@ -567,13 +567,15 @@ fn mutable_references_to_immutable_variables() {
 #[test]
 fn less_than() -> anyhow::Result<()> {
     let program = r"fn test() i32 {
-        if 48 < 10 {
+        if 48 < 48 {
             return 123
+        } else if 48 < 10 {
+            return 124
         } else if 10 < 48 {
             return 58
         }
 
-        return 123
+        return 125
     }";
 
     assert_eq!(run_test(program)?, 58);
@@ -584,13 +586,49 @@ fn less_than() -> anyhow::Result<()> {
 #[test]
 fn greater_than() -> anyhow::Result<()> {
     let program = r"fn test() i32 {
-        if 10 > 48 {
+        if 10 > 10 {
             return 123
+        } else if 10 > 48 {
+            return 124
         } else if 48 > 10 {
             return 58
         }
 
-        return 123
+        return 125
+    }";
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn less_than_or_equal() -> anyhow::Result<()> {
+    let program = r"fn test() i32 {
+        if 48 <= 48 {
+            return 58
+        } else {
+            return 123
+        }
+
+        return 86
+    }";
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn greater_than_or_equal() -> anyhow::Result<()> {
+    let program = r"fn test() i32 {
+        if 10 >= 10 {
+            return 58
+        } else {
+            return 123
+        }
+
+        return 86
     }";
 
     assert_eq!(run_test(program)?, 58);

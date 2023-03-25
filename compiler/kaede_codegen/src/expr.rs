@@ -314,6 +314,32 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
                 }
             }
 
+            Le => {
+                if has_signed(&left, &right) {
+                    Value::new(
+                        self.cucx
+                            .builder
+                            .build_int_compare(IntPredicate::SLE, left_int, right_int, "")
+                            .into(),
+                        Rc::new(make_fundamental_type(
+                            FundamentalTypeKind::Bool,
+                            Mutability::Not,
+                        )),
+                    )
+                } else {
+                    Value::new(
+                        self.cucx
+                            .builder
+                            .build_int_compare(IntPredicate::ULE, left_int, right_int, "")
+                            .into(),
+                        Rc::new(make_fundamental_type(
+                            FundamentalTypeKind::Bool,
+                            Mutability::Not,
+                        )),
+                    )
+                }
+            }
+
             Gt => {
                 if has_signed(&left, &right) {
                     Value::new(
@@ -331,6 +357,32 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
                         self.cucx
                             .builder
                             .build_int_compare(IntPredicate::UGT, left_int, right_int, "")
+                            .into(),
+                        Rc::new(make_fundamental_type(
+                            FundamentalTypeKind::Bool,
+                            Mutability::Not,
+                        )),
+                    )
+                }
+            }
+
+            Ge => {
+                if has_signed(&left, &right) {
+                    Value::new(
+                        self.cucx
+                            .builder
+                            .build_int_compare(IntPredicate::SGE, left_int, right_int, "")
+                            .into(),
+                        Rc::new(make_fundamental_type(
+                            FundamentalTypeKind::Bool,
+                            Mutability::Not,
+                        )),
+                    )
+                } else {
+                    Value::new(
+                        self.cucx
+                            .builder
+                            .build_int_compare(IntPredicate::UGE, left_int, right_int, "")
                             .into(),
                         Rc::new(make_fundamental_type(
                             FundamentalTypeKind::Bool,

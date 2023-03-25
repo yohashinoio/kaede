@@ -17,7 +17,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
     /// Same precedence of equal
     fn equal(&mut self) -> ParseResult<Expr> {
-        let mut node = self.lt_or_gt()?;
+        let mut node = self.lt_or_gt_e()?;
 
         loop {
             if let Ok(span) = self.consume(&TokenKind::DoubleEq) {
@@ -25,7 +25,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                     kind: ExprKind::Binary(Binary::new(
                         Box::new(node),
                         BinaryKind::Eq,
-                        Box::new(self.lt_or_gt()?),
+                        Box::new(self.lt_or_gt_e()?),
                     )),
                     span,
                 };
@@ -35,8 +35,8 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
     }
 
-    /// Same precedence of less than and greater than
-    fn lt_or_gt(&mut self) -> ParseResult<Expr> {
+    /// Same precedence of lt(e) and gt(e)
+    fn lt_or_gt_e(&mut self) -> ParseResult<Expr> {
         let mut node = self.add()?;
 
         loop {
@@ -49,11 +49,29 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                     )),
                     span,
                 };
+            } else if let Ok(span) = self.consume(&TokenKind::Le) {
+                node = Expr {
+                    kind: ExprKind::Binary(Binary::new(
+                        Box::new(node),
+                        BinaryKind::Le,
+                        Box::new(self.add()?),
+                    )),
+                    span,
+                };
             } else if let Ok(span) = self.consume(&TokenKind::Gt) {
                 node = Expr {
                     kind: ExprKind::Binary(Binary::new(
                         Box::new(node),
                         BinaryKind::Gt,
+                        Box::new(self.add()?),
+                    )),
+                    span,
+                };
+            } else if let Ok(span) = self.consume(&TokenKind::Ge) {
+                node = Expr {
+                    kind: ExprKind::Binary(Binary::new(
+                        Box::new(node),
+                        BinaryKind::Ge,
                         Box::new(self.add()?),
                     )),
                     span,

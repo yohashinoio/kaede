@@ -68,8 +68,14 @@ pub enum BinaryKind {
     /// Field access or module item access
     Access,
 
+    // Less than
     Lt,
+    // Less than or equal
+    Le,
+    // Greater than
     Gt,
+    // Greater than or equal
+    Ge,
 }
 
 #[derive(Debug, PartialEq, Eq)]

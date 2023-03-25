@@ -186,8 +186,26 @@ impl Cursor<'_> {
             '*' => self.create_token(TokenKind::Asterisk),
             '/' => self.create_token(TokenKind::Slash),
             '&' => self.create_token(TokenKind::And),
-            '<' => self.create_token(TokenKind::Lt),
-            '>' => self.create_token(TokenKind::Gt),
+            '<' => {
+                if self.first() == '=' {
+                    // <=
+                    self.bump().unwrap();
+                    self.create_token(TokenKind::Le)
+                } else {
+                    // <
+                    self.create_token(TokenKind::Lt)
+                }
+            }
+            '>' => {
+                if self.first() == '=' {
+                    // >=
+                    self.bump().unwrap();
+                    self.create_token(TokenKind::Ge)
+                } else {
+                    // >
+                    self.create_token(TokenKind::Gt)
+                }
+            }
             '=' => {
                 if self.first() == '=' {
                     // ==
