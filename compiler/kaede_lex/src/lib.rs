@@ -195,6 +195,7 @@ impl Cursor<'_> {
             '-' => self.create_token(TokenKind::Minus),
             '*' => self.create_token(TokenKind::Asterisk),
             '/' => self.create_token(TokenKind::Slash),
+            '%' => self.create_token(TokenKind::Percent),
             '&' => self.create_token(TokenKind::And),
             '<' => {
                 if self.first() == '=' {

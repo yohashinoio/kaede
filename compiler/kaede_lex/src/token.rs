@@ -55,6 +55,8 @@ pub enum TokenKind {
     LogicalNot,
     /// "!="
     Ne,
+    /// "%"
+    Percent,
 
     // Reserved words
     /// "fn"
@@ -121,6 +123,7 @@ impl std::fmt::Display for TokenKind {
             Ge => write!(f, "'>='"),
             LogicalNot => write!(f, "'!'"),
             Ne => write!(f, "'!='"),
+            Percent => write!(f, "'%'"),
 
             Fn => write!(f, "'fn'"),
             Return => write!(f, "'return'"),

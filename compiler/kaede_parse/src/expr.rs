@@ -96,11 +96,11 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     }
 
     fn add_or_sub(&mut self) -> ParseResult<Expr> {
-        let mut node = self.mul_or_div()?;
+        let mut node = self.mul_or_div_or_rem()?;
 
         loop {
             if self.consume_b(&TokenKind::Plus) {
-                let right = self.mul_or_div()?;
+                let right = self.mul_or_div_or_rem()?;
                 node = Expr {
                     span: Span::new(node.span.start, right.span.finish),
                     kind: ExprKind::Binary(Binary::new(
@@ -110,7 +110,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                     )),
                 };
             } else if self.consume_b(&TokenKind::Minus) {
-                let right = self.mul_or_div()?;
+                let right = self.mul_or_div_or_rem()?;
                 node = Expr {
                     span: Span::new(node.span.start, right.span.finish),
                     kind: ExprKind::Binary(Binary::new(
@@ -125,7 +125,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
     }
 
-    fn mul_or_div(&mut self) -> ParseResult<Expr> {
+    fn mul_or_div_or_rem(&mut self) -> ParseResult<Expr> {
         let mut node = self.unary()?;
 
         loop {
@@ -146,6 +146,16 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                     kind: ExprKind::Binary(Binary::new(
                         Box::new(node),
                         BinaryKind::Div,
+                        Box::new(right),
+                    )),
+                };
+            } else if self.consume_b(&TokenKind::Percent) {
+                let right = self.unary()?;
+                node = Expr {
+                    span: Span::new(node.span.start, right.span.finish),
+                    kind: ExprKind::Binary(Binary::new(
+                        Box::new(node),
+                        BinaryKind::Rem,
                         Box::new(right),
                     )),
                 };

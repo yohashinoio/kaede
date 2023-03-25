@@ -59,11 +59,18 @@ impl IntKind {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Copy)]
 pub enum BinaryKind {
+    // Addition
     Add,
+    // Subtraction
     Sub,
+    // Multiplication
     Mul,
+    // Division
     Div,
+    /// Integer remainder
+    Rem,
 
+    /// Equal to
     Eq,
     /// Not equal to
     Ne,

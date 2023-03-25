@@ -282,6 +282,26 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
                 left.get_type(),
             ),
 
+            Rem => {
+                if has_signed(&left, &right) {
+                    Value::new(
+                        self.cucx
+                            .builder
+                            .build_int_signed_rem(left_int, right_int, "")
+                            .into(),
+                        left.get_type(),
+                    )
+                } else {
+                    Value::new(
+                        self.cucx
+                            .builder
+                            .build_int_unsigned_rem(left_int, right_int, "")
+                            .into(),
+                        left.get_type(),
+                    )
+                }
+            }
+
             Div => {
                 if has_signed(&left, &right) {
                     Value::new(

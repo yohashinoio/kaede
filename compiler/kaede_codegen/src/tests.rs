@@ -676,3 +676,14 @@ fn logical_not() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn remainder() -> anyhow::Result<()> {
+    let program = r"fn test() i32 {
+        return 123 % 7
+    }";
+
+    assert_eq!(run_test(program)?, 4);
+
+    Ok(())
+}
