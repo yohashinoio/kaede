@@ -68,7 +68,7 @@ fn main() -> anyhow::Result<()> {
 
     if let Some(program) = args.program {
         compile(vec![CompileUnitInfo {
-            file_path: PathBuf::from("commandline"),
+            file_path: PathBuf::from("<commandline>"),
             program,
         }])?;
 

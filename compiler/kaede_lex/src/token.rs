@@ -21,6 +21,10 @@ pub enum TokenKind {
     OpenBrace,
     /// "}"
     CloseBrace,
+    /// "["
+    OpenBracket,
+    /// "]"
+    CloseBracket,
     /// ","
     Comma,
     /// ";"
@@ -110,6 +114,8 @@ impl std::fmt::Display for TokenKind {
             CloseParen => write!(f, "')'"),
             OpenBrace => write!(f, "'{{'"),
             CloseBrace => write!(f, "'}}'"),
+            OpenBracket => write!(f, "'['"),
+            CloseBracket => write!(f, "']'"),
             Comma => write!(f, "','"),
             Semi => write!(f, "';'"),
             Dot => write!(f, "'.'"),

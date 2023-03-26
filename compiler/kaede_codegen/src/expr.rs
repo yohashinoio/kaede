@@ -13,7 +13,8 @@ use inkwell::{
     IntPredicate,
 };
 use kaede_ast::expr::{
-    Binary, BinaryKind, Borrow, Deref, Expr, ExprKind, FnCall, Ident, LogicalNot, StructLiteral,
+    ArrayLiteral, Binary, BinaryKind, Borrow, Deref, Expr, ExprKind, FnCall, Ident, LogicalNot,
+    StructLiteral,
 };
 use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability, Ty, TyKind, UDType};
 
@@ -45,6 +46,10 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
 
             ExprKind::StringLiteral(s) => self.string_literal(s),
 
+            ExprKind::StructLiteral(node) => self.struct_literal(node)?,
+
+            ExprKind::ArrayLiteral(node) => self.array_literal(node)?,
+
             ExprKind::Ident(name) => self.expr_ident(name)?,
 
             ExprKind::Binary(node) => self.binary_op(node)?,
@@ -52,8 +57,6 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             ExprKind::LogicalNot(node) => self.logical_not(node)?,
 
             ExprKind::FnCall(node) => self.call_fn(node)?,
-
-            ExprKind::StructLiteral(node) => self.struct_literal(node)?,
 
             // Boolean literals
             ExprKind::True => self.boolean_literal(true),
@@ -63,6 +66,47 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
 
             ExprKind::Deref(node) => self.deref(node)?,
         })
+    }
+
+    fn array_literal(&self, node: &ArrayLiteral) -> CodegenResult<Value<'ctx>> {
+        assert!(!node.elems.is_empty());
+
+        let mut elems = Vec::new();
+
+        // Compile elements
+        for elem in node.elems.iter() {
+            elems.push(build_expression(self.cucx, elem)?);
+        }
+
+        let array_ty = Rc::new(Ty {
+            kind: TyKind::Array((elems[0].get_type(), elems.len() as u32)).into(),
+            mutability: Mutability::Not,
+        });
+
+        let alloca = self.cucx.create_entry_block_alloca("arrtmp", &array_ty);
+
+        let array_ty_llvm = as_llvm_type(self.cucx, &array_ty);
+
+        for (idx, elem) in elems.iter().enumerate() {
+            let gep = unsafe {
+                self.cucx.builder.build_in_bounds_gep(
+                    array_ty_llvm,
+                    alloca,
+                    &[
+                        self.cucx.context().i32_type().const_zero(),
+                        self.cucx.context().i32_type().const_int(idx as u64, false),
+                    ],
+                    "",
+                )
+            };
+
+            self.cucx.builder.build_store(gep, elem.get_value());
+        }
+
+        Ok(Value::new(
+            self.cucx.builder.build_load(array_ty_llvm, alloca, ""),
+            array_ty,
+        ))
     }
 
     fn logical_not(&self, node: &LogicalNot) -> CodegenResult<Value<'ctx>> {

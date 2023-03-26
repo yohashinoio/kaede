@@ -124,6 +124,12 @@ pub struct Deref {
 }
 
 #[derive(Debug, PartialEq, Eq)]
+pub struct ArrayLiteral {
+    pub elems: Vec<Expr>,
+    pub span: Span,
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub struct Expr {
     pub kind: ExprKind,
     pub span: Span,
@@ -142,4 +148,5 @@ pub enum ExprKind {
     Borrow(Borrow),
     Deref(Deref),
     LogicalNot(LogicalNot),
+    ArrayLiteral(ArrayLiteral),
 }

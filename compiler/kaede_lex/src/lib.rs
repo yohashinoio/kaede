@@ -73,7 +73,15 @@ fn can_insert_semicolon(token: &TokenKind) -> bool {
 
     matches!(
         token,
-        Int(_) | Ident(_) | StringLiteral(_) | CloseParen | CloseBrace | Return | True | False
+        Int(_)
+            | Ident(_)
+            | StringLiteral(_)
+            | CloseParen
+            | CloseBrace
+            | CloseBracket
+            | Return
+            | True
+            | False
     )
 }
 
@@ -176,6 +184,8 @@ impl Cursor<'_> {
             ')' => self.create_token(TokenKind::CloseParen),
             '{' => self.create_token(TokenKind::OpenBrace),
             '}' => self.create_token(TokenKind::CloseBrace),
+            '[' => self.create_token(TokenKind::OpenBracket),
+            ']' => self.create_token(TokenKind::CloseBracket),
             ',' => self.create_token(TokenKind::Comma),
             ';' => self.create_token(TokenKind::Semi),
             '.' => self.create_token(TokenKind::Dot),

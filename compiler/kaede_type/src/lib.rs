@@ -68,6 +68,8 @@ pub enum TyKind {
 
     Reference((Rc<Ty>, Mutability)),
 
+    Array((Rc<Ty> /* Element type */, u32 /* Size */)),
+
     /// If a type is not yet known
     Unknown,
 }
@@ -83,6 +85,8 @@ impl std::fmt::Display for TyKind {
 
             Self::Reference(refee) => write!(f, "&{}", refee.0.kind),
 
+            Self::Array((elem_ty, size)) => write!(f, "[{}; {}]", elem_ty.kind, size),
+
             Self::Unknown => write!(f, "unknown"),
         }
     }
@@ -95,8 +99,9 @@ impl TyKind {
             Self::UDType(_) => todo!(),
             Self::Reference(ty) => ty.0.kind.is_signed(),
 
-            Self::Str => panic!("Cannot get sign information of Str type!"),
-            Self::Unknown => panic!("Cannot get sign information of Unknown type!"),
+            Self::Array(_) => panic!("Cannot get sign information of 'array' type!"),
+            Self::Str => panic!("Cannot get sign information of 'str' type!"),
+            Self::Unknown => panic!("Cannot get sign information of 'unknown' type!"),
         }
     }
 

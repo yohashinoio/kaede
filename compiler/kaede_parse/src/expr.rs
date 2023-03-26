@@ -1,6 +1,6 @@
 use kaede_ast::expr::{
-    Args, Binary, BinaryKind, Borrow, Deref, Expr, ExprKind, FnCall, Ident, Int, IntKind,
-    LogicalNot, StructLiteral,
+    Args, ArrayLiteral, Binary, BinaryKind, Borrow, Deref, Expr, ExprKind, FnCall, Ident, Int,
+    IntKind, LogicalNot, StructLiteral,
 };
 use kaede_lex::token::{Token, TokenKind};
 use kaede_span::Span;
@@ -341,12 +341,17 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             });
         }
 
-        // String literals
+        if self.check(&TokenKind::OpenBracket) {
+            // Array literal
+            return self.array_literal();
+        }
+
+        // String literal
         if let Some(lit) = self.string_literal() {
             return Ok(lit);
         }
 
-        // Boolean literals
+        // Boolean literal
         if let Some(lit) = self.boolean_literal() {
             return Ok(lit);
         }
@@ -357,6 +362,27 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             span: int.span,
             kind: ExprKind::Int(int),
         })
+    }
+
+    fn array_literal(&mut self) -> ParseResult<Expr> {
+        let start = self.consume(&TokenKind::OpenBracket).unwrap().start;
+
+        // Elements
+        let mut elems = Vec::new();
+
+        loop {
+            elems.push(self.expr()?);
+
+            if let Ok(span) = self.consume(&TokenKind::CloseBracket) {
+                let span = Span::new(start, span.finish);
+                return Ok(Expr {
+                    kind: ExprKind::ArrayLiteral(ArrayLiteral { elems, span }),
+                    span,
+                });
+            }
+
+            self.consume(&TokenKind::Comma)?;
+        }
     }
 
     fn boolean_literal(&mut self) -> Option<Expr> {

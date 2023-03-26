@@ -47,6 +47,8 @@ pub fn as_llvm_type<'ctx>(cucx: &CompileUnitContext<'ctx, '_, '_>, ty: &Ty) -> B
             .ptr_type(AddressSpace::default())
             .into(),
 
+        TyKind::Array((elem_ty, size)) => as_llvm_type(cucx, elem_ty).array_type(*size).into(),
+
         TyKind::Unknown => panic!("Cannot get LLVM type of Unknown type!"),
     }
 }
