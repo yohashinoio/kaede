@@ -2,6 +2,7 @@ use std::rc::Rc;
 
 use crate::{
     error::{CodegenError, CodegenResult},
+    get_loaded_pointer,
     mangle::mangle_name,
     to_llvm_type,
     value::{has_signed, Value},
@@ -13,8 +14,8 @@ use inkwell::{
     IntPredicate,
 };
 use kaede_ast::expr::{
-    ArrayLiteral, Binary, BinaryKind, Borrow, Deref, Expr, ExprKind, FnCall, Ident, LogicalNot,
-    StructLiteral,
+    ArrayLiteral, Binary, BinaryKind, Borrow, Deref, Expr, ExprKind, FnCall, Ident, Index,
+    LogicalNot, StructLiteral,
 };
 use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability, Ty, TyKind, UDType};
 
@@ -65,7 +66,50 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             ExprKind::Borrow(node) => self.borrow(node)?,
 
             ExprKind::Deref(node) => self.deref(node)?,
+
+            ExprKind::Index(node) => self.index_expr(node)?,
         })
+    }
+
+    fn index_expr(&self, node: &Index) -> CodegenResult<Value<'ctx>> {
+        let array = build_expression(self.cucx, &node.operand)?;
+        let array_ty = array.get_type();
+
+        let elem_ty = match array_ty.kind.as_ref() {
+            TyKind::Array((elem_ty, _)) => elem_ty,
+            _ => todo!(), /* Error */
+        };
+
+        let array_ty_llvm = to_llvm_type(self.cucx, &array_ty).into_array_type();
+
+        let load_array_inst = array.get_value().as_instruction_value().unwrap();
+
+        let ptr_to_array = get_loaded_pointer(&load_array_inst).unwrap();
+
+        // Remove load instruction as it is not needed
+        load_array_inst.erase_from_basic_block();
+
+        let index = build_expression(self.cucx, &node.index)?;
+
+        // Calculate the address of the index-th element
+        let gep = unsafe {
+            self.cucx.builder.build_in_bounds_gep(
+                array_ty_llvm,
+                ptr_to_array,
+                &[
+                    self.cucx.context().i32_type().const_zero(),
+                    index.get_value().into_int_value(),
+                ],
+                "",
+            )
+        };
+
+        Ok(Value::new(
+            self.cucx
+                .builder
+                .build_load(array_ty_llvm.get_element_type(), gep, ""),
+            elem_ty.clone(),
+        ))
     }
 
     fn array_literal(&self, node: &ArrayLiteral) -> CodegenResult<Value<'ctx>> {

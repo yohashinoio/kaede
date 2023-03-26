@@ -129,6 +129,14 @@ pub struct ArrayLiteral {
     pub span: Span,
 }
 
+/// Sometimes called `Array subscripting`
+#[derive(Debug, PartialEq, Eq)]
+pub struct Index {
+    pub operand: Box<Expr>,
+    pub index: Box<Expr>,
+    pub span: Span,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct Expr {
     pub kind: ExprKind,
@@ -149,4 +157,5 @@ pub enum ExprKind {
     Deref(Deref),
     LogicalNot(LogicalNot),
     ArrayLiteral(ArrayLiteral),
+    Index(Index),
 }

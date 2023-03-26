@@ -93,7 +93,6 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
     }
 
     /// Create a value for the side to be assigned
-    /// Return `Err` if the expression is inappropriate as the one to be assigned
     fn build_assignable(&mut self, node: Expr) -> CodegenResult<Value<'ctx>> {
         match node.kind {
             ExprKind::Ident(ident) => {

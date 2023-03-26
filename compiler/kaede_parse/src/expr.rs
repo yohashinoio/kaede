@@ -1,6 +1,6 @@
 use kaede_ast::expr::{
-    Args, ArrayLiteral, Binary, BinaryKind, Borrow, Deref, Expr, ExprKind, FnCall, Ident, Int,
-    IntKind, LogicalNot, StructLiteral,
+    Args, ArrayLiteral, Binary, BinaryKind, Borrow, Deref, Expr, ExprKind, FnCall, Ident, Index,
+    Int, IntKind, LogicalNot, StructLiteral,
 };
 use kaede_lex::token::{Token, TokenKind};
 use kaede_span::Span;
@@ -289,11 +289,11 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
     /// Field access or module item access
     fn access(&mut self) -> ParseResult<Expr> {
-        let mut node = self.primary()?;
+        let mut node = self.index()?;
 
         loop {
             if self.consume_b(&TokenKind::Dot) {
-                let right = self.primary()?;
+                let right = self.index()?;
                 node = Expr {
                     span: Span::new(node.span.start, right.span.finish),
                     kind: ExprKind::Binary(Binary::new(
@@ -301,6 +301,29 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                         BinaryKind::Access,
                         Box::new(right),
                     )),
+                };
+            } else {
+                return Ok(node);
+            }
+        }
+    }
+
+    /// Index expression (sometimes called array subscripting)
+    fn index(&mut self) -> ParseResult<Expr> {
+        let mut node = self.primary()?;
+
+        loop {
+            if self.consume_b(&TokenKind::OpenBracket) {
+                let index = self.expr()?;
+                let finish = self.consume(&TokenKind::CloseBracket)?.finish;
+                let span = Span::new(node.span.start, finish);
+                node = Expr {
+                    span,
+                    kind: ExprKind::Index(Index {
+                        operand: node.into(),
+                        index: index.into(),
+                        span,
+                    }),
                 };
             } else {
                 return Ok(node);

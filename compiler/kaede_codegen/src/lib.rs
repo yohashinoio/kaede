@@ -7,7 +7,7 @@ use inkwell::{
     module::Module,
     targets::{CodeModel, InitializationConfig, RelocMode, Target, TargetData, TargetMachine},
     types::{AnyType, BasicType, BasicTypeEnum},
-    values::{FunctionValue, PointerValue},
+    values::{BasicValueEnum, FunctionValue, InstructionValue, PointerValue},
     AddressSpace, OptimizationLevel,
 };
 use kaede_ast::{top::TopLevel, CompileUnit};
@@ -51,6 +51,20 @@ pub fn to_llvm_type<'ctx>(cucx: &CompileUnitContext<'ctx, '_, '_>, ty: &Ty) -> B
 
         TyKind::Unknown => panic!("Cannot get LLVM type of 'unknown' type!"),
     }
+}
+
+/// Used when you want to get a pointer from the evaluated value after evaluating an expression
+fn get_loaded_pointer<'ctx>(load_instr: &InstructionValue<'ctx>) -> Option<PointerValue<'ctx>> {
+    if let Some(loaded_value) = load_instr.get_operand(0) {
+        // Check if the loaded value is a pointer
+        if let BasicValueEnum::PointerValue(pointer_value) = loaded_value.left().unwrap() {
+            // Return the pointer value as an InstructionValue
+            return Some(pointer_value);
+        }
+    }
+
+    // If the loaded value is not a pointer, return None
+    None
 }
 
 pub fn codegen<'ctx>(
