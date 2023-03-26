@@ -10,8 +10,11 @@ pub enum ParseError {
         span: Span,
     },
 
-    #[error("{}:{} Out of range for i32", .0.start.line, .0.start.column)]
+    #[error("{}:{} Out of range for 'i32'", .0.start.line, .0.start.column)]
     OutOfRangeForI32(Span),
+
+    #[error("{}:{} Out of range for 'u32'", .0.start.line, .0.start.column)]
+    OutOfRangeForU32(Span),
 }
 
 pub type ParseResult<T> = Result<T, ParseError>;

@@ -70,8 +70,7 @@ pub enum TyKind {
 
     Array((Rc<Ty> /* Element type */, u32 /* Size */)),
 
-    /// If a type is not yet known
-    Unknown,
+    Inferred,
 }
 
 impl std::fmt::Display for TyKind {
@@ -87,7 +86,7 @@ impl std::fmt::Display for TyKind {
 
             Self::Array((elem_ty, size)) => write!(f, "[{}; {}]", elem_ty.kind, size),
 
-            Self::Unknown => write!(f, "unknown"),
+            Self::Inferred => write!(f, "_"),
         }
     }
 }
@@ -99,14 +98,14 @@ impl TyKind {
             Self::UDType(_) => todo!(),
             Self::Reference(ty) => ty.0.kind.is_signed(),
 
-            Self::Array(_) => panic!("Cannot get sign information of 'array' type!"),
-            Self::Str => panic!("Cannot get sign information of 'str' type!"),
-            Self::Unknown => panic!("Cannot get sign information of 'unknown' type!"),
+            Self::Array(_) => panic!("Cannot get sign information of array type!"),
+            Self::Str => panic!("Cannot get sign information of str type!"),
+            Self::Inferred => panic!("Cannot get sign information of inferred type!"),
         }
     }
 
-    pub fn is_unknown(&self) -> bool {
-        matches!(self, Self::Unknown)
+    pub fn is_inferred(&self) -> bool {
+        matches!(self, Self::Inferred)
     }
 }
 

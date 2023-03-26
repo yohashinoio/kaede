@@ -737,14 +737,38 @@ fn logical_and() -> anyhow::Result<()> {
 }
 
 #[test]
-fn array() -> anyhow::Result<()> {
+fn array_literal() -> anyhow::Result<()> {
     let program = r"fn test() i32 {
-        let a1 = [48, 10]
-        let a2 [i32; 1] = [2]
-        return (a1[0] + a1[1] + [58][0]) / a2[0]
+        let a = [48, 10]
+        return 58
     }";
 
     assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn index_operation() -> anyhow::Result<()> {
+    let program = r"fn test() i32 {
+        let a = [48, 10]
+        return a[0] + [4][0] + a[1]
+    }";
+
+    assert_eq!(run_test(program)?, 62);
+
+    Ok(())
+}
+
+#[test]
+fn array_type() -> anyhow::Result<()> {
+    let program = r"fn test() i32 {
+        let a [i32; 2] = [48, 10]
+        let n [i32; 1] = [4]
+        return a[0] + a[1] + n[0]
+    }";
+
+    assert_eq!(run_test(program)?, 62);
 
     Ok(())
 }

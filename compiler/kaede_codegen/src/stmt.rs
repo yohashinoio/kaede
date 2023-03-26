@@ -217,7 +217,7 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
         if let Some(init) = node.init {
             let init = build_expression(self.cucx, &init)?;
 
-            let alloca = if node.ty.kind.is_unknown() {
+            let alloca = if node.ty.kind.is_inferred() {
                 // No type information was available, so infer from an initializer
                 let mut ty = (*init.get_type()).clone();
                 ty.mutability = node.ty.mutability;

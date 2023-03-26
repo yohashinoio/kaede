@@ -207,11 +207,6 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         let name = self.ident()?;
 
-        let ty = match self.ty() {
-            Ok(ty) => ty,
-            Err(_) => Ty::new(TyKind::Unknown.into(), mutability),
-        };
-
         if self.consume_b(&TokenKind::Eq) {
             let init = self.expr()?;
 
@@ -220,20 +215,23 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             return Ok(Let {
                 name,
                 init: Some(init),
-                ty,
+                ty: Ty::new(TyKind::Inferred.into(), mutability),
                 span: Span::new(start, finish),
             });
         }
 
-        if ty.kind.is_unknown() {
-            // Error if both type and initializer are missing
-            self.consume(&TokenKind::Eq)?;
-        }
+        let ty = self.ty()?;
+
+        let init = if self.consume_b(&TokenKind::Eq) {
+            Some(self.expr()?)
+        } else {
+            None
+        };
 
         Ok(Let {
             span: Span::new(start, name.span.finish),
             name,
-            init: None,
+            init,
             ty,
         })
     }

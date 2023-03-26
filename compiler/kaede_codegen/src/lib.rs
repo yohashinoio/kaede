@@ -49,7 +49,7 @@ pub fn to_llvm_type<'ctx>(cucx: &CompileUnitContext<'ctx, '_, '_>, ty: &Ty) -> B
 
         TyKind::Array((elem_ty, size)) => to_llvm_type(cucx, elem_ty).array_type(*size).into(),
 
-        TyKind::Unknown => panic!("Cannot get LLVM type of 'unknown' type!"),
+        TyKind::Inferred => panic!("Cannot get LLVM type of inferred type!"),
     }
 }
 
