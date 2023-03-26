@@ -530,7 +530,7 @@ fn assign_to_immutable_reference() {
 
     assert!(matches!(
         run_test(program),
-        Err(CodegenError::CannotAssignToImutableRef { .. })
+        Err(CodegenError::CannotAssignTwiceToImutable { .. })
     ));
 }
 

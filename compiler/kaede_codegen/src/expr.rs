@@ -179,8 +179,8 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
     fn deref(&self, node: &Deref) -> CodegenResult<Value<'ctx>> {
         let operand = build_expression(self.cucx, &node.operand)?;
 
-        let pointee_ty = match operand.get_type().kind.as_ref() {
-            TyKind::Reference(pointee_ty) => pointee_ty.0.clone(),
+        let (pointee_ty, mutability) = match operand.get_type().kind.as_ref() {
+            TyKind::Reference((pointee_ty, m)) => (pointee_ty.clone(), *m),
 
             kind => {
                 return Err(CodegenError::CannotDeref {
@@ -200,7 +200,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             loaded_operand,
             Rc::new(Ty {
                 kind: pointee_ty.kind.clone(),
-                mutability: Mutability::Not,
+                mutability,
             }),
         ))
     }

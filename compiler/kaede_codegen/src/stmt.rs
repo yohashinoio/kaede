@@ -1,17 +1,16 @@
 use std::rc::Rc;
 
-use inkwell::{basic_block::BasicBlock, IntPredicate};
+use inkwell::{basic_block::BasicBlock, values::BasicValue, IntPredicate};
 use kaede_ast::{
-    expr::{Expr, ExprKind},
+    expr::ExprKind,
     stmt::{Assign, AssignKind, Block, Break, Else, If, Let, Loop, Return, Stmt, StmtKind},
 };
-use kaede_type::TyKind;
 
 use crate::{
     error::{CodegenError, CodegenResult},
     expr::build_expression,
+    get_loaded_pointer,
     tcx::SymbolTable,
-    value::Value,
     CompileUnitContext,
 };
 
@@ -92,52 +91,27 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
         Ok(())
     }
 
-    /// Create a value for the side to be assigned
-    fn build_assignable(&mut self, node: Expr) -> CodegenResult<Value<'ctx>> {
-        match node.kind {
-            ExprKind::Ident(ident) => {
-                let (ptr, ty) = self.cucx.tcx.lookup_var(&ident)?;
-
-                if ty.mutability.is_not() {
-                    return Err(CodegenError::CannotAssignTwiceToImutable {
-                        name: ident.name,
-                        span: ident.span,
-                    });
-                }
-
-                Ok(Value::new((*ptr).into(), ty.clone()))
-            }
-
-            ExprKind::Deref(deref) => {
-                let opr = build_expression(self.cucx, &deref.operand)?;
-
-                // Check if mutable
-                assert!(matches!(opr.get_type().kind.as_ref(), TyKind::Reference(_)));
-                if let TyKind::Reference((_, mutability)) = opr.get_type().kind.as_ref() {
-                    if mutability.is_not() {
-                        return Err(CodegenError::CannotAssignToImutableRef { span: deref.span });
-                    }
-                }
-
-                Ok(opr)
-            }
-
-            ExprKind::FnCall(_) => unimplemented!(),
-
-            _ => Err(CodegenError::InvalidLeftOfAssignment { span: node.span }),
-        }
-    }
-
     fn assign(&mut self, node: Assign) -> CodegenResult<()> {
-        let lhs = self.build_assignable(node.lhs)?;
+        if !matches!(node.lhs.kind, ExprKind::Ident(_) | ExprKind::Deref(_)) {
+            return Err(CodegenError::InvalidLeftOfAssignment { span: node.span });
+        }
 
-        let rhs = build_expression(self.cucx, &node.rhs)?;
+        let left = build_expression(self.cucx, &node.lhs)?;
+
+        if left.get_type().mutability.is_not() {
+            return Err(CodegenError::CannotAssignTwiceToImutable { span: node.span });
+        }
+
+        let ptr_to_left =
+            get_loaded_pointer(&left.get_value().as_instruction_value().unwrap()).unwrap();
+
+        let right = build_expression(self.cucx, &node.rhs)?;
 
         match node.kind {
             AssignKind::Simple => self
                 .cucx
                 .builder
-                .build_store(lhs.get_value().into_pointer_value(), rhs.get_value()),
+                .build_store(ptr_to_left, right.get_value()),
         };
 
         Ok(())

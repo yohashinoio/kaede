@@ -18,11 +18,8 @@ pub enum CodegenError {
     #[error("{}:{} Invalid left-hand side of assignment", span.start.line, span.start.column)]
     InvalidLeftOfAssignment { span: Span },
 
-    #[error("{}:{} Cannot assign twice to immutable variable `{}`", span.start.line, span.start.column, .name)]
-    CannotAssignTwiceToImutable { name: String, span: Span },
-
-    #[error("{}:{} Cannot assign to immutable reference", span.start.line, span.start.column)]
-    CannotAssignToImutableRef { span: Span },
+    #[error("{}:{} Cannot assign twice to immutable variable", span.start.line, span.start.column)]
+    CannotAssignTwiceToImutable { span: Span },
 
     #[error("{}:{} Has no fields", span.start.line, span.start.column)]
     HasNoFields { span: Span },
