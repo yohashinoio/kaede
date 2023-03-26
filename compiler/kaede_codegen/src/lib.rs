@@ -26,7 +26,7 @@ mod value;
 #[cfg(test)]
 mod tests;
 
-pub fn as_llvm_type<'ctx>(cucx: &CompileUnitContext<'ctx, '_, '_>, ty: &Ty) -> BasicTypeEnum<'ctx> {
+pub fn to_llvm_type<'ctx>(cucx: &CompileUnitContext<'ctx, '_, '_>, ty: &Ty) -> BasicTypeEnum<'ctx> {
     let context = cucx.context();
 
     match ty.kind.as_ref() {
@@ -43,13 +43,13 @@ pub fn as_llvm_type<'ctx>(cucx: &CompileUnitContext<'ctx, '_, '_>, ty: &Ty) -> B
 
         TyKind::UDType(name) => cucx.tcx.struct_table[&name.0].0.into(),
 
-        TyKind::Reference((refee_ty, _)) => as_llvm_type(cucx, refee_ty)
+        TyKind::Reference((refee_ty, _)) => to_llvm_type(cucx, refee_ty)
             .ptr_type(AddressSpace::default())
             .into(),
 
-        TyKind::Array((elem_ty, size)) => as_llvm_type(cucx, elem_ty).array_type(*size).into(),
+        TyKind::Array((elem_ty, size)) => to_llvm_type(cucx, elem_ty).array_type(*size).into(),
 
-        TyKind::Unknown => panic!("Cannot get LLVM type of Unknown type!"),
+        TyKind::Unknown => panic!("Cannot get LLVM type of 'unknown' type!"),
     }
 }
 
@@ -165,7 +165,7 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
             None => builder.position_at_end(entry),
         }
 
-        builder.build_alloca(as_llvm_type(self, ty), name)
+        builder.build_alloca(to_llvm_type(self, ty), name)
     }
 
     pub fn get_current_fn(&self) -> FunctionValue<'ctx> {

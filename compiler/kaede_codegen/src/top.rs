@@ -11,12 +11,11 @@ use kaede_parse::parse;
 use kaede_type::Ty;
 
 use crate::{
-    as_llvm_type,
     error::{CodegenError, CodegenResult},
     mangle::{mangle_external_name, mangle_name},
     stmt::{build_block, StmtContext},
     tcx::{StructFieldInfo, StructInfo, SymbolTable},
-    CompileUnitContext,
+    to_llvm_type, CompileUnitContext,
 };
 
 pub fn build_top_level(ctx: &mut CompileUnitContext, node: TopLevel) -> CodegenResult<()> {
@@ -101,11 +100,11 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
     fn create_fn_type(&mut self, params: &Params, return_ty: &Option<Ty>) -> FunctionType<'ctx> {
         let param_types = params
             .iter()
-            .map(|e| as_llvm_type(self.cucx, &e.1).into())
+            .map(|e| to_llvm_type(self.cucx, &e.1).into())
             .collect::<Vec<_>>();
 
         match &return_ty {
-            Some(ty) => as_llvm_type(self.cucx, ty).fn_type(param_types.as_slice(), false),
+            Some(ty) => to_llvm_type(self.cucx, ty).fn_type(param_types.as_slice(), false),
 
             None => self
                 .cucx
@@ -201,7 +200,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
             let alloca = self
                 .cucx
                 .builder
-                .build_alloca(as_llvm_type(self.cucx, &ty), &name);
+                .build_alloca(to_llvm_type(self.cucx, &ty), &name);
 
             self.cucx
                 .builder
@@ -219,7 +218,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
         let field_tys: Vec<_> = node
             .fields
             .iter()
-            .map(|f| as_llvm_type(self.cucx, &f.ty))
+            .map(|f| to_llvm_type(self.cucx, &f.ty))
             .collect();
 
         let ty = self.cucx.context().opaque_struct_type(&mangled_name);

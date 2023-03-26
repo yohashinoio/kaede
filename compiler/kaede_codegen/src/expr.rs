@@ -1,9 +1,9 @@
 use std::rc::Rc;
 
 use crate::{
-    as_llvm_type,
     error::{CodegenError, CodegenResult},
     mangle::mangle_name,
+    to_llvm_type,
     value::{has_signed, Value},
     CompileUnitContext,
 };
@@ -85,7 +85,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
 
         let alloca = self.cucx.create_entry_block_alloca("arrtmp", &array_ty);
 
-        let array_ty_llvm = as_llvm_type(self.cucx, &array_ty);
+        let array_ty_llvm = to_llvm_type(self.cucx, &array_ty);
 
         for (idx, elem) in elems.iter().enumerate() {
             let gep = unsafe {
@@ -112,7 +112,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
     fn logical_not(&self, node: &LogicalNot) -> CodegenResult<Value<'ctx>> {
         let operand = build_expression(self.cucx, &node.operand)?;
 
-        let zero = as_llvm_type(self.cucx, &operand.get_type()).const_zero();
+        let zero = to_llvm_type(self.cucx, &operand.get_type()).const_zero();
 
         // Compared to zero, it would be equivalent to 'logical not'
         Ok(Value::new(
@@ -147,7 +147,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         };
 
         let loaded_operand = self.cucx.builder.build_load(
-            as_llvm_type(self.cucx, &pointee_ty),
+            to_llvm_type(self.cucx, &pointee_ty),
             operand.get_value().into_pointer_value(),
             "",
         );
@@ -280,7 +280,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         Ok(Value::new(
             self.cucx
                 .builder
-                .build_load(as_llvm_type(self.cucx, ty), *ptr, ""),
+                .build_load(to_llvm_type(self.cucx, ty), *ptr, ""),
             ty.clone(),
         ))
     }
@@ -598,13 +598,13 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         let (_, struct_info) = &self.cucx.tcx.struct_table[struct_name];
 
         let field_info = &struct_info.fields[field_name];
-        let field_llvm_ty = as_llvm_type(self.cucx, &field_info.ty);
+        let field_llvm_ty = to_llvm_type(self.cucx, &field_info.ty);
 
         let offset = field_info.offset;
 
         let gep = unsafe {
             self.cucx.builder.build_in_bounds_gep(
-                as_llvm_type(self.cucx, struct_ty),
+                to_llvm_type(self.cucx, struct_ty),
                 *p,
                 &[
                     self.cucx.context().i32_type().const_zero(),
