@@ -793,3 +793,61 @@ fn array_as_argument() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn tuple() -> anyhow::Result<()> {
+    let program = r#"fn test() i32 {
+        let tup = (58, true, "hello")
+
+        if tup.1 {
+            return tup.0
+        }
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    let program = r#"fn test() i32 {
+        let tup = (58, true, "hello")
+
+        let (n, f, _) = tup
+
+        if f {
+            return n
+        }
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn tuple_as_argument() -> anyhow::Result<()> {
+    let program = r"fn tup1(a (i32, bool)) i32 {
+        if a.1 {
+            return a.0
+        }
+
+        return 123
+    }
+
+    fn tup2(a &(i32, bool)) i32 {
+        let (n, f) = a
+
+        if *f {
+            return *n
+        }
+
+        return 124
+    }
+
+    fn test() i32 {
+        let tup = (58, true)
+
+        return tup1(tup) + tup2(&tup)
+    }";
+
+    assert_eq!(run_test(program)?, 116);
+
+    Ok(())
+}
