@@ -41,6 +41,12 @@ impl<'ctx> Value<'ctx> {
     }
 }
 
-pub fn has_signed(left: &Value, right: &Value) -> bool {
-    left.get_type().kind.is_signed() || right.get_type().kind.is_signed()
+pub fn has_signed(vals: &[&Value]) -> bool {
+    for val in vals {
+        if val.get_type().kind.is_signed() {
+            return true;
+        }
+    }
+
+    false
 }

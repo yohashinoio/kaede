@@ -426,7 +426,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             ),
 
             Rem => {
-                if has_signed(&left, &right) {
+                if has_signed(&[&left, &right]) {
                     Value::new(
                         self.cucx
                             .builder
@@ -446,7 +446,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             }
 
             Div => {
-                if has_signed(&left, &right) {
+                if has_signed(&[&left, &right]) {
                     Value::new(
                         self.cucx
                             .builder
@@ -488,7 +488,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             ),
 
             Lt => {
-                if has_signed(&left, &right) {
+                if has_signed(&[&left, &right]) {
                     Value::new(
                         self.cucx
                             .builder
@@ -514,7 +514,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             }
 
             Le => {
-                if has_signed(&left, &right) {
+                if has_signed(&[&left, &right]) {
                     Value::new(
                         self.cucx
                             .builder
@@ -540,7 +540,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             }
 
             Gt => {
-                if has_signed(&left, &right) {
+                if has_signed(&[&left, &right]) {
                     Value::new(
                         self.cucx
                             .builder
@@ -566,7 +566,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             }
 
             Ge => {
-                if has_signed(&left, &right) {
+                if has_signed(&[&left, &right]) {
                     Value::new(
                         self.cucx
                             .builder
