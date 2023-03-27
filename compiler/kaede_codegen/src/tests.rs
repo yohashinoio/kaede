@@ -772,3 +772,24 @@ fn array_type() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn array_as_argument() -> anyhow::Result<()> {
+    let program = r"fn add_copy(a [i32; 2]) i32 {
+        return a[0] + a[1]
+    }
+
+    fn add(a &[i32; 2]) i32 {
+        return (*a)[0] + (*a)[1]
+    }
+
+    fn test() i32 {
+        let a = [48, 10]
+
+        return add(&a) + add_copy(a)
+    }";
+
+    assert_eq!(run_test(program)?, 116);
+
+    Ok(())
+}
