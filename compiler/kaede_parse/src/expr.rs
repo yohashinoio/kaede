@@ -1,9 +1,11 @@
+use std::collections::VecDeque;
+
 use kaede_ast::expr::{
     Args, ArrayLiteral, Binary, BinaryKind, Borrow, Deref, Expr, ExprKind, FnCall, Ident, Index,
-    Int, IntKind, LogicalNot, StructLiteral,
+    Int, IntKind, LogicalNot, StructLiteral, TupleLiteral,
 };
 use kaede_lex::token::{Token, TokenKind};
-use kaede_span::Span;
+use kaede_span::{Location, Span};
 
 use crate::{
     error::{ParseError, ParseResult},
@@ -332,13 +334,6 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     }
 
     fn primary(&mut self) -> ParseResult<Expr> {
-        if self.consume_b(&TokenKind::OpenParen) {
-            // '(' expr ')'
-            let node = self.expr()?;
-            self.consume(&TokenKind::CloseParen)?;
-            return Ok(node);
-        }
-
         if let Ok(ident) = self.ident() {
             // Function call
             if self.first().kind == TokenKind::OpenParen {
@@ -364,8 +359,8 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             });
         }
 
+        // Array literal
         if self.check(&TokenKind::OpenBracket) {
-            // Array literal
             return self.array_literal();
         }
 
@@ -379,33 +374,94 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             return Ok(lit);
         }
 
-        // Integers
-        let int = self.integer()?;
+        // Integer
+        if matches!(self.first().kind, TokenKind::Int(_)) {
+            let int = self.integer()?;
+            return Ok(Expr {
+                span: int.span,
+                kind: ExprKind::Int(int),
+            });
+        }
+
+        if self.consume_b(&TokenKind::OpenParen) {
+            let node = self.expr()?;
+
+            if let Ok(span) = self.consume(&TokenKind::Comma) {
+                // Tuple literal
+                return self.tuple_literal(span.start, node);
+            }
+
+            // '(' expr ')'
+            self.consume(&TokenKind::CloseParen)?;
+            return Ok(node);
+        }
+
+        Err(ParseError::ExpectedError {
+            expected: "expression".to_string(),
+            but: self.first().kind.to_string(),
+            span: self.first().span,
+        })
+    }
+
+    fn comma_separated_elements(&mut self, end: &TokenKind) -> ParseResult<Vec<Expr>> {
+        let mut elems = Vec::new();
+
+        loop {
+            elems.push(self.expr()?);
+
+            if self.check(end) {
+                return Ok(elems);
+            }
+
+            self.consume(&TokenKind::Comma)?;
+        }
+    }
+
+    fn comma_separated_elements_deque(&mut self, end: &TokenKind) -> ParseResult<VecDeque<Expr>> {
+        let mut elems = VecDeque::new();
+
+        loop {
+            elems.push_back(self.expr()?);
+
+            if self.check(end) {
+                return Ok(elems);
+            }
+
+            self.consume(&TokenKind::Comma)?;
+        }
+    }
+
+    /// (xxx, 58, true)
+    /// ^~~~~
+    /// Expect that this part has already been analyzed
+    fn tuple_literal(&mut self, start: Location, first_elem: Expr) -> ParseResult<Expr> {
+        let mut elements = self.comma_separated_elements_deque(&TokenKind::CloseParen)?;
+
+        elements.push_front(first_elem);
+
+        let finish = self.consume(&TokenKind::CloseParen).unwrap().finish;
+
+        let span = Span::new(start, finish);
+
         Ok(Expr {
-            span: int.span,
-            kind: ExprKind::Int(int),
+            kind: ExprKind::TupleLiteral(TupleLiteral { elements, span }),
+            span,
         })
     }
 
     fn array_literal(&mut self) -> ParseResult<Expr> {
         let start = self.consume(&TokenKind::OpenBracket).unwrap().start;
 
-        // Elements
-        let mut elems = Vec::new();
+        let elements = self.comma_separated_elements(&TokenKind::CloseBracket)?;
 
-        loop {
-            elems.push(self.expr()?);
+        let finish = self.consume(&TokenKind::CloseBracket).unwrap().finish;
 
-            if let Ok(span) = self.consume(&TokenKind::CloseBracket) {
-                let span = Span::new(start, span.finish);
-                return Ok(Expr {
-                    kind: ExprKind::ArrayLiteral(ArrayLiteral { elems, span }),
-                    span,
-                });
-            }
+        let span = Span::new(start, finish);
 
-            self.consume(&TokenKind::Comma)?;
-        }
+        Ok(Expr {
+            kind: ExprKind::ArrayLiteral(ArrayLiteral { elements, span }),
+            span,
+        })
     }
 
     fn boolean_literal(&mut self) -> Option<Expr> {
@@ -520,6 +576,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                         kind: IntKind::I32(n),
                         span: token.span,
                     }),
+
                     Err(_) => Err(ParseError::OutOfRangeForI32(token.span)),
                 }
             }

@@ -70,6 +70,8 @@ pub enum TyKind {
 
     Array((Rc<Ty> /* Element type */, u32 /* Size */)),
 
+    Tuple(Vec<Rc<Ty>> /* Element types */),
+
     Inferred,
 }
 
@@ -86,6 +88,16 @@ impl std::fmt::Display for TyKind {
 
             Self::Array((elem_ty, size)) => write!(f, "[{}; {}]", elem_ty.kind, size),
 
+            Self::Tuple(elem_tys) => write!(
+                f,
+                "({})",
+                elem_tys
+                    .iter()
+                    .map(|t| t.kind.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ),
+
             Self::Inferred => write!(f, "_"),
         }
     }
@@ -99,6 +111,7 @@ impl TyKind {
             Self::Reference(ty) => ty.0.kind.is_signed(),
 
             Self::Array(_) => panic!("Cannot get sign information of array type!"),
+            Self::Tuple(_) => panic!("Cannot get sign information of tuple type!"),
             Self::Str => panic!("Cannot get sign information of str type!"),
             Self::Inferred => panic!("Cannot get sign information of inferred type!"),
         }

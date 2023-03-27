@@ -15,7 +15,7 @@ use inkwell::{
 };
 use kaede_ast::expr::{
     ArrayLiteral, Binary, BinaryKind, Borrow, Deref, Expr, ExprKind, FnCall, Ident, Index,
-    LogicalNot, StructLiteral,
+    LogicalNot, StructLiteral, TupleLiteral,
 };
 use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability, Ty, TyKind, UDType};
 
@@ -51,6 +51,8 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
 
             ExprKind::ArrayLiteral(node) => self.array_literal(node)?,
 
+            ExprKind::TupleLiteral(node) => self.tuple_literal(node)?,
+
             ExprKind::Ident(name) => self.expr_ident(name)?,
 
             ExprKind::Binary(node) => self.binary_op(node)?,
@@ -69,6 +71,35 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
 
             ExprKind::Index(node) => self.index_expr(node)?,
         })
+    }
+
+    fn tuple_literal(&self, node: &TupleLiteral) -> CodegenResult<Value<'ctx>> {
+        let element_values = {
+            let mut v = Vec::new();
+            for e in node.elements.iter() {
+                v.push(build_expression(self.cucx, e)?);
+            }
+            v
+        };
+
+        Ok(Value::new(
+            self.cucx
+                .context()
+                .const_struct(
+                    element_values
+                        .iter()
+                        .map(|v| v.get_value())
+                        .collect::<Vec<_>>()
+                        .as_slice(),
+                    true,
+                )
+                .into(),
+            Ty {
+                kind: TyKind::Tuple(element_values.iter().map(|v| v.get_type()).collect()).into(),
+                mutability: Mutability::Not,
+            }
+            .into(),
+        ))
     }
 
     fn index_expr(&self, node: &Index) -> CodegenResult<Value<'ctx>> {
@@ -113,12 +144,12 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
     }
 
     fn array_literal(&self, node: &ArrayLiteral) -> CodegenResult<Value<'ctx>> {
-        assert!(!node.elems.is_empty());
+        assert!(!node.elements.is_empty());
 
         let mut elems = Vec::new();
 
         // Compile elements
-        for elem in node.elems.iter() {
+        for elem in node.elements.iter() {
             elems.push(build_expression(self.cucx, elem)?);
         }
 

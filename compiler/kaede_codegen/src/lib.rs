@@ -49,6 +49,11 @@ pub fn to_llvm_type<'ctx>(cucx: &CompileUnitContext<'ctx, '_, '_>, ty: &Ty) -> B
 
         TyKind::Array((elem_ty, size)) => to_llvm_type(cucx, elem_ty).array_type(*size).into(),
 
+        TyKind::Tuple(types) => {
+            let types: Vec<_> = types.iter().map(|t| to_llvm_type(cucx, t)).collect();
+            context.struct_type(types.as_slice(), true).into()
+        }
+
         TyKind::Inferred => panic!("Cannot get LLVM type of inferred type!"),
     }
 }

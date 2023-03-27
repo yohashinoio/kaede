@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use inkwell::{context::Context, values::IntValue};
 use kaede_span::Span;
 use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability, Ty};
@@ -125,7 +127,13 @@ pub struct Deref {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct ArrayLiteral {
-    pub elems: Vec<Expr>,
+    pub elements: Vec<Expr>,
+    pub span: Span,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct TupleLiteral {
+    pub elements: VecDeque<Expr>,
     pub span: Span,
 }
 
@@ -158,4 +166,5 @@ pub enum ExprKind {
     LogicalNot(LogicalNot),
     ArrayLiteral(ArrayLiteral),
     Index(Index),
+    TupleLiteral(TupleLiteral),
 }
