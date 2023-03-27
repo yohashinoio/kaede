@@ -795,7 +795,7 @@ fn array_as_argument() -> anyhow::Result<()> {
 }
 
 #[test]
-fn tuple() -> anyhow::Result<()> {
+fn tuple1() -> anyhow::Result<()> {
     let program = r#"fn test() i32 {
         let tup = (58, true, "hello")
 
@@ -806,13 +806,47 @@ fn tuple() -> anyhow::Result<()> {
 
     assert_eq!(run_test(program)?, 58);
 
-    let program = r#"fn test() i32 {
-        let tup = (58, true, "hello")
+    Ok(())
+}
 
-        let (n, f, _) = tup
+#[test]
+fn tuple2() -> anyhow::Result<()> {
+    let program = r#"fn test() i32 {
+        let tup = (48, true, "hello", 10)
+
+        let (n1, f, _, n2) = tup
 
         if f {
-            return n
+            return n1 + n2
+        }
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    let program = r#"fn test() i32 {
+        let tup = (48, true, "hello", 10)
+
+        let (n1, f, _, n2) = &tup
+
+        if *f {
+            return *n1 + *n2
+        }
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn tuple3() -> anyhow::Result<()> {
+    let program = r#"fn test() i32 {
+        let tup = (48, true, "hello", 10)
+
+        let (n1, f, _, n2) = &tup
+
+        if *f {
+            return *n1 + *n2
         }
     }"#;
 

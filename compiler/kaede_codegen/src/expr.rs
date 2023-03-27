@@ -4,7 +4,6 @@ use crate::{
     error::{CodegenError, CodegenResult},
     get_loaded_pointer,
     mangle::mangle_name,
-    to_llvm_type,
     value::{has_signed, Value},
     CompileUnitContext,
 };
@@ -111,7 +110,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             _ => todo!(), /* Error */
         };
 
-        let array_ty_llvm = to_llvm_type(self.cucx, &array_ty).into_array_type();
+        let array_ty_llvm = self.cucx.to_llvm_type(&array_ty).into_array_type();
 
         let load_array_inst = array.get_value().as_instruction_value().unwrap();
 
@@ -160,7 +159,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
 
         let alloca = self.cucx.create_entry_block_alloca("arrtmp", &array_ty);
 
-        let array_ty_llvm = to_llvm_type(self.cucx, &array_ty);
+        let array_ty_llvm = self.cucx.to_llvm_type(&array_ty);
 
         for (idx, elem) in elems.iter().enumerate() {
             let gep = unsafe {
@@ -187,7 +186,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
     fn logical_not(&self, node: &LogicalNot) -> CodegenResult<Value<'ctx>> {
         let operand = build_expression(self.cucx, &node.operand)?;
 
-        let zero = to_llvm_type(self.cucx, &operand.get_type()).const_zero();
+        let zero = self.cucx.to_llvm_type(&operand.get_type()).const_zero();
 
         // Compared to zero, it would be equivalent to 'logical not'
         Ok(Value::new(
@@ -222,7 +221,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         };
 
         let loaded_operand = self.cucx.builder.build_load(
-            to_llvm_type(self.cucx, &pointee_ty),
+            self.cucx.to_llvm_type(&pointee_ty),
             operand.get_value().into_pointer_value(),
             "",
         );
@@ -355,7 +354,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         Ok(Value::new(
             self.cucx
                 .builder
-                .build_load(to_llvm_type(self.cucx, ty), *ptr, ""),
+                .build_load(self.cucx.to_llvm_type(ty), *ptr, ""),
             ty.clone(),
         ))
     }
@@ -718,7 +717,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         Ok(Value::new(
             self.cucx
                 .builder
-                .build_load(to_llvm_type(self.cucx, &field_info.ty), gep, ""),
+                .build_load(self.cucx.to_llvm_type(&field_info.ty), gep, ""),
             field_info.ty.clone(),
         ))
     }
@@ -736,7 +735,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
 
         let gep = unsafe {
             self.cucx.builder.build_in_bounds_gep(
-                to_llvm_type(self.cucx, &tuple_ty),
+                self.cucx.to_llvm_type(&tuple_ty),
                 left,
                 &[
                     self.cucx.context().i32_type().const_zero(),
@@ -762,7 +761,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         Ok(Value::new(
             self.cucx
                 .builder
-                .build_load(to_llvm_type(self.cucx, elem_ty), gep, ""),
+                .build_load(self.cucx.to_llvm_type(elem_ty), gep, ""),
             elem_ty.clone(),
         ))
     }

@@ -26,38 +26,6 @@ mod value;
 #[cfg(test)]
 mod tests;
 
-pub fn to_llvm_type<'ctx>(cucx: &CompileUnitContext<'ctx, '_, '_>, ty: &Ty) -> BasicTypeEnum<'ctx> {
-    let context = cucx.context();
-
-    match ty.kind.as_ref() {
-        TyKind::Fundamental(t) => t.as_llvm_type(cucx.context()),
-
-        TyKind::Str => {
-            let str_ty = context.i8_type().ptr_type(AddressSpace::default());
-            let len_ty = context.i64_type();
-            // { *i8, i64 }
-            context
-                .struct_type(&[str_ty.into(), len_ty.into()], true)
-                .into()
-        }
-
-        TyKind::UDType(name) => cucx.tcx.struct_table[&name.0].0.into(),
-
-        TyKind::Reference((refee_ty, _)) => to_llvm_type(cucx, refee_ty)
-            .ptr_type(AddressSpace::default())
-            .into(),
-
-        TyKind::Array((elem_ty, size)) => to_llvm_type(cucx, elem_ty).array_type(*size).into(),
-
-        TyKind::Tuple(types) => {
-            let types: Vec<_> = types.iter().map(|t| to_llvm_type(cucx, t)).collect();
-            context.struct_type(types.as_slice(), true).into()
-        }
-
-        TyKind::Inferred => panic!("Cannot get LLVM type of inferred type!"),
-    }
-}
-
 /// Used when you want to get a pointer from the evaluated value after evaluating an expression
 fn get_loaded_pointer<'ctx>(load_instr: &InstructionValue<'ctx>) -> Option<PointerValue<'ctx>> {
     if let Some(loaded_value) = load_instr.get_operand(0) {
@@ -184,7 +152,7 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
             None => builder.position_at_end(entry),
         }
 
-        builder.build_alloca(to_llvm_type(self, ty), name)
+        builder.build_alloca(self.to_llvm_type(ty), name)
     }
 
     pub fn get_current_fn(&self) -> FunctionValue<'ctx> {
@@ -202,6 +170,39 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
             .unwrap()
             .get_terminator()
             .is_none()
+    }
+
+    pub fn to_llvm_type(&self, ty: &Ty) -> BasicTypeEnum<'ctx> {
+        let context = self.context();
+
+        match ty.kind.as_ref() {
+            TyKind::Fundamental(t) => t.as_llvm_type(self.context()),
+
+            TyKind::Str => {
+                let str_ty = context.i8_type().ptr_type(AddressSpace::default());
+                let len_ty = context.i64_type();
+                // { *i8, i64 }
+                context
+                    .struct_type(&[str_ty.into(), len_ty.into()], true)
+                    .into()
+            }
+
+            TyKind::UDType(name) => self.tcx.struct_table[&name.0].0.into(),
+
+            TyKind::Reference((refee_ty, _)) => self
+                .to_llvm_type(refee_ty)
+                .ptr_type(AddressSpace::default())
+                .into(),
+
+            TyKind::Array((elem_ty, size)) => self.to_llvm_type(elem_ty).array_type(*size).into(),
+
+            TyKind::Tuple(types) => {
+                let types: Vec<_> = types.iter().map(|t| self.to_llvm_type(t)).collect();
+                context.struct_type(types.as_slice(), true).into()
+            }
+
+            TyKind::Inferred => panic!("Cannot get LLVM type of inferred type!"),
+        }
     }
 
     pub fn codegen(&mut self, top_levels: Vec<TopLevel>) -> CodegenResult<()> {
