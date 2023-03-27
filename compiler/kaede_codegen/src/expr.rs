@@ -671,11 +671,9 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
 
             TyKind::Tuple(_) => self.tuple_indexing(ptr_to_left, &node.rhs, left_ty),
 
-            _ => {
-                return Err(CodegenError::HasNoFields {
-                    span: node.lhs.span,
-                })
-            }
+            _ => Err(CodegenError::HasNoFields {
+                span: node.lhs.span,
+            }),
         }
     }
 
@@ -735,7 +733,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
 
         let gep = unsafe {
             self.cucx.builder.build_in_bounds_gep(
-                self.cucx.to_llvm_type(&tuple_ty),
+                self.cucx.to_llvm_type(tuple_ty),
                 left,
                 &[
                     self.cucx.context().i32_type().const_zero(),
