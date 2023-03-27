@@ -9,7 +9,7 @@ pub mod token;
 mod tests;
 
 pub fn lex(input: &str) -> impl Iterator<Item = Token> + '_ {
-    insert_semicolons(lex_internal(input)).into_iter()
+    insert_semi(lex_internal(input)).into_iter()
 }
 
 fn lex_internal(input: &str) -> impl Iterator<Item = Token> + '_ {
@@ -34,15 +34,15 @@ fn lex_internal(input: &str) -> impl Iterator<Item = Token> + '_ {
 }
 
 /// Rules similar to Go language
-/// 'NewLine' token will be removed
-fn insert_semicolons(tokens: impl Iterator<Item = Token>) -> Vec<Token> {
+/// Newline token will be removed
+fn insert_semi(tokens: impl Iterator<Item = Token>) -> Vec<Token> {
     let mut result = Vec::<Token>::new();
 
     for tok in tokens {
         match tok.kind {
             TokenKind::NewLine | TokenKind::Eoi => {
                 if let Some(last) = result.last() {
-                    if can_insert_semicolon(&last.kind) {
+                    if is_semi_insertable_after(&last.kind) {
                         let start = last.span.finish;
                         let mut finish = start;
                         finish.increase_column();
@@ -67,8 +67,7 @@ fn insert_semicolons(tokens: impl Iterator<Item = Token>) -> Vec<Token> {
     result
 }
 
-/// True if a semicolon can be inserted after the token
-fn can_insert_semicolon(token: &TokenKind) -> bool {
+fn is_semi_insertable_after(token: &TokenKind) -> bool {
     use TokenKind::*;
 
     matches!(
