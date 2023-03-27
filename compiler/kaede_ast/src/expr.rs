@@ -43,17 +43,25 @@ pub enum IntKind {
     I32(i32),
 }
 
-impl IntKind {
+impl Int {
+    pub fn as_u64(&self) -> u64 {
+        use IntKind::*;
+
+        match self.kind {
+            I32(n) => n as u64,
+        }
+    }
+
     pub fn as_llvm_int<'ctx>(&self, context: &'ctx Context) -> IntValue<'ctx> {
         use IntKind::*;
 
-        match self {
-            I32(n) => context.i32_type().const_int(*n as u64, false),
+        match self.kind {
+            I32(n) => context.i32_type().const_int(n as u64, false),
         }
     }
 
     pub fn get_type(&self) -> Ty {
-        match self {
+        match self.kind {
             IntKind::I32(_) => make_fundamental_type(FundamentalTypeKind::I32, Mutability::Not),
         }
     }
@@ -165,6 +173,6 @@ pub enum ExprKind {
     Deref(Deref),
     LogicalNot(LogicalNot),
     ArrayLiteral(ArrayLiteral),
-    Index(Index),
+    Indexing(Index),
     TupleLiteral(TupleLiteral),
 }

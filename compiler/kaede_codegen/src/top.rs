@@ -232,7 +232,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
                 (
                     f.name.name,
                     StructFieldInfo {
-                        ty: f.ty,
+                        ty: f.ty.into(),
                         vis: f.vis,
                         offset: f.offset,
                     },

@@ -749,7 +749,7 @@ fn array_literal() -> anyhow::Result<()> {
 }
 
 #[test]
-fn index_operation() -> anyhow::Result<()> {
+fn array_indexing() -> anyhow::Result<()> {
     let program = r"fn test() i32 {
         let a = [48, 10]
         return a[0] + [4][0] + a[1]
@@ -850,4 +850,17 @@ fn tuple_as_argument() -> anyhow::Result<()> {
     assert_eq!(run_test(program)?, 116);
 
     Ok(())
+}
+
+#[test]
+fn tuples_require_access_by_index() {
+    let program = r"fn test() i32 {
+        let tup = (58, true)
+        tup.llvm
+    }";
+
+    assert!(matches!(
+        run_test(program),
+        Err(CodegenError::TupleRequireAccessByIndex { .. })
+    ));
 }

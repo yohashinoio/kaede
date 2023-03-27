@@ -289,13 +289,13 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         })
     }
 
-    /// Field access or module item access
+    /// Field access or module item access or tuple indexing
     fn access(&mut self) -> ParseResult<Expr> {
-        let mut node = self.index()?;
+        let mut node = self.indexing()?;
 
         loop {
             if self.consume_b(&TokenKind::Dot) {
-                let right = self.index()?;
+                let right = self.indexing()?;
                 node = Expr {
                     span: Span::new(node.span.start, right.span.finish),
                     kind: ExprKind::Binary(Binary::new(
@@ -310,8 +310,8 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
     }
 
-    /// Index expression (sometimes called array subscripting)
-    fn index(&mut self) -> ParseResult<Expr> {
+    /// Array subscripting
+    fn indexing(&mut self) -> ParseResult<Expr> {
         let mut node = self.primary()?;
 
         loop {
@@ -321,7 +321,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                 let span = Span::new(node.span.start, finish);
                 node = Expr {
                     span,
-                    kind: ExprKind::Index(Index {
+                    kind: ExprKind::Indexing(Index {
                         operand: node.into(),
                         index: index.into(),
                         span,

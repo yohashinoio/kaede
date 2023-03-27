@@ -40,6 +40,12 @@ pub enum CodegenError {
     #[error("{}:{} File not found for module `{}`", span.start.line, span.start.column, mod_name)]
     FileNotFoundForModule { span: Span, mod_name: String },
 
+    #[error("{}:{} Tuples require access by index", span.start.line, span.start.column)]
+    TupleRequireAccessByIndex { span: Span },
+
+    #[error("{}:{} Index '{}' is out of range", span.start.line, span.start.column, index)]
+    IndexOutOfRange { index: u64, span: Span },
+
     /// Error issued by LLVM
     #[error("{}", .what)]
     LLVMError { what: String },

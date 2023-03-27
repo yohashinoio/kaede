@@ -38,7 +38,7 @@ pub type ReturnTypeTable<'ctx> = HashMap<FunctionValue<'ctx>, Option<Rc<Ty>>>;
 pub type ParamTable<'ctx> = HashMap<FunctionValue<'ctx>, Vec<Rc<Ty>>>;
 
 pub struct StructFieldInfo {
-    pub ty: Ty,
+    pub ty: Rc<Ty>,
     pub vis: Visibility,
     pub offset: u64,
 }

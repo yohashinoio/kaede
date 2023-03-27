@@ -10,7 +10,7 @@ use crate::{
 };
 
 use inkwell::{
-    values::{BasicValue, IntValue},
+    values::{BasicValue, IntValue, PointerValue},
     IntPredicate,
 };
 use kaede_ast::expr::{
@@ -41,8 +41,8 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
     fn build(&self, node: &Expr) -> CodegenResult<Value<'ctx>> {
         Ok(match &node.kind {
             ExprKind::Int(int) => Value::new(
-                int.kind.as_llvm_int(self.cucx.context()).into(),
-                Rc::new(int.kind.get_type()),
+                int.as_llvm_int(self.cucx.context()).into(),
+                Rc::new(int.get_type()),
             ),
 
             ExprKind::StringLiteral(s) => self.string_literal(s),
@@ -53,7 +53,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
 
             ExprKind::TupleLiteral(node) => self.tuple_literal(node)?,
 
-            ExprKind::Ident(name) => self.expr_ident(name)?,
+            ExprKind::Ident(name) => self.ident_expr(name)?,
 
             ExprKind::Binary(node) => self.binary_op(node)?,
 
@@ -69,7 +69,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
 
             ExprKind::Deref(node) => self.deref(node)?,
 
-            ExprKind::Index(node) => self.index_expr(node)?,
+            ExprKind::Indexing(node) => self.indexing(node)?,
         })
     }
 
@@ -102,7 +102,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         ))
     }
 
-    fn index_expr(&self, node: &Index) -> CodegenResult<Value<'ctx>> {
+    fn indexing(&self, node: &Index) -> CodegenResult<Value<'ctx>> {
         let array = build_expression(self.cucx, &node.operand)?;
         let array_ty = array.get_type();
 
@@ -349,7 +349,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         )
     }
 
-    fn expr_ident(&self, ident: &Ident) -> CodegenResult<Value<'ctx>> {
+    fn ident_expr(&self, ident: &Ident) -> CodegenResult<Value<'ctx>> {
         let (ptr, ty) = self.cucx.tcx.lookup_var(ident)?;
 
         Ok(Value::new(
@@ -643,44 +643,70 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             }
         }
 
-        // --- Field access ---
+        // --- Field access or tuple indexing ---
 
-        // Pointer to left value (struct)
-        let (p, struct_ty) = {
-            match &node.lhs.kind {
-                ExprKind::Ident(name) => self.cucx.tcx.lookup_var(name)?,
+        let left = build_expression(self.cucx, &node.lhs)?;
 
-                ExprKind::FnCall(_) => todo!(),
-
-                _ => {
-                    return Err(CodegenError::HasNoFields {
-                        span: node.lhs.span,
-                    })
-                }
+        let left_inst = match left.get_value().as_instruction_value() {
+            Some(inst) => inst,
+            None => {
+                return Err(CodegenError::HasNoFields {
+                    span: node.lhs.span,
+                })
             }
         };
 
-        let struct_name = match struct_ty.kind.as_ref() {
-            TyKind::UDType(n) => &n.0,
-            _ => todo!(),
+        let ptr_to_left = match get_loaded_pointer(&left_inst) {
+            Some(p) => p,
+            None => {
+                return Err(CodegenError::HasNoFields {
+                    span: node.lhs.span,
+                })
+            }
         };
 
-        let field_name = match &node.rhs.kind {
+        let left_ty = &left.get_type();
+
+        match left_ty.kind.as_ref() {
+            TyKind::UDType(_) => self.struct_field_access(ptr_to_left, &node.rhs, left_ty),
+
+            TyKind::Tuple(_) => self.tuple_indexing(ptr_to_left, &node.rhs, left_ty),
+
+            _ => {
+                return Err(CodegenError::HasNoFields {
+                    span: node.lhs.span,
+                })
+            }
+        }
+    }
+
+    fn struct_field_access(
+        &self,
+        left: PointerValue<'ctx>,
+        right: &Expr,
+        struct_type: &Rc<Ty>,
+    ) -> CodegenResult<Value<'ctx>> {
+        let struct_name = if let TyKind::UDType(ty) = struct_type.kind.as_ref() {
+            &ty.0
+        } else {
+            unreachable!()
+        };
+
+        let field_name = match &right.kind {
             ExprKind::Ident(s) => s.as_str(),
             kind => unreachable!("{:?}", kind),
         };
 
-        let (_, struct_info) = &self.cucx.tcx.struct_table[struct_name];
+        let (struct_ty_llvm, struct_info) = &self.cucx.tcx.struct_table[struct_name];
 
         let field_info = &struct_info.fields[field_name];
-        let field_llvm_ty = to_llvm_type(self.cucx, &field_info.ty);
 
         let offset = field_info.offset;
 
         let gep = unsafe {
             self.cucx.builder.build_in_bounds_gep(
-                to_llvm_type(self.cucx, struct_ty),
-                *p,
+                *struct_ty_llvm,
+                left,
                 &[
                     self.cucx.context().i32_type().const_zero(),
                     self.cucx.context().i32_type().const_int(offset, false),
@@ -690,8 +716,54 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         };
 
         Ok(Value::new(
-            self.cucx.builder.build_load(field_llvm_ty, gep, ""),
-            struct_ty.clone(),
+            self.cucx
+                .builder
+                .build_load(to_llvm_type(self.cucx, &field_info.ty), gep, ""),
+            field_info.ty.clone(),
+        ))
+    }
+
+    fn tuple_indexing(
+        &self,
+        left: PointerValue<'ctx>,
+        right: &Expr,
+        tuple_ty: &Rc<Ty>,
+    ) -> CodegenResult<Value<'ctx>> {
+        let index = match &right.kind {
+            ExprKind::Int(i) => i.as_u64(),
+            _ => return Err(CodegenError::TupleRequireAccessByIndex { span: right.span }),
+        };
+
+        let gep = unsafe {
+            self.cucx.builder.build_in_bounds_gep(
+                to_llvm_type(self.cucx, &tuple_ty),
+                left,
+                &[
+                    self.cucx.context().i32_type().const_zero(),
+                    self.cucx.context().i32_type().const_int(index, false),
+                ],
+                "",
+            )
+        };
+
+        let elem_ty = match tuple_ty.kind.as_ref() {
+            TyKind::Tuple(types) => match types.get(index as usize) {
+                Some(ty) => ty,
+                None => {
+                    return Err(CodegenError::IndexOutOfRange {
+                        index,
+                        span: right.span,
+                    })
+                }
+            },
+            kind => unreachable!("{:?}", kind),
+        };
+
+        Ok(Value::new(
+            self.cucx
+                .builder
+                .build_load(to_llvm_type(self.cucx, elem_ty), gep, ""),
+            elem_ty.clone(),
         ))
     }
 
