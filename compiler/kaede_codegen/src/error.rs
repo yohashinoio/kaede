@@ -46,6 +46,12 @@ pub enum CodegenError {
     #[error("{}:{} Index '{}' is out of range", span.start.line, span.start.column, index)]
     IndexOutOfRange { index: u64, span: Span },
 
+    #[error("{}:{} An initializer for tuple unpacking must be a tuple", span.start.line, span.start.column)]
+    InitializerTupleUnpackingMustBeTuple { span: Span },
+
+    #[error("{}:{} Number of tuple fields does not match ({} vs {})", span.start.line, span.start.column, lens.0, lens.1)]
+    NumberOfTupleFieldsDoesNotMatch { lens: (usize, usize), span: Span },
+
     /// Error issued by LLVM
     #[error("{}", .what)]
     LLVMError { what: String },

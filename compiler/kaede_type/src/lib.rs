@@ -49,6 +49,7 @@ impl Mutability {
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum FundamentalTypeKind {
     I32,
+    U64,
     Bool,
 }
 
@@ -66,7 +67,7 @@ pub enum TyKind {
 
     UDType(UDType),
 
-    Reference((Rc<Ty>, Mutability)),
+    Reference(RefrenceType),
 
     Array((Rc<Ty> /* Element type */, u32 /* Size */)),
 
@@ -84,7 +85,7 @@ impl std::fmt::Display for TyKind {
 
             Self::UDType(udt) => write!(f, "{}", udt.0),
 
-            Self::Reference(refee) => write!(f, "&{}", refee.0.kind),
+            Self::Reference(refee) => write!(f, "&{}", refee.refee_ty.kind),
 
             Self::Array((elem_ty, size)) => write!(f, "[{}; {}]", elem_ty.kind, size),
 
@@ -108,7 +109,7 @@ impl TyKind {
         match &self {
             Self::Fundamental(fty) => fty.is_signed(),
             Self::UDType(_) => todo!(),
-            Self::Reference(ty) => ty.0.kind.is_signed(),
+            Self::Reference(ty) => ty.refee_ty.kind.is_signed(),
 
             Self::Array(_) => panic!("Cannot get sign information of array type!"),
             Self::Tuple(_) => panic!("Cannot get sign information of tuple type!"),
@@ -131,6 +132,7 @@ impl std::fmt::Display for FundamentalType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.kind {
             FundamentalTypeKind::I32 => write!(f, "i32"),
+            FundamentalTypeKind::U64 => write!(f, "u32"),
 
             FundamentalTypeKind::Bool => write!(f, "bool"),
         }
@@ -147,6 +149,7 @@ impl FundamentalType {
 
         match self.kind {
             I32 => context.i32_type().as_basic_type_enum(),
+            U64 => context.i64_type().as_basic_type_enum(),
 
             Bool => context.bool_type().as_basic_type_enum(),
         }
@@ -157,6 +160,7 @@ impl FundamentalType {
 
         match self.kind {
             I32 => true,
+            U64 => false,
             Bool => false,
         }
     }
@@ -165,3 +169,29 @@ impl FundamentalType {
 /// User defined types
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct UDType(pub String);
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct RefrenceType {
+    pub refee_ty: Rc<Ty>,
+    pub mutability: Mutability,
+}
+
+impl RefrenceType {
+    pub fn new(refee_ty: Rc<Ty>, mutability: Mutability) -> Self {
+        Self {
+            refee_ty,
+            mutability,
+        }
+    }
+
+    /// &i32 -> i32
+    ///
+    /// &&i32 -> i32
+    pub fn get_base_type_of_reference(&self) -> Rc<Ty> {
+        match self.refee_ty.kind.as_ref() {
+            TyKind::Reference(rty) => rty.get_base_type_of_reference(),
+
+            _ => self.refee_ty.clone(),
+        }
+    }
+}

@@ -1,11 +1,19 @@
 use std::rc::Rc;
 
 use inkwell::{basic_block::BasicBlock, values::BasicValue, IntPredicate};
+use kaede_ast::expr::Ident;
 use kaede_ast::{
     expr::ExprKind,
-    stmt::{Assign, AssignKind, Block, Break, Else, If, Let, Loop, Return, Stmt, StmtKind},
+    stmt::{
+        Assign, AssignKind, Block, Break, Else, If, Let, LetKind, Loop, NormalLet, Return, Stmt,
+        StmtKind, TupleUnpack,
+    },
 };
+use kaede_span::Span;
+use kaede_type::{Mutability, Ty, TyKind};
 
+use crate::expr::tuple_indexing;
+use crate::value::Value;
 use crate::{
     error::{CodegenError, CodegenResult},
     expr::build_expression,
@@ -214,36 +222,43 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
     }
 
     fn let_(&mut self, node: Let) -> CodegenResult<()> {
-        if let Some(init) = node.init {
-            let init = build_expression(self.cucx, &init)?;
+        match node.kind {
+            LetKind::NormalLet(node) => self.normal_let(node),
+            LetKind::TupleUnpack(node) => self.tuple_unpacking(node),
+        }
+    }
 
-            let alloca = if node.ty.kind.is_inferred() {
+    fn normal_let_internal(
+        &mut self,
+        name: Ident,
+        init: Option<Value<'ctx>>,
+        specified_ty: Rc<Ty>,
+        span: Span,
+    ) -> CodegenResult<()> {
+        if let Some(init) = init {
+            let alloca = if specified_ty.kind.is_inferred() {
                 // No type information was available, so infer from an initializer
                 let mut ty = (*init.get_type()).clone();
-                ty.mutability = node.ty.mutability;
+                ty.mutability = specified_ty.mutability;
 
-                let alloca = self.cucx.create_entry_block_alloca(node.name.as_str(), &ty);
+                let alloca = self.cucx.create_entry_block_alloca(name.as_str(), &ty);
 
-                self.cucx
-                    .tcx
-                    .add_symbol(node.name.name, (alloca, Rc::new(ty)));
+                self.cucx.tcx.add_symbol(name.name, (alloca, ty.into()));
 
                 alloca
             } else {
                 // Type information is available
 
                 // Check if an initializer type and type match
-                if node.ty != *init.get_type() {
-                    return Err(CodegenError::MismatchedTypes { span: node.span });
+                if specified_ty != init.get_type() {
+                    return Err(CodegenError::MismatchedTypes { span });
                 }
 
                 let alloca = self
                     .cucx
-                    .create_entry_block_alloca(node.name.as_str(), &node.ty);
+                    .create_entry_block_alloca(name.as_str(), &specified_ty);
 
-                self.cucx
-                    .tcx
-                    .add_symbol(node.name.name, (alloca, Rc::new(node.ty)));
+                self.cucx.tcx.add_symbol(name.name, (alloca, specified_ty));
 
                 alloca
             };
@@ -254,6 +269,104 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
             return Ok(());
         }
 
-        unreachable!();
+        todo!()
+    }
+
+    fn normal_let(&mut self, node: NormalLet) -> CodegenResult<()> {
+        self.normal_let_internal(
+            node.name,
+            match node.init {
+                Some(e) => Some(build_expression(self.cucx, &e)?),
+                None => None,
+            },
+            node.ty,
+            node.span,
+        )
+    }
+
+    fn tuple_unpacking(&mut self, node: TupleUnpack) -> CodegenResult<()> {
+        let tuple = build_expression(self.cucx, &node.init)?;
+
+        // The tuple is a temporary object, allocate it in memory
+        let tuple = if tuple.get_value().as_instruction_value().is_none() {
+            let alloca = self
+                .cucx
+                .create_entry_block_alloca("tupletmp", &tuple.get_type());
+
+            self.cucx.builder.build_store(alloca, tuple.get_value());
+
+            Value::new(
+                self.cucx
+                    .builder
+                    .build_load(self.cucx.to_llvm_type(&tuple.get_type()), alloca, ""),
+                tuple.get_type(),
+            )
+        } else {
+            tuple
+        };
+
+        let tuple_ty = tuple.get_type();
+
+        let (tuple_field_len, tuple_mutability) = match tuple_ty.kind.as_ref() {
+            TyKind::Tuple(ts) => (ts.len(), Mutability::Not),
+
+            TyKind::Reference(rty) => {
+                let tuple_ty = rty.get_base_type_of_reference();
+
+                match tuple_ty.kind.as_ref() {
+                    TyKind::Tuple(ts) => (ts.len(), tuple_ty.mutability),
+
+                    _ => {
+                        return Err(CodegenError::InitializerTupleUnpackingMustBeTuple {
+                            span: node.init.span,
+                        })
+                    }
+                }
+            }
+
+            _ => {
+                return Err(CodegenError::InitializerTupleUnpackingMustBeTuple {
+                    span: node.init.span,
+                })
+            }
+        };
+
+        if node.names.len() != tuple_field_len {
+            return Err(CodegenError::NumberOfTupleFieldsDoesNotMatch {
+                lens: (node.names.len(), tuple_field_len),
+                span: node.span,
+            });
+        }
+
+        // Unpacking
+        for (index, (name, mutability)) in node.names.into_iter().enumerate() {
+            if mutability.is_mut() && tuple_mutability.is_not() {
+                todo!("ERROR")
+            }
+
+            self.tuple_unpacking_internal(&tuple, index as u64, name, node.span)?;
+        }
+
+        Ok(())
+    }
+
+    fn tuple_unpacking_internal(
+        &mut self,
+        tuple: &Value<'ctx>,
+        index: u64,
+        unpacked_name: Ident,
+        span: Span,
+    ) -> CodegenResult<()> {
+        let ptr_to_tuple =
+            get_loaded_pointer(&tuple.get_value().as_instruction_value().unwrap()).unwrap();
+
+        let unpacked_value =
+            tuple_indexing(self.cucx, ptr_to_tuple, index, &tuple.get_type(), span)?;
+
+        let unpacked_ty = unpacked_value.get_type();
+
+        self.normal_let_internal(unpacked_name, Some(unpacked_value), unpacked_ty, span)?;
+
+        Ok(())
     }
 }

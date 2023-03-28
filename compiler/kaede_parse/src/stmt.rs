@@ -1,10 +1,15 @@
+use std::rc::Rc;
+
 use kaede_ast::{
     expr::Expr,
-    stmt::{Assign, AssignKind, Block, Break, Else, If, Let, Loop, Return, Stmt, StmtKind},
+    stmt::{
+        Assign, AssignKind, Block, Break, Else, If, Let, LetKind, Loop, NormalLet, Return, Stmt,
+        StmtKind, TupleUnpack,
+    },
 };
 use kaede_lex::token::{Token, TokenKind};
-use kaede_span::Span;
-use kaede_type::{Mutability, Ty, TyKind};
+use kaede_span::{Location, Span};
+use kaede_type::{Ty, TyKind};
 
 use crate::{
     error::{ParseError, ParseResult},
@@ -199,11 +204,12 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     fn let_(&mut self) -> ParseResult<Let> {
         let start = self.consume(&TokenKind::Let).unwrap().start;
 
-        let mutability = if self.consume_b(&TokenKind::Mut) {
-            Mutability::Mut
-        } else {
-            Mutability::Not
-        };
+        if self.check(&TokenKind::OpenParen) {
+            // Tuple unpacking
+            return self.tuple_unpacking(&start);
+        }
+
+        let mutability = self.consume_b(&TokenKind::Mut).into();
 
         let name = self.ident()?;
 
@@ -212,27 +218,74 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
             let finish = init.span.finish;
 
+            let span = Span::new(start, finish);
+
             return Ok(Let {
-                name,
-                init: Some(init),
-                ty: Ty::new(TyKind::Inferred.into(), mutability),
-                span: Span::new(start, finish),
+                kind: LetKind::NormalLet(NormalLet {
+                    name,
+                    init: Some(init.into()),
+                    ty: Ty::new(TyKind::Inferred.into(), mutability).into(),
+                    span,
+                }),
+                span,
             });
         }
 
         let ty = self.ty()?;
 
         let init = if self.consume_b(&TokenKind::Eq) {
-            Some(self.expr()?)
+            Some(Rc::new(self.expr()?))
         } else {
             None
         };
 
+        let span = match &init {
+            Some(e) => e.span,
+            None => Span::new(start, name.span.finish),
+        };
+
         Ok(Let {
-            span: Span::new(start, name.span.finish),
-            name,
-            init,
-            ty,
+            kind: LetKind::NormalLet(NormalLet {
+                span,
+                name,
+                init,
+                ty: ty.into(),
+            }),
+            span,
+        })
+    }
+
+    // Expect that the Let token has already been consumed!
+    fn tuple_unpacking(&mut self, start: &Location) -> ParseResult<Let> {
+        self.consume(&TokenKind::OpenParen)?;
+
+        let mut names = Vec::new();
+
+        loop {
+            let mutability = self.consume_b(&TokenKind::Mut).into();
+
+            names.push((self.ident()?, mutability));
+
+            if self.consume_b(&TokenKind::CloseParen) {
+                break;
+            }
+
+            self.consume(&TokenKind::Comma)?;
+        }
+
+        self.consume(&TokenKind::Eq)?;
+
+        let init = self.expr()?;
+
+        let span = Span::new(*start, init.span.finish);
+
+        Ok(Let {
+            kind: LetKind::TupleUnpack(TupleUnpack {
+                names,
+                init: init.into(),
+                span,
+            }),
+            span,
         })
     }
 }

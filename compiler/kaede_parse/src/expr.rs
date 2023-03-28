@@ -26,9 +26,9 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                 node = Expr {
                     span: Span::new(node.span.start, right.span.finish),
                     kind: ExprKind::Binary(Binary::new(
-                        Box::new(node),
+                        node.into(),
                         BinaryKind::LogicalOr,
-                        Box::new(right),
+                        right.into(),
                     )),
                 };
             } else {
@@ -46,9 +46,9 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                 node = Expr {
                     span: Span::new(node.span.start, right.span.finish),
                     kind: ExprKind::Binary(Binary::new(
-                        Box::new(node),
+                        node.into(),
                         BinaryKind::LogicalAnd,
-                        Box::new(right),
+                        right.into(),
                     )),
                 };
             } else {
@@ -65,21 +65,13 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                 let right = self.lt_gt_le_ge()?;
                 node = Expr {
                     span: Span::new(node.span.start, right.span.finish),
-                    kind: ExprKind::Binary(Binary::new(
-                        Box::new(node),
-                        BinaryKind::Eq,
-                        Box::new(right),
-                    )),
+                    kind: ExprKind::Binary(Binary::new(node.into(), BinaryKind::Eq, right.into())),
                 };
             } else if self.consume_b(&TokenKind::Ne) {
                 let right = self.lt_gt_le_ge()?;
                 node = Expr {
                     span: Span::new(node.span.start, right.span.finish),
-                    kind: ExprKind::Binary(Binary::new(
-                        Box::new(node),
-                        BinaryKind::Ne,
-                        Box::new(right),
-                    )),
+                    kind: ExprKind::Binary(Binary::new(node.into(), BinaryKind::Ne, right.into())),
                 };
             } else {
                 return Ok(node);
@@ -95,41 +87,25 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                 let right = self.add_or_sub()?;
                 node = Expr {
                     span: Span::new(node.span.start, right.span.finish),
-                    kind: ExprKind::Binary(Binary::new(
-                        Box::new(node),
-                        BinaryKind::Lt,
-                        Box::new(right),
-                    )),
+                    kind: ExprKind::Binary(Binary::new(node.into(), BinaryKind::Lt, right.into())),
                 };
             } else if self.consume_b(&TokenKind::Le) {
                 let right = self.add_or_sub()?;
                 node = Expr {
                     span: Span::new(node.span.start, right.span.finish),
-                    kind: ExprKind::Binary(Binary::new(
-                        Box::new(node),
-                        BinaryKind::Le,
-                        Box::new(right),
-                    )),
+                    kind: ExprKind::Binary(Binary::new(node.into(), BinaryKind::Le, right.into())),
                 };
             } else if self.consume_b(&TokenKind::Gt) {
                 let right = self.add_or_sub()?;
                 node = Expr {
                     span: Span::new(node.span.start, right.span.finish),
-                    kind: ExprKind::Binary(Binary::new(
-                        Box::new(node),
-                        BinaryKind::Gt,
-                        Box::new(right),
-                    )),
+                    kind: ExprKind::Binary(Binary::new(node.into(), BinaryKind::Gt, right.into())),
                 };
             } else if self.consume_b(&TokenKind::Ge) {
                 let right = self.add_or_sub()?;
                 node = Expr {
                     span: Span::new(node.span.start, right.span.finish),
-                    kind: ExprKind::Binary(Binary::new(
-                        Box::new(node),
-                        BinaryKind::Ge,
-                        Box::new(right),
-                    )),
+                    kind: ExprKind::Binary(Binary::new(node.into(), BinaryKind::Ge, right.into())),
                 };
             } else {
                 return Ok(node);
@@ -145,21 +121,13 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                 let right = self.mul_or_div_or_rem()?;
                 node = Expr {
                     span: Span::new(node.span.start, right.span.finish),
-                    kind: ExprKind::Binary(Binary::new(
-                        Box::new(node),
-                        BinaryKind::Add,
-                        Box::new(right),
-                    )),
+                    kind: ExprKind::Binary(Binary::new(node.into(), BinaryKind::Add, right.into())),
                 };
             } else if self.consume_b(&TokenKind::Minus) {
                 let right = self.mul_or_div_or_rem()?;
                 node = Expr {
                     span: Span::new(node.span.start, right.span.finish),
-                    kind: ExprKind::Binary(Binary::new(
-                        Box::new(node),
-                        BinaryKind::Sub,
-                        Box::new(right),
-                    )),
+                    kind: ExprKind::Binary(Binary::new(node.into(), BinaryKind::Sub, right.into())),
                 };
             } else {
                 return Ok(node);
@@ -175,31 +143,19 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                 let right = self.unary()?;
                 node = Expr {
                     span: Span::new(node.span.start, right.span.finish),
-                    kind: ExprKind::Binary(Binary::new(
-                        Box::new(node),
-                        BinaryKind::Mul,
-                        Box::new(right),
-                    )),
+                    kind: ExprKind::Binary(Binary::new(node.into(), BinaryKind::Mul, right.into())),
                 };
             } else if self.consume_b(&TokenKind::Slash) {
                 let right = self.unary()?;
                 node = Expr {
                     span: Span::new(node.span.start, right.span.finish),
-                    kind: ExprKind::Binary(Binary::new(
-                        Box::new(node),
-                        BinaryKind::Div,
-                        Box::new(right),
-                    )),
+                    kind: ExprKind::Binary(Binary::new(node.into(), BinaryKind::Div, right.into())),
                 };
             } else if self.consume_b(&TokenKind::Percent) {
                 let right = self.unary()?;
                 node = Expr {
                     span: Span::new(node.span.start, right.span.finish),
-                    kind: ExprKind::Binary(Binary::new(
-                        Box::new(node),
-                        BinaryKind::Rem,
-                        Box::new(right),
-                    )),
+                    kind: ExprKind::Binary(Binary::new(node.into(), BinaryKind::Rem, right.into())),
                 };
             } else {
                 return Ok(node);
@@ -214,19 +170,20 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         if let Ok(span) = self.consume(&TokenKind::Minus) {
             // Subtracting a number from 0 inverts the sign
-            let zero = Box::new(Expr {
+            let zero = Expr {
                 kind: ExprKind::Int(Int {
                     kind: IntKind::I32(0),
                     span,
                 }),
                 span,
-            });
+            }
+            .into();
 
             let e = self.access()?;
 
             return Ok(Expr {
                 span: Span::new(span.start, e.span.finish),
-                kind: ExprKind::Binary(Binary::new(zero, BinaryKind::Sub, Box::new(e))),
+                kind: ExprKind::Binary(Binary::new(zero, BinaryKind::Sub, e.into())),
             });
         }
 
@@ -299,9 +256,9 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                 node = Expr {
                     span: Span::new(node.span.start, right.span.finish),
                     kind: ExprKind::Binary(Binary::new(
-                        Box::new(node),
+                        node.into(),
                         BinaryKind::Access,
-                        Box::new(right),
+                        right.into(),
                     )),
                 };
             } else {

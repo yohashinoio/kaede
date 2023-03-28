@@ -16,7 +16,10 @@ use kaede_ast::expr::{
     ArrayLiteral, Binary, BinaryKind, Borrow, Deref, Expr, ExprKind, FnCall, Ident, Index,
     LogicalNot, StructLiteral, TupleLiteral,
 };
-use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability, Ty, TyKind, UDType};
+use kaede_span::Span;
+use kaede_type::{
+    make_fundamental_type, FundamentalTypeKind, Mutability, RefrenceType, Ty, TyKind, UDType,
+};
 
 pub fn build_expression<'ctx>(
     cucx: &CompileUnitContext<'ctx, '_, '_>,
@@ -25,6 +28,40 @@ pub fn build_expression<'ctx>(
     let builder = ExprBuilder::new(cucx);
 
     builder.build(node)
+}
+
+pub fn tuple_indexing<'ctx>(
+    cucx: &CompileUnitContext<'ctx, '_, '_>,
+    tuple: PointerValue<'ctx>,
+    index: u64,
+    tuple_ty: &Rc<Ty>,
+    span: Span,
+) -> CodegenResult<Value<'ctx>> {
+    let gep = unsafe {
+        cucx.builder.build_in_bounds_gep(
+            cucx.to_llvm_type(tuple_ty),
+            tuple,
+            &[
+                cucx.context().i32_type().const_zero(),
+                cucx.context().i32_type().const_int(index, false),
+            ],
+            "",
+        )
+    };
+
+    let elem_ty = match tuple_ty.kind.as_ref() {
+        TyKind::Tuple(types) => match types.get(index as usize) {
+            Some(ty) => ty,
+
+            None => return Err(CodegenError::IndexOutOfRange { index, span }),
+        },
+        kind => unreachable!("{:?}", kind),
+    };
+
+    Ok(Value::new(
+        cucx.builder.build_load(cucx.to_llvm_type(elem_ty), gep, ""),
+        elem_ty.clone(),
+    ))
 }
 
 struct ExprBuilder<'a, 'ctx, 'm, 'c> {
@@ -209,8 +246,8 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
     fn deref(&self, node: &Deref) -> CodegenResult<Value<'ctx>> {
         let operand = build_expression(self.cucx, &node.operand)?;
 
-        let (pointee_ty, mutability) = match operand.get_type().kind.as_ref() {
-            TyKind::Reference((pointee_ty, m)) => (pointee_ty.clone(), *m),
+        let (refee_ty, mutability) = match operand.get_type().kind.as_ref() {
+            TyKind::Reference(rty) => (rty.refee_ty.clone(), rty.mutability),
 
             kind => {
                 return Err(CodegenError::CannotDeref {
@@ -221,7 +258,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         };
 
         let loaded_operand = self.cucx.builder.build_load(
-            self.cucx.to_llvm_type(&pointee_ty),
+            self.cucx.to_llvm_type(&refee_ty),
             operand.get_value().into_pointer_value(),
             "",
         );
@@ -229,7 +266,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         Ok(Value::new(
             loaded_operand,
             Rc::new(Ty {
-                kind: pointee_ty.kind.clone(),
+                kind: refee_ty.kind.clone(),
                 mutability,
             }),
         ))
@@ -266,7 +303,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         Ok(Value::new(
             ptr.as_basic_value_enum(),
             Rc::new(Ty {
-                kind: TyKind::Reference((ty, node.mutability)).into(),
+                kind: TyKind::Reference(RefrenceType::new(ty, node.mutability)).into(),
                 // Pointers to references are always immutable!
                 mutability: Mutability::Not,
             }),
@@ -731,37 +768,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             _ => return Err(CodegenError::TupleRequireAccessByIndex { span: right.span }),
         };
 
-        let gep = unsafe {
-            self.cucx.builder.build_in_bounds_gep(
-                self.cucx.to_llvm_type(tuple_ty),
-                left,
-                &[
-                    self.cucx.context().i32_type().const_zero(),
-                    self.cucx.context().i32_type().const_int(index, false),
-                ],
-                "",
-            )
-        };
-
-        let elem_ty = match tuple_ty.kind.as_ref() {
-            TyKind::Tuple(types) => match types.get(index as usize) {
-                Some(ty) => ty,
-                None => {
-                    return Err(CodegenError::IndexOutOfRange {
-                        index,
-                        span: right.span,
-                    })
-                }
-            },
-            kind => unreachable!("{:?}", kind),
-        };
-
-        Ok(Value::new(
-            self.cucx
-                .builder
-                .build_load(self.cucx.to_llvm_type(elem_ty), gep, ""),
-            elem_ty.clone(),
-        ))
+        tuple_indexing(self.cucx, left, index, tuple_ty, right.span)
     }
 
     fn call_fn(&self, node: &FnCall) -> CodegenResult<Value<'ctx>> {

@@ -802,6 +802,8 @@ fn tuple1() -> anyhow::Result<()> {
         if tup.1 {
             return tup.0
         }
+
+        return 123
     }"#;
 
     assert_eq!(run_test(program)?, 58);
@@ -810,7 +812,7 @@ fn tuple1() -> anyhow::Result<()> {
 }
 
 #[test]
-fn tuple2() -> anyhow::Result<()> {
+fn tuple_unpacking() -> anyhow::Result<()> {
     let program = r#"fn test() i32 {
         let tup = (48, true, "hello", 10)
 
@@ -819,10 +821,29 @@ fn tuple2() -> anyhow::Result<()> {
         if f {
             return n1 + n2
         }
+
+        return 123
     }"#;
 
     assert_eq!(run_test(program)?, 58);
 
+    let program = r#"fn test() i32 {
+        let (n1, f, _, n2) = (48, true, "hello", 10)
+
+        if f {
+            return n1 + n2
+        }
+
+        return 123
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn reference_tuple_unpacking() -> anyhow::Result<()> {
     let program = r#"fn test() i32 {
         let tup = (48, true, "hello", 10)
 
@@ -835,15 +856,8 @@ fn tuple2() -> anyhow::Result<()> {
 
     assert_eq!(run_test(program)?, 58);
 
-    Ok(())
-}
-
-#[test]
-fn tuple3() -> anyhow::Result<()> {
     let program = r#"fn test() i32 {
-        let tup = (48, true, "hello", 10)
-
-        let (n1, f, _, n2) = &tup
+        let (n1, f, _, n2) = &(48, true, "hello", 10)
 
         if *f {
             return *n1 + *n2

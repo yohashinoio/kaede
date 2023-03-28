@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, rc::Rc};
 
 use inkwell::{context::Context, values::IntValue};
 use kaede_span::Span;
@@ -41,6 +41,7 @@ pub struct Int {
 #[derive(Debug, PartialEq, Eq)]
 pub enum IntKind {
     I32(i32),
+    U64(u64),
 }
 
 impl Int {
@@ -49,6 +50,8 @@ impl Int {
 
         match self.kind {
             I32(n) => n as u64,
+
+            U64(n) => n,
         }
     }
 
@@ -56,13 +59,15 @@ impl Int {
         use IntKind::*;
 
         match self.kind {
-            I32(n) => context.i32_type().const_int(n as u64, false),
+            I32(n) => context.i32_type().const_int(n as u64, true),
+            U64(n) => context.i64_type().const_int(n, false),
         }
     }
 
     pub fn get_type(&self) -> Ty {
         match self.kind {
             IntKind::I32(_) => make_fundamental_type(FundamentalTypeKind::I32, Mutability::Not),
+            IntKind::U64(_) => make_fundamental_type(FundamentalTypeKind::U64, Mutability::Not),
         }
     }
 }
@@ -103,13 +108,13 @@ pub enum BinaryKind {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Binary {
-    pub lhs: Box<Expr>,
+    pub lhs: Rc<Expr>,
     pub kind: BinaryKind,
-    pub rhs: Box<Expr>,
+    pub rhs: Rc<Expr>,
 }
 
 impl Binary {
-    pub fn new(lhs: Box<Expr>, op: BinaryKind, rhs: Box<Expr>) -> Self {
+    pub fn new(lhs: Rc<Expr>, op: BinaryKind, rhs: Rc<Expr>) -> Self {
         Self { lhs, kind: op, rhs }
     }
 }

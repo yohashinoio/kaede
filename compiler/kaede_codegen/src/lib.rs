@@ -189,8 +189,8 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
 
             TyKind::UDType(name) => self.tcx.struct_table[&name.0].0.into(),
 
-            TyKind::Reference((refee_ty, _)) => self
-                .to_llvm_type(refee_ty)
+            TyKind::Reference(rty) => self
+                .to_llvm_type(&rty.refee_ty)
                 .ptr_type(AddressSpace::default())
                 .into(),
 

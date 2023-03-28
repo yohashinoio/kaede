@@ -1,5 +1,7 @@
+use std::rc::Rc;
+
 use kaede_span::Span;
-use kaede_type::Ty;
+use kaede_type::{Mutability, Ty};
 
 use crate::expr::{Expr, Ident};
 
@@ -50,9 +52,28 @@ pub struct Return {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Let {
+    pub kind: LetKind,
+    pub span: Span,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum LetKind {
+    NormalLet(NormalLet),
+    TupleUnpack(TupleUnpack),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct NormalLet {
     pub name: Ident,
-    pub init: Option<Expr>,
-    pub ty: Ty,
+    pub init: Option<Rc<Expr>>,
+    pub ty: Rc<Ty>,
+    pub span: Span,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct TupleUnpack {
+    pub names: Vec<(Ident, Mutability)>,
+    pub init: Rc<Expr>,
     pub span: Span,
 }
 

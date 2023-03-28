@@ -1,5 +1,7 @@
 use kaede_lex::token::{Token, TokenKind};
-use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability, Ty, TyKind};
+use kaede_type::{
+    make_fundamental_type, FundamentalTypeKind, Mutability, RefrenceType, Ty, TyKind,
+};
 
 use crate::{
     error::{ParseError, ParseResult},
@@ -42,7 +44,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         let refee_ty = self.ty()?;
 
         Ok(Ty {
-            kind: TyKind::Reference((refee_ty.into(), ref_mutability)).into(),
+            kind: TyKind::Reference(RefrenceType::new(refee_ty.into(), ref_mutability)).into(),
             mutability: Mutability::Not,
         })
     }
