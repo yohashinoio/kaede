@@ -390,7 +390,7 @@ fn define_struct() -> anyhow::Result<()> {
 }
 
 #[test]
-fn use_struct() -> anyhow::Result<()> {
+fn struct_field_access() -> anyhow::Result<()> {
     let program = r"struct Person {
         age i32
         stature i32
@@ -795,7 +795,7 @@ fn array_as_argument() -> anyhow::Result<()> {
 }
 
 #[test]
-fn tuple1() -> anyhow::Result<()> {
+fn tuple_indexing() -> anyhow::Result<()> {
     let program = r#"fn test() i32 {
         let tup = (58, true, "hello")
 
@@ -920,6 +920,42 @@ fn tuple_in_tuple() -> anyhow::Result<()> {
 
         return tuptup.0.0 + tuptup.1.0
     }";
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn reference_tuple_indexing() -> anyhow::Result<()> {
+    let program = r#"fn test() i32 {
+        let tup = &(58, true, "hello")
+
+        if *(tup.1) {
+            return *tup.0
+        }
+
+        return 123
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn field_access_to_reference_struct() -> anyhow::Result<()> {
+    let program = r#"struct Person {
+        age i32
+        stature i32
+        is_male bool
+        is_female bool
+    }
+
+    fn test() i32 {
+        let person = &Person { is_male false, stature 48, age 10, is_female true }
+        return *(person.age) + *person.stature
+    }"#;
 
     assert_eq!(run_test(program)?, 58);
 

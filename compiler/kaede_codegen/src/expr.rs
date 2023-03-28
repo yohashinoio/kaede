@@ -30,7 +30,7 @@ pub fn build_expression<'ctx>(
     builder.build(node)
 }
 
-pub fn tuple_indexing<'ctx>(
+pub fn build_tuple_indexing<'ctx>(
     cucx: &CompileUnitContext<'ctx, '_, '_>,
     tuple: PointerValue<'ctx>,
     index: u64,
@@ -768,7 +768,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             _ => return Err(CodegenError::TupleRequireAccessByIndex { span: right.span }),
         };
 
-        tuple_indexing(self.cucx, left, index, tuple_ty, right.span)
+        build_tuple_indexing(self.cucx, left, index, tuple_ty, right.span)
     }
 
     fn call_fn(&self, node: &FnCall) -> CodegenResult<Value<'ctx>> {

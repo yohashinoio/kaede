@@ -12,7 +12,7 @@ use kaede_ast::{
 use kaede_span::Span;
 use kaede_type::{Mutability, Ty, TyKind};
 
-use crate::expr::tuple_indexing;
+use crate::expr::build_tuple_indexing;
 use crate::value::Value;
 use crate::{
     error::{CodegenError, CodegenResult},
@@ -361,7 +361,7 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
             get_loaded_pointer(&tuple.get_value().as_instruction_value().unwrap()).unwrap();
 
         let unpacked_value =
-            tuple_indexing(self.cucx, ptr_to_tuple, index, &tuple.get_type(), span)?;
+            build_tuple_indexing(self.cucx, ptr_to_tuple, index, &tuple.get_type(), span)?;
 
         let unpacked_ty = unpacked_value.get_type();
 
