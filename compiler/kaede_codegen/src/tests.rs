@@ -898,3 +898,16 @@ fn tuples_require_access_by_index() {
         Err(CodegenError::TupleRequireAccessByIndex { .. })
     ));
 }
+
+#[test]
+fn tuple_in_tuple() -> anyhow::Result<()> {
+    let program = r"fn test() i32 {
+        let tuptup = ((48, true), (10, true))
+
+        return tuptup.0.0 + tuptup.1.0
+    }";
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
