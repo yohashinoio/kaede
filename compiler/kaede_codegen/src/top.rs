@@ -5,7 +5,10 @@ use inkwell::{
     types::{BasicType, FunctionType},
     values::FunctionValue,
 };
-use kaede_ast::top::{Fn, Import, Params, Struct, TopLevel, TopLevelKind};
+use kaede_ast::{
+    expr::Ident,
+    top::{Fn, Import, Params, Struct, TopLevel, TopLevelKind},
+};
 use kaede_lex::lex;
 use kaede_parse::parse;
 use kaede_type::Ty;
@@ -192,7 +195,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
     /// Expand function parameters into a symbol table for easier handling
     fn tabling_fn_params(
         &self,
-        param_info: Vec<(String, Rc<Ty>)>,
+        param_info: Vec<(Ident, Rc<Ty>)>,
         fn_value: FunctionValue<'ctx>,
     ) -> SymbolTable<'ctx> {
         let mut params = SymbolTable::new();
@@ -203,13 +206,13 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
             let alloca = self
                 .cucx
                 .builder
-                .build_alloca(self.cucx.to_llvm_type(&ty), &name);
+                .build_alloca(self.cucx.to_llvm_type(&ty), name.as_str());
 
             self.cucx
                 .builder
                 .build_store(alloca, fn_value.get_nth_param(idx as u32).unwrap());
 
-            params.add(name, (alloca, ty));
+            params.add(name.name, (alloca, ty));
         }
 
         params

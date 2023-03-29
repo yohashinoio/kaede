@@ -45,7 +45,7 @@ pub struct Struct {
     pub span: Span,
 }
 
-pub type Params = Vec<(String, Ty)>;
+pub type Params = Vec<(Ident, Ty)>;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Fn {

@@ -84,7 +84,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
 
         loop {
-            params.push((self.ident()?.name, self.ty()?));
+            params.push((self.ident()?, self.ty()?));
 
             if !self.consume_b(&TokenKind::Comma) {
                 break;
