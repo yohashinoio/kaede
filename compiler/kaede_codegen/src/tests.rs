@@ -931,8 +931,10 @@ fn reference_tuple_indexing() -> anyhow::Result<()> {
     let program = r#"fn test() i32 {
         let tup = &(58, true, "hello")
 
-        if *(tup.1) {
-            return *tup.0
+        let t0 = tup.0
+
+        if *tup.1 {
+            return *t0
         }
 
         return 123
@@ -954,7 +956,8 @@ fn field_access_to_reference_struct() -> anyhow::Result<()> {
 
     fn test() i32 {
         let person = &Person { is_male false, stature 48, age 10, is_female true }
-        return *(person.age) + *person.stature
+        let age = person.age
+        return *age + *person.stature
     }"#;
 
     assert_eq!(run_test(program)?, 58);

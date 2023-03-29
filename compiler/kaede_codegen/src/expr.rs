@@ -243,16 +243,14 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         ))
     }
 
-    fn deref(&self, node: &Deref) -> CodegenResult<Value<'ctx>> {
-        let operand = build_expression(self.cucx, &node.operand)?;
-
+    fn deref_internal(&self, operand: &Value<'ctx>, span: Span) -> CodegenResult<Value<'ctx>> {
         let (refee_ty, mutability) = match operand.get_type().kind.as_ref() {
             TyKind::Reference(rty) => (rty.refee_ty.clone(), rty.mutability),
 
             kind => {
                 return Err(CodegenError::CannotDeref {
                     ty: kind.to_string(),
-                    span: node.span,
+                    span,
                 })
             }
         };
@@ -270,6 +268,12 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
                 mutability,
             }),
         ))
+    }
+
+    fn deref(&self, node: &Deref) -> CodegenResult<Value<'ctx>> {
+        let operand = build_expression(self.cucx, &node.operand)?;
+
+        self.deref_internal(&operand, node.span)
     }
 
     fn borrow(&self, node: &Borrow) -> CodegenResult<Value<'ctx>> {
@@ -679,40 +683,100 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             }
         }
 
-        // --- Field access or tuple indexing ---
-
-        todo!("Support for reference struct and tuple");
-
         let left = build_expression(self.cucx, &node.lhs)?;
+
+        let left_ty = &left.get_type();
+
+        if let TyKind::Reference(rty) = left_ty.kind.as_ref() {
+            // ---  Field access or tuple indexing --- (Reference)
+            if matches!(
+                rty.get_base_type_of_reference().kind.as_ref(),
+                TyKind::UDType(_) | TyKind::Tuple(_)
+            ) {
+                return self.field_access_or_tuple_indexing_ref(&left, node.lhs.span, &node.rhs);
+            } else {
+                return Err(CodegenError::HasNoFields {
+                    span: node.lhs.span,
+                });
+            }
+        }
+
+        // --- Field access or tuple indexing --- (Not reference)
+        self.field_access_or_tuple_indexing(&left, node.lhs.span, &node.rhs)
+    }
+
+    /// Expect that left hand side is a reference
+    fn field_access_or_tuple_indexing_ref(
+        &self,
+        left: &Value<'ctx>,
+        left_span: Span,
+        right: &Expr,
+    ) -> CodegenResult<Value<'ctx>> {
+        assert!(matches!(
+            left.get_type().kind.as_ref(),
+            TyKind::Reference(_)
+        ));
+
+        let mutability = if let TyKind::Reference(rty) = left.get_type().kind.as_ref() {
+            rty.mutability
+        } else {
+            unreachable!()
+        };
+
+        let accessed_value = self.field_access_or_tuple_indexing(
+            &self.deref_internal(left, left_span)?,
+            left_span,
+            right,
+        )?;
+
+        let inst = accessed_value.get_value().as_instruction_value().unwrap();
+
+        let ptr_to_accessed = get_loaded_pointer(&inst).unwrap();
+
+        Ok(Value::new(
+            ptr_to_accessed.into(),
+            Ty {
+                kind: TyKind::Reference(RefrenceType {
+                    refee_ty: accessed_value.get_type().clone(),
+                    mutability,
+                })
+                .into(),
+                mutability: Mutability::Not,
+            }
+            .into(),
+        ))
+    }
+
+    /// Expect that left hand side is not a reference
+    fn field_access_or_tuple_indexing(
+        &self,
+        left: &Value<'ctx>,
+        left_span: Span,
+        right: &Expr,
+    ) -> CodegenResult<Value<'ctx>> {
+        assert!(!matches!(
+            left.get_type().kind.as_ref(),
+            TyKind::Reference(_)
+        ));
+
+        let left_ty = &left.get_type();
 
         let left_inst = match left.get_value().as_instruction_value() {
             Some(inst) => inst,
-            None => {
-                return Err(CodegenError::HasNoFields {
-                    span: node.lhs.span,
-                })
-            }
+            None => return Err(CodegenError::HasNoFields { span: left_span }),
         };
 
         let ptr_to_left = match get_loaded_pointer(&left_inst) {
             Some(p) => p,
-            None => {
-                return Err(CodegenError::HasNoFields {
-                    span: node.lhs.span,
-                })
-            }
+            None => return Err(CodegenError::HasNoFields { span: left_span }),
         };
 
-        let left_ty = &left.get_type();
-
         match left_ty.kind.as_ref() {
-            TyKind::UDType(_) => self.struct_field_access(ptr_to_left, &node.rhs, left_ty),
+            TyKind::UDType(_) => self.struct_field_access(ptr_to_left, &right, left_ty),
 
-            TyKind::Tuple(_) => self.tuple_indexing(ptr_to_left, &node.rhs, left_ty),
+            TyKind::Tuple(_) => self.tuple_indexing(ptr_to_left, &right, left_ty),
 
-            _ => Err(CodegenError::HasNoFields {
-                span: node.lhs.span,
-            }),
+            _ => Err(CodegenError::HasNoFields { span: left_span }),
         }
     }
 
