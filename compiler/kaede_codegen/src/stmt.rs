@@ -227,6 +227,7 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
     fn normal_let_internal(
         &mut self,
         name: Ident,
+        mutability: Mutability,
         init: Option<Value<'ctx>>,
         specified_ty: Rc<Ty>,
         span: Span,
@@ -234,8 +235,16 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
         if let Some(init) = init {
             let alloca = if specified_ty.kind.is_inferred() {
                 // No type information was available, so infer from an initializer
+
+                if let TyKind::Reference(rty) = init.get_type().kind.as_ref() {
+                    // Example: let mut x = &y
+                    if mutability.is_mut() && rty.mutability.is_not() {
+                        return Err(CodegenError::CannotAssignImmutableReferencesToMut { span });
+                    }
+                }
+
                 let mut ty = (*init.get_type()).clone();
-                ty.mutability = specified_ty.mutability;
+                ty.mutability = mutability;
 
                 let alloca = self.cucx.create_entry_block_alloca(name.as_str(), &ty);
 
@@ -271,6 +280,7 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
     fn normal_let(&mut self, node: NormalLet) -> CodegenResult<()> {
         self.normal_let_internal(
             node.name,
+            node.mutability,
             match node.init {
                 Some(e) => Some(build_expression(self.cucx, &e)?),
                 None => None,
@@ -372,6 +382,7 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
 
         self.normal_let_internal(
             unpacked_name,
+            unpacked_mutability,
             Some(unpacked_value),
             Ty {
                 kind: TyKind::Inferred.into(),
@@ -428,6 +439,7 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
 
         self.normal_let_internal(
             unpacked_name,
+            unpacked_mutability,
             Some(unpacked_value_reference),
             Ty {
                 kind: TyKind::Inferred.into(),

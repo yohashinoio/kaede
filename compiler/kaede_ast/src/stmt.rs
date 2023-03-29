@@ -65,6 +65,7 @@ pub enum LetKind {
 #[derive(Debug, PartialEq, Eq)]
 pub struct NormalLet {
     pub name: Ident,
+    pub mutability: Mutability,
     pub init: Option<Rc<Expr>>,
     pub ty: Rc<Ty>,
     pub span: Span,

@@ -223,6 +223,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             return Ok(Let {
                 kind: LetKind::NormalLet(NormalLet {
                     name,
+                    mutability,
                     init: Some(init.into()),
                     ty: Ty::new(TyKind::Inferred.into(), mutability).into(),
                     span,
@@ -247,6 +248,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         Ok(Let {
             kind: LetKind::NormalLet(NormalLet {
                 span,
+                mutability,
                 name,
                 init,
                 ty: ty.into(),

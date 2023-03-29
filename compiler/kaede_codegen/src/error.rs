@@ -52,6 +52,12 @@ pub enum CodegenError {
     #[error("{}:{} Number of tuple fields does not match ({} vs {})", span.start.line, span.start.column, lens.0, lens.1)]
     NumberOfTupleFieldsDoesNotMatch { lens: (usize, usize), span: Span },
 
+    /// Example: let mut x = &y
+    ///
+    /// Correct: let mut x = &mut y
+    #[error("{}:{} Cannot assign '&' references to mutable", span.start.line, span.start.column)]
+    CannotAssignImmutableReferencesToMut { span: Span },
+
     /// Error issued by LLVM
     #[error("{}", .what)]
     LLVMError { what: String },
