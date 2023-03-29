@@ -22,6 +22,11 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             return self.reference_ty();
         }
 
+        if self.check(&TokenKind::OpenParen) {
+            // Tuple type
+            return self.tuple_ty();
+        }
+
         let tyname = match self.ident() {
             Ok(t) => t,
             Err(_) => {
@@ -102,5 +107,28 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             kind: TyKind::Array((element_ty.into(), size)).into(),
             mutability: Mutability::Not,
         })
+    }
+
+    fn tuple_ty(&mut self) -> ParseResult<Ty> {
+        // (i32, bool)
+        // ^
+        self.consume(&TokenKind::OpenParen)?;
+
+        // (i32, bool)
+        //  ^~~~~~~~~
+        let mut field_types = Vec::new();
+
+        loop {
+            field_types.push(self.ty()?.into());
+
+            if self.consume_b(&TokenKind::CloseParen) {
+                return Ok(Ty {
+                    kind: TyKind::Tuple(field_types).into(),
+                    mutability: Mutability::Not,
+                });
+            }
+
+            self.consume(&TokenKind::Comma)?;
+        }
     }
 }
