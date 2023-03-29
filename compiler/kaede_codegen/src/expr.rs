@@ -60,7 +60,11 @@ pub fn build_tuple_indexing<'ctx>(
 
     Ok(Value::new(
         cucx.builder.build_load(cucx.to_llvm_type(elem_ty), gep, ""),
-        elem_ty.clone(),
+        Ty {
+            kind: elem_ty.kind.clone(),
+            mutability: tuple_ty.mutability,
+        }
+        .into(),
     ))
 }
 
@@ -819,7 +823,11 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             self.cucx
                 .builder
                 .build_load(self.cucx.to_llvm_type(&field_info.ty), gep, ""),
-            field_info.ty.clone(),
+            Ty {
+                kind: field_info.ty.kind.clone(),
+                mutability: struct_type.mutability,
+            }
+            .into(),
         ))
     }
 

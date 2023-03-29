@@ -2,12 +2,9 @@ use std::rc::Rc;
 
 use inkwell::{basic_block::BasicBlock, values::BasicValue, IntPredicate};
 use kaede_ast::expr::Ident;
-use kaede_ast::{
-    expr::ExprKind,
-    stmt::{
-        Assign, AssignKind, Block, Break, Else, If, Let, LetKind, Loop, NormalLet, Return, Stmt,
-        StmtKind, TupleUnpack,
-    },
+use kaede_ast::stmt::{
+    Assign, AssignKind, Block, Break, Else, If, Let, LetKind, Loop, NormalLet, Return, Stmt,
+    StmtKind, TupleUnpack,
 };
 use kaede_span::Span;
 use kaede_type::{Mutability, RefrenceType, Ty, TyKind};
@@ -100,10 +97,6 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
     }
 
     fn assign(&mut self, node: Assign) -> CodegenResult<()> {
-        if !matches!(node.lhs.kind, ExprKind::Ident(_) | ExprKind::Deref(_)) {
-            return Err(CodegenError::InvalidLeftOfAssignment { span: node.span });
-        }
-
         let left = build_expression(self.cucx, &node.lhs)?;
 
         if left.get_type().mutability.is_not() {
@@ -111,7 +104,10 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
         }
 
         let ptr_to_left =
-            get_loaded_pointer(&left.get_value().as_instruction_value().unwrap()).unwrap();
+            match get_loaded_pointer(&left.get_value().as_instruction_value().unwrap()) {
+                Some(p) => p,
+                None => return Err(CodegenError::InvalidLeftOfAssignment { span: node.span }),
+            };
 
         let right = build_expression(self.cucx, &node.rhs)?;
 
