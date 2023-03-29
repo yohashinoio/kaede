@@ -852,6 +852,8 @@ fn reference_tuple_unpacking() -> anyhow::Result<()> {
         if *f {
             return *n1 + *n2
         }
+
+        return 123
     }"#;
 
     assert_eq!(run_test(program)?, 58);
@@ -862,6 +864,8 @@ fn reference_tuple_unpacking() -> anyhow::Result<()> {
         if *f {
             return *n1 + *n2
         }
+
+        return 123
     }"#;
 
     assert_eq!(run_test(program)?, 58);

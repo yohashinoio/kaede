@@ -10,7 +10,7 @@ use kaede_ast::{
     },
 };
 use kaede_span::Span;
-use kaede_type::{Mutability, Ty, TyKind};
+use kaede_type::{Mutability, RefrenceType, Ty, TyKind};
 
 use crate::expr::build_tuple_indexing;
 use crate::value::Value;
@@ -344,7 +344,7 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
                 todo!("ERROR")
             }
 
-            self.tuple_unpacking_internal(&tuple, index as u64, name, node.span)?;
+            self.tuple_unpacking_internal(&tuple, index as u64, name, mutability, node.span)?;
         }
 
         Ok(())
@@ -355,17 +355,91 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
         tuple: &Value<'ctx>,
         index: u64,
         unpacked_name: Ident,
+        unpacked_mutability: Mutability,
         span: Span,
     ) -> CodegenResult<()> {
+        if matches!(tuple.get_type().kind.as_ref(), TyKind::Reference(_)) {
+            return self.reference_tuple_unpacking(
+                tuple,
+                index,
+                unpacked_name,
+                unpacked_mutability,
+                span,
+            );
+        }
+
         let ptr_to_tuple =
             get_loaded_pointer(&tuple.get_value().as_instruction_value().unwrap()).unwrap();
 
         let unpacked_value =
             build_tuple_indexing(self.cucx, ptr_to_tuple, index, &tuple.get_type(), span)?;
 
-        let unpacked_ty = unpacked_value.get_type();
+        self.normal_let_internal(
+            unpacked_name,
+            Some(unpacked_value),
+            Ty {
+                kind: TyKind::Inferred.into(),
+                mutability: unpacked_mutability,
+            }
+            .into(),
+            span,
+        )?;
 
-        self.normal_let_internal(unpacked_name, Some(unpacked_value), unpacked_ty, span)?;
+        Ok(())
+    }
+
+    fn reference_tuple_unpacking(
+        &mut self,
+        tuple: &Value<'ctx>,
+        index: u64,
+        unpacked_name: Ident,
+        unpacked_mutability: Mutability,
+        span: Span,
+    ) -> CodegenResult<()> {
+        assert!(matches!(
+            tuple.get_type().kind.as_ref(),
+            TyKind::Reference(_)
+        ));
+
+        let ref_tuple_ty = tuple.get_type();
+        let ref_tuple_ty = if let TyKind::Reference(rty) = ref_tuple_ty.kind.as_ref() {
+            rty
+        } else {
+            unreachable!();
+        };
+
+        let ptr_to_tuple = tuple.get_value().into_pointer_value();
+
+        let unpacked_value =
+            build_tuple_indexing(self.cucx, ptr_to_tuple, index, &ref_tuple_ty.refee_ty, span)?;
+
+        let ptr_to_unpacked_value =
+            get_loaded_pointer(&unpacked_value.get_value().as_instruction_value().unwrap())
+                .unwrap();
+
+        let unpacked_value_reference = Value::new(
+            ptr_to_unpacked_value.into(),
+            Ty {
+                kind: TyKind::Reference(RefrenceType {
+                    refee_ty: unpacked_value.get_type(),
+                    mutability: ref_tuple_ty.mutability,
+                })
+                .into(),
+                mutability: Mutability::Not,
+            }
+            .into(),
+        );
+
+        self.normal_let_internal(
+            unpacked_name,
+            Some(unpacked_value_reference),
+            Ty {
+                kind: TyKind::Inferred.into(),
+                mutability: unpacked_mutability,
+            }
+            .into(),
+            span,
+        )?;
 
         Ok(())
     }
