@@ -1063,7 +1063,9 @@ fn comments() -> anyhow::Result<()> {
         world, hello
          */
 
-        return 58
+        let n /* Number */ = 58 // Let
+
+        return /* My name is John Smith */ n // Return
 
         // hello, world
     }";

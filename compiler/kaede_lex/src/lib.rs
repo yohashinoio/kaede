@@ -137,11 +137,29 @@ impl Cursor<'_> {
         match first_char {
             '\n' => self.create_token(TokenKind::NewLine),
 
-            // Skipper
+            // Whitespace
             c if is_whitespace(c) => {
                 self.eat_whitespace();
                 self.advance_token()
             }
+
+            // Comments or Slash
+            '/' => match self.first() {
+                '/' => {
+                    // Line comment (// This is a comment)
+                    self.eat_line_comment();
+                    self.create_token(TokenKind::NewLine)
+                }
+                '*' => {
+                    // Block Comment (/* This is a comment */)
+                    self.eat_block_comment();
+                    self.advance_token()
+                }
+                _ => {
+                    // '/'
+                    self.create_token(TokenKind::Slash)
+                }
+            },
 
             // Number
             c @ '0'..='9' => {
@@ -203,7 +221,6 @@ impl Cursor<'_> {
             '+' => self.create_token(TokenKind::Plus),
             '-' => self.create_token(TokenKind::Minus),
             '*' => self.create_token(TokenKind::Asterisk),
-            '/' => self.create_token(TokenKind::Slash),
             '%' => self.create_token(TokenKind::Percent),
             '&' => {
                 if self.first() == '&' {
@@ -262,6 +279,41 @@ impl Cursor<'_> {
 
     fn eat_whitespace(&mut self) {
         self.eat_while(is_whitespace);
+    }
+
+    fn eat_line_comment(&mut self) {
+        // // xxx
+        //  ^
+        self.bump();
+
+        self.eat_while(|c| c != '\n');
+    }
+
+    fn eat_block_comment(&mut self) {
+        // /* xxx */
+        //  ^
+        self.bump();
+
+        let mut depth = 1usize;
+        while let Some(c) = self.bump() {
+            match c {
+                '/' if self.first() == '*' => {
+                    self.bump();
+                    depth += 1;
+                }
+                '*' if self.first() == '/' => {
+                    self.bump();
+                    depth -= 1;
+                    if depth == 0 {
+                        // This block comment is closed, so for a construction like "/* */ */"
+                        // there will be a successfully parsed block comment "/* */"
+                        // and " */" will be processed separately
+                        break;
+                    }
+                }
+                _ => (),
+            }
+        }
     }
 
     fn string_literal(&mut self) -> String {
