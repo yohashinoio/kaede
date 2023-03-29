@@ -22,7 +22,18 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             return self.reference_ty();
         }
 
-        Ok(match self.ident()?.as_str() {
+        let tyname = match self.ident() {
+            Ok(t) => t,
+            Err(_) => {
+                return Err(ParseError::ExpectedError {
+                    expected: "type".to_string(),
+                    but: self.first().kind.to_string(),
+                    span: self.first().span,
+                })
+            }
+        };
+
+        Ok(match tyname.as_str() {
             "i32" => make_fundamental_type(I32, Mutability::Not),
             "bool" => make_fundamental_type(Bool, Mutability::Not),
 
