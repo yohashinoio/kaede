@@ -1046,3 +1046,29 @@ fn assign_to_immutable_tuple_field() {
         Err(CodegenError::CannotAssignTwiceToImutable { .. })
     ));
 }
+
+#[test]
+fn comments() -> anyhow::Result<()> {
+    let program = r"// hello, world
+    /* hello, world */
+    /*
+    hello, world
+    world, hello
+     */
+    fn test() i32 {
+        // hello, world
+        /* hello, world */
+        /*
+        hello, world
+        world, hello
+         */
+
+        return 58
+
+        // hello, world
+    }";
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
