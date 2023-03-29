@@ -406,7 +406,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         }
     }
 
-    fn build_logical_or(&self, b1: IntValue<'ctx>, b2: IntValue<'ctx>) -> Value<'ctx> {
+    fn logical_or(&self, b1: IntValue<'ctx>, b2: IntValue<'ctx>) -> Value<'ctx> {
         let bool_type = self.cucx.context().bool_type();
 
         let result = self.cucx.builder.build_or(b1, b2, "");
@@ -430,7 +430,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         )
     }
 
-    fn build_logical_and(&self, b1: IntValue<'ctx>, b2: IntValue<'ctx>) -> Value<'ctx> {
+    fn logical_and(&self, b1: IntValue<'ctx>, b2: IntValue<'ctx>) -> Value<'ctx> {
         let bool_type = self.cucx.context().bool_type();
 
         let result = self.cucx.builder.build_and(b1, b2, "");
@@ -464,9 +464,9 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         let right_int = right.get_value().into_int_value();
 
         Ok(match node.kind {
-            LogicalOr => self.build_logical_or(left_int, right_int),
+            LogicalOr => self.logical_or(left_int, right_int),
 
-            LogicalAnd => self.build_logical_and(left_int, right_int),
+            LogicalAnd => self.logical_and(left_int, right_int),
 
             Add => Value::new(
                 self.cucx
@@ -680,6 +680,8 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         }
 
         // --- Field access or tuple indexing ---
+
+        todo!("Support for reference struct and tuple");
 
         let left = build_expression(self.cucx, &node.lhs)?;
 
