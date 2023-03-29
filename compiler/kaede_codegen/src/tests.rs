@@ -968,3 +968,81 @@ fn field_access_to_reference_struct() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn assign_to_struct_field() -> anyhow::Result<()> {
+    let program = r#"struct Person {
+        age i32
+        stature i32
+        is_male bool
+        is_female bool
+    }
+
+    fn test() i32 {
+        let mut person = Person { is_male false, stature 48, age 0, is_female true }
+        person.age = 10
+        return person.age + person.stature
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn assign_to_immutable_struct_field() {
+    let program = r#"struct Person {
+        age i32
+        stature i32
+        is_male bool
+        is_female bool
+    }
+
+    fn test() i32 {
+        let person = Person { is_male false, stature 48, age 0, is_female true }
+        person.age = 10
+        return person.age + person.stature
+    }"#;
+
+    assert!(matches!(
+        run_test(program),
+        Err(CodegenError::CannotAssignTwiceToImutable { .. })
+    ));
+}
+
+#[test]
+fn assign_to_tuple_field() -> anyhow::Result<()> {
+    let program = r#"fn test() i32 {
+        let mut t = (58, false)
+        t.1 = true
+
+        if t.1 {
+            return t.0
+        }
+
+        return 123
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn assign_to_immutable_tuple_field() {
+    let program = r#"fn test() i32 {
+        let t = (58, false)
+        t.1 = true
+
+        if t.1 {
+            return t.0
+        }
+
+        return 123
+    }"#;
+
+    assert!(matches!(
+        run_test(program),
+        Err(CodegenError::CannotAssignTwiceToImutable { .. })
+    ));
+}
