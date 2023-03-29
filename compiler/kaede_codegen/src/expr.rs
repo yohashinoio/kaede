@@ -737,7 +737,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             ptr_to_accessed.into(),
             Ty {
                 kind: TyKind::Reference(RefrenceType {
-                    refee_ty: accessed_value.get_type().clone(),
+                    refee_ty: accessed_value.get_type(),
                     mutability,
                 })
                 .into(),
@@ -772,9 +772,9 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         };
 
         match left_ty.kind.as_ref() {
-            TyKind::UDType(_) => self.struct_field_access(ptr_to_left, &right, left_ty),
+            TyKind::UDType(_) => self.struct_field_access(ptr_to_left, right, left_ty),
 
-            TyKind::Tuple(_) => self.tuple_indexing(ptr_to_left, &right, left_ty),
+            TyKind::Tuple(_) => self.tuple_indexing(ptr_to_left, right, left_ty),
 
             _ => Err(CodegenError::HasNoFields { span: left_span }),
         }
