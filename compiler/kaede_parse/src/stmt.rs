@@ -266,7 +266,14 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         loop {
             let mutability = self.consume_b(&TokenKind::Mut).into();
 
-            names.push((self.ident()?, mutability));
+            let ident = self.ident()?;
+
+            if ident.as_str() == "_" {
+                // Ignore field
+                names.push(None);
+            } else {
+                names.push(Some((ident, mutability)));
+            }
 
             if self.consume_b(&TokenKind::CloseParen) {
                 break;

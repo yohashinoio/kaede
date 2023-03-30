@@ -345,7 +345,12 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
         }
 
         // Unpacking
-        for (index, (name, mutability)) in node.names.into_iter().enumerate() {
+        for (index, name_and_mutability) in node.names.into_iter().enumerate() {
+            let (name, mutability) = match name_and_mutability {
+                Some(nam) => (nam.0, nam.1),
+                None => continue,
+            };
+
             if mutability.is_mut() && tuple_mutability.is_not() {
                 todo!("ERROR")
             }

@@ -73,7 +73,9 @@ pub struct NormalLet {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct TupleUnpack {
-    pub names: Vec<(Ident, Mutability)>,
+    /// None if ignore field
+    pub names: Vec<Option<(Ident, Mutability)>>,
+
     pub init: Rc<Expr>,
     pub span: Span,
 }
