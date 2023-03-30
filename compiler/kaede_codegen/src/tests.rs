@@ -1114,6 +1114,26 @@ fn assign_to_reference_tuple_field() -> anyhow::Result<()> {
 }
 
 #[test]
+fn assign_to_unpacked_reference_tuple_field() -> anyhow::Result<()> {
+    let program = r#"fn test() i32 {
+        let mut t = (123, true)
+
+        let (n, _) = &mut t
+        *n = 58
+
+        if t.1 {
+            return t.0
+        }
+
+        return 124
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
 fn assign_immutable_ref_to_mutable_variable() {
     let program = r#"fn test() i32 {
         let n = 58

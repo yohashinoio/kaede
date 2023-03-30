@@ -348,6 +348,8 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
         for (index, name_and_mutability) in node.names.into_iter().enumerate() {
             let (name, mutability) = match name_and_mutability {
                 Some(nam) => (nam.0, nam.1),
+
+                // Ignore field
                 None => continue,
             };
 
