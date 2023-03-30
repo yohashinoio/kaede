@@ -33,18 +33,7 @@ impl<'a> Cursor<'a> {
         };
 
         match c {
-            // Unix (LF)
             '\n' => {
-                self.span_builder.increase_line();
-            }
-
-            // Windows (CRLF), Mac (CR)
-            '\r' => {
-                // Windows
-                if self.first() == '\n' {
-                    self.chars.next();
-                }
-
                 self.span_builder.increase_line();
             }
 
