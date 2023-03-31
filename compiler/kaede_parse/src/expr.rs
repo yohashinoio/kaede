@@ -474,13 +474,13 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         let finish = self.consume(&TokenKind::CloseBrace)?.finish;
 
-        return Ok(Expr {
+        Ok(Expr {
             span: Span::new(struct_name.span.start, finish),
             kind: ExprKind::StructLiteral(StructLiteral {
                 struct_name,
                 values: inits,
             }),
-        });
+        })
     }
 
     fn string_literal(&mut self) -> Option<Expr> {
