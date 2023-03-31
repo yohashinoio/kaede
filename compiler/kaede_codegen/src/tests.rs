@@ -153,7 +153,7 @@ fn let_statement() -> anyhow::Result<()> {
 
     // Specified type
     let program = r"fn test() -> i32 {
-        let yohaio i32 = 58
+        let yohaio: i32 = 58
         return yohaio
     }";
 
@@ -161,7 +161,7 @@ fn let_statement() -> anyhow::Result<()> {
 
     // Mutable, Specified type
     let program = r"fn test() -> i32 {
-        let mut yohaio i32 = 58
+        let mut yohaio: i32 = 58
         return yohaio
     }";
 
@@ -769,8 +769,8 @@ fn array_indexing() -> anyhow::Result<()> {
 #[test]
 fn array_type() -> anyhow::Result<()> {
     let program = r"fn test() -> i32 {
-        let a [i32; 2] = [48, 10]
-        let n [i32; 1] = [4]
+        let a: [i32; 2] = [48, 10]
+        let n: [i32; 1] = [4]
         return a[0] + a[1] + n[0]
     }";
 

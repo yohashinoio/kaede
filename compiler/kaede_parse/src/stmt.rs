@@ -232,6 +232,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             });
         }
 
+        self.consume(&TokenKind::Colon)?;
         let ty = self.ty()?;
 
         let init = if self.consume_b(&TokenKind::Eq) {
