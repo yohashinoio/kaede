@@ -455,20 +455,32 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
 
         loop {
-            inits.push((self.ident()?, self.expr()?));
+            if self.check(&TokenKind::CloseBrace) {
+                break;
+            }
+
+            let name = self.ident()?;
+
+            self.consume(&TokenKind::Colon)?;
+
+            let init = self.expr()?;
+
+            inits.push((name, init));
 
             if !self.consume_b(&TokenKind::Comma) {
-                let finish = self.consume(&TokenKind::CloseBrace)?.finish;
-
-                return Ok(Expr {
-                    span: Span::new(struct_name.span.start, finish),
-                    kind: ExprKind::StructLiteral(StructLiteral {
-                        struct_name,
-                        values: inits,
-                    }),
-                });
+                break;
             }
         }
+
+        let finish = self.consume(&TokenKind::CloseBrace)?.finish;
+
+        return Ok(Expr {
+            span: Span::new(struct_name.span.start, finish),
+            kind: ExprKind::StructLiteral(StructLiteral {
+                struct_name,
+                values: inits,
+            }),
+        });
     }
 
     fn string_literal(&mut self) -> Option<Expr> {

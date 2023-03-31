@@ -205,7 +205,18 @@ impl Cursor<'_> {
             ']' => self.create_token(TokenKind::CloseBracket),
             ',' => self.create_token(TokenKind::Comma),
             ';' => self.create_token(TokenKind::Semi),
+            ':' => self.create_token(TokenKind::Colon),
             '.' => self.create_token(TokenKind::Dot),
+            '-' => {
+                if self.first() == '>' {
+                    // ->
+                    self.bump().unwrap();
+                    self.create_token(TokenKind::Arrow)
+                } else {
+                    // -
+                    self.create_token(TokenKind::Minus)
+                }
+            }
 
             // Operators
             '!' => {
@@ -219,7 +230,6 @@ impl Cursor<'_> {
                 }
             }
             '+' => self.create_token(TokenKind::Plus),
-            '-' => self.create_token(TokenKind::Minus),
             '*' => self.create_token(TokenKind::Asterisk),
             '%' => self.create_token(TokenKind::Percent),
             '&' => {

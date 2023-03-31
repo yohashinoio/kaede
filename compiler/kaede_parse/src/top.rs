@@ -55,12 +55,10 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         self.consume(&TokenKind::CloseParen)?;
 
-        let return_ty = {
-            if self.check(&TokenKind::OpenBrace) {
-                None
-            } else {
-                Some(self.ty()?)
-            }
+        let return_ty = if self.consume_b(&TokenKind::Arrow) {
+            Some(self.ty()?)
+        } else {
+            None
         };
 
         let body = self.block()?;
@@ -84,7 +82,13 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
 
         loop {
-            params.push((self.ident()?, self.ty()?));
+            let name = self.ident()?;
+
+            self.consume(&TokenKind::Colon)?;
+
+            let ty = self.ty()?;
+
+            params.push((name, ty));
 
             if !self.consume_b(&TokenKind::Comma) {
                 break;
@@ -122,9 +126,13 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
             let name = self.ident()?;
 
+            self.consume(&TokenKind::Colon)?;
+
             let ty = self.ty()?;
 
-            self.consume_semi()?;
+            if !self.consume_b(&TokenKind::Comma) {
+                break;
+            }
 
             fields.push(StructField {
                 name,

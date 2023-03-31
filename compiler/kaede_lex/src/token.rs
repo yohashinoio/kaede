@@ -29,8 +29,12 @@ pub enum TokenKind {
     Comma,
     /// ";"
     Semi,
+    /// ":"
+    Colon,
     /// "."
     Dot,
+    /// "->"
+    Arrow,
 
     // Operators
     /// "+"
@@ -118,7 +122,9 @@ impl std::fmt::Display for TokenKind {
             CloseBracket => write!(f, "']'"),
             Comma => write!(f, "','"),
             Semi => write!(f, "';'"),
+            Colon => write!(f, "':'"),
             Dot => write!(f, "'.'"),
+            Arrow => write!(f, "'->'"),
 
             Plus => write!(f, "'+'"),
             Minus => write!(f, "'-'"),
