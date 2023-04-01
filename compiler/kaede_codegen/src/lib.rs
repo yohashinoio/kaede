@@ -2,6 +2,7 @@ use std::{collections::HashSet, path::PathBuf};
 
 use error::{CodegenError, CodegenResult};
 use inkwell::{
+    basic_block::BasicBlock,
     builder::Builder,
     context::Context,
     module::Module,
@@ -112,6 +113,16 @@ pub struct CompileUnitContext<'ctx, 'm, 'c> {
 
     pub modname: String,
     pub imported_modules: HashSet<String>,
+
+    /// Block to jump to when a `break` is executed
+    ///
+    /// Empty if **not** in a loop
+    ///
+    /// Each time a loop is nested, a basicblock is pushed
+    pub loop_break_bb_stk: Vec<BasicBlock<'ctx>>,
+
+    // Flag to be used if 'if' is not used as an expression
+    pub is_if_statement: bool,
 }
 
 impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
@@ -130,6 +141,8 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
             file_path,
             modname,
             imported_modules: HashSet::new(),
+            loop_break_bb_stk: Vec::new(),
+            is_if_statement: false,
         })
     }
 
@@ -201,6 +214,8 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
                 context.struct_type(types.as_slice(), true).into()
             }
 
+            TyKind::Unit => panic!("Cannot get LLVM type of unit type!"),
+            TyKind::Never => panic!("Cannot get LLVM type of never type!"),
             TyKind::Inferred => panic!("Cannot get LLVM type of inferred type!"),
         }
     }

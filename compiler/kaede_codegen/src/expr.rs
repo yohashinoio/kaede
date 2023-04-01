@@ -4,6 +4,8 @@ use crate::{
     error::{CodegenError, CodegenResult},
     get_loaded_pointer,
     mangle::mangle_name,
+    stmt::{build_block, build_statement},
+    tcx::SymbolTable,
     value::{has_signed, Value},
     CompileUnitContext,
 };
@@ -12,20 +14,60 @@ use inkwell::{
     values::{BasicValue, IntValue, PointerValue},
     IntPredicate,
 };
-use kaede_ast::expr::{
-    ArrayLiteral, Binary, BinaryKind, Borrow, Deref, Expr, ExprKind, FnCall, Ident, Index,
-    LogicalNot, StructLiteral, TupleLiteral,
+use kaede_ast::{
+    expr::{
+        ArrayLiteral, Binary, BinaryKind, Borrow, Break, Deref, Else, Expr, ExprKind, FnCall,
+        Ident, If, Indexing, LogicalNot, Loop, Return, StructLiteral, TupleLiteral,
+    },
+    stmt::{Block, StmtKind},
 };
 use kaede_span::Span;
 use kaede_type::{
-    make_fundamental_type, FundamentalTypeKind, Mutability, RefrenceType, Ty, TyKind, UDType,
+    is_same_type, make_fundamental_type, FundamentalTypeKind, Mutability, RefrenceType, Ty, TyKind,
+    UDType,
 };
 
+/// Unit value if the end of the block is not an expression
+pub fn build_block_expression<'ctx>(
+    cucx: &mut CompileUnitContext<'ctx, '_, '_>,
+    block: &Block,
+) -> CodegenResult<Value<'ctx>> {
+    if block.body.is_empty() {
+        return Ok(Value::new_unit());
+    }
+
+    cucx.tcx.push_symbol_table(SymbolTable::new());
+
+    let mut idx: usize = 0;
+
+    let last_stmt = loop {
+        if idx + 1 == block.body.len() {
+            // Last element
+            break &block.body[idx];
+        }
+
+        build_statement(cucx, &block.body[idx])?;
+
+        idx += 1;
+    };
+
+    let value = match &last_stmt.kind {
+        StmtKind::Expr(e) => build_expression(cucx, e)?,
+
+        // The end of the block is not an expression
+        _ => Value::new_unit(),
+    };
+
+    cucx.tcx.pop_symbol_table();
+
+    Ok(value)
+}
+
 pub fn build_expression<'ctx>(
-    cucx: &CompileUnitContext<'ctx, '_, '_>,
+    cucx: &mut CompileUnitContext<'ctx, '_, '_>,
     node: &Expr,
 ) -> CodegenResult<Value<'ctx>> {
-    let builder = ExprBuilder::new(cucx);
+    let mut builder = ExprBuilder::new(cucx);
 
     builder.build(node)
 }
@@ -69,16 +111,16 @@ pub fn build_tuple_indexing<'ctx>(
 }
 
 struct ExprBuilder<'a, 'ctx, 'm, 'c> {
-    cucx: &'a CompileUnitContext<'ctx, 'm, 'c>,
+    cucx: &'a mut CompileUnitContext<'ctx, 'm, 'c>,
 }
 
 impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
-    fn new(cucx: &'a CompileUnitContext<'ctx, 'm, 'c>) -> Self {
+    fn new(cucx: &'a mut CompileUnitContext<'ctx, 'm, 'c>) -> Self {
         Self { cucx }
     }
 
     /// Generate expression code
-    fn build(&self, node: &Expr) -> CodegenResult<Value<'ctx>> {
+    fn build(&mut self, node: &Expr) -> CodegenResult<Value<'ctx>> {
         Ok(match &node.kind {
             ExprKind::Int(int) => Value::new(
                 int.as_llvm_int(self.cucx.context()).into(),
@@ -110,10 +152,162 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             ExprKind::Deref(node) => self.deref(node)?,
 
             ExprKind::Indexing(node) => self.indexing(node)?,
+
+            ExprKind::Break(node) => self.break_(node)?,
+
+            ExprKind::Return(node) => self.return_(node)?,
+
+            ExprKind::Loop(node) => self.loop_(node)?,
+
+            ExprKind::If(node) => self.if_(node)?,
         })
     }
 
-    fn tuple_literal(&self, node: &TupleLiteral) -> CodegenResult<Value<'ctx>> {
+    fn break_(&self, node: &Break) -> CodegenResult<Value<'ctx>> {
+        match self.cucx.loop_break_bb_stk.last() {
+            Some(bb) => {
+                self.cucx.builder.build_unconditional_branch(*bb);
+                Ok(Value::new_never())
+            }
+
+            None => Err(CodegenError::BreakOutsideOfLoop { span: node.span }),
+        }
+    }
+
+    fn return_(&mut self, node: &Return) -> CodegenResult<Value<'ctx>> {
+        match &node.val {
+            Some(val) => {
+                let value = build_expression(self.cucx, val)?;
+                self.cucx.builder.build_return(Some(&value.get_value()))
+            }
+
+            None => self.cucx.builder.build_return(None),
+        };
+
+        Ok(Value::new_never())
+    }
+
+    fn loop_(&mut self, node: &Loop) -> CodegenResult<Value<'ctx>> {
+        let parent = self.cucx.get_current_fn();
+
+        let body_bb = self.cucx.context().append_basic_block(parent, "body");
+
+        let cont_bb = self.cucx.context().append_basic_block(parent, "loopcont");
+
+        // Setup for break statement
+        self.cucx.loop_break_bb_stk.push(cont_bb);
+
+        // Build body block
+        self.cucx.builder.build_unconditional_branch(body_bb);
+        self.cucx.builder.position_at_end(body_bb);
+        build_block(self.cucx, &node.body)?;
+
+        // Loop!
+        if self.cucx.no_terminator() {
+            self.cucx.builder.build_unconditional_branch(body_bb);
+        }
+
+        self.cucx.builder.position_at_end(cont_bb);
+
+        Ok(Value::new_never())
+    }
+
+    fn if_(&mut self, node: &If) -> CodegenResult<Value<'ctx>> {
+        let parent = self.cucx.get_current_fn();
+        let zero_const = self.cucx.context().bool_type().const_zero();
+
+        let cond = build_expression(self.cucx, &node.cond)?;
+        let cond = self.cucx.builder.build_int_compare(
+            IntPredicate::NE,
+            cond.get_value().into_int_value(),
+            zero_const,
+            "ifcond",
+        );
+
+        let then_bb = self.cucx.context().append_basic_block(parent, "then");
+        let else_bb = self.cucx.context().append_basic_block(parent, "else");
+        let cont_bb = self.cucx.context().append_basic_block(parent, "ifcont");
+
+        self.cucx
+            .builder
+            .build_conditional_branch(cond, then_bb, else_bb);
+
+        // Build then block
+        self.cucx.builder.position_at_end(then_bb);
+        let then_val = build_block_expression(self.cucx, &node.then)?;
+        // Since there can be no more than one terminator per block
+        if self.cucx.no_terminator() {
+            self.cucx.builder.build_unconditional_branch(cont_bb);
+        }
+
+        let then_bb = self.cucx.builder.get_insert_block().unwrap();
+
+        // Build else block
+        self.cucx.builder.position_at_end(else_bb);
+
+        let else_val = match &node.else_ {
+            Some(else_) => match else_.as_ref() {
+                Else::If(if_) => self.if_(if_)?,
+                Else::Block(block) => build_block_expression(self.cucx, block)?,
+            },
+
+            _ => {
+                // Check if it is used as an expression
+                if self.cucx.is_if_statement {
+                    Value::new_unit()
+                } else {
+                    return Err(CodegenError::IfMustHaveElseUsedAsExpr { span: node.span });
+                }
+            }
+        };
+
+        let else_bb = self.cucx.builder.get_insert_block().unwrap();
+
+        // Since there can be no more than one terminator per block
+        if self.cucx.no_terminator() {
+            self.cucx.builder.build_unconditional_branch(cont_bb);
+        }
+
+        self.cucx.builder.position_at_end(cont_bb);
+
+        if self.cucx.is_if_statement {
+            // Not used as a expression
+            return Ok(Value::new_unit());
+        }
+
+        if !is_same_type(&then_val.get_type(), &else_val.get_type()) {
+            return Err(CodegenError::IfAndElseHaveIncompatibleTypes {
+                types: (
+                    then_val.get_type().kind.to_string(),
+                    else_val.get_type().kind.to_string(),
+                ),
+                span: node.span,
+            });
+        }
+
+        // Either then_val or else_val could be never
+        let ty = if matches!(then_val.get_type().kind.as_ref(), TyKind::Never) {
+            return Ok(else_val);
+        } else if matches!(else_val.get_type().kind.as_ref(), TyKind::Never) {
+            return Ok(then_val);
+        } else {
+            then_val.get_type()
+        };
+
+        let phi = self
+            .cucx
+            .builder
+            .build_phi(self.cucx.to_llvm_type(&ty), "iftmp");
+
+        phi.add_incoming(&[
+            (&then_val.get_value(), then_bb),
+            (&else_val.get_value(), else_bb),
+        ]);
+
+        Ok(Value::new(phi.as_basic_value(), ty))
+    }
+
+    fn tuple_literal(&mut self, node: &TupleLiteral) -> CodegenResult<Value<'ctx>> {
         let element_values = {
             let mut v = Vec::new();
             for e in node.elements.iter() {
@@ -142,7 +336,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         ))
     }
 
-    fn indexing(&self, node: &Index) -> CodegenResult<Value<'ctx>> {
+    fn indexing(&mut self, node: &Indexing) -> CodegenResult<Value<'ctx>> {
         let array = build_expression(self.cucx, &node.operand)?;
         let array_ty = array.get_type();
 
@@ -183,7 +377,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         ))
     }
 
-    fn array_literal(&self, node: &ArrayLiteral) -> CodegenResult<Value<'ctx>> {
+    fn array_literal(&mut self, node: &ArrayLiteral) -> CodegenResult<Value<'ctx>> {
         assert!(!node.elements.is_empty());
 
         let mut elems = Vec::new();
@@ -224,7 +418,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         ))
     }
 
-    fn logical_not(&self, node: &LogicalNot) -> CodegenResult<Value<'ctx>> {
+    fn logical_not(&mut self, node: &LogicalNot) -> CodegenResult<Value<'ctx>> {
         let operand = build_expression(self.cucx, &node.operand)?;
 
         let zero = self.cucx.to_llvm_type(&operand.get_type()).const_zero();
@@ -274,13 +468,13 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         ))
     }
 
-    fn deref(&self, node: &Deref) -> CodegenResult<Value<'ctx>> {
+    fn deref(&mut self, node: &Deref) -> CodegenResult<Value<'ctx>> {
         let operand = build_expression(self.cucx, &node.operand)?;
 
         self.deref_internal(&operand, node.span)
     }
 
-    fn borrow(&self, node: &Borrow) -> CodegenResult<Value<'ctx>> {
+    fn borrow(&mut self, node: &Borrow) -> CodegenResult<Value<'ctx>> {
         let (ptr, ty) = match &node.operand.kind {
             ExprKind::Ident(ident) => {
                 let var = self.cucx.tcx.lookup_var(ident)?;
@@ -332,9 +526,9 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         )
     }
 
-    fn struct_literal(&self, node: &StructLiteral) -> CodegenResult<Value<'ctx>> {
+    fn struct_literal(&mut self, node: &StructLiteral) -> CodegenResult<Value<'ctx>> {
         let (_ty, info) = match self.cucx.tcx.struct_table.get(node.struct_name.as_str()) {
-            Some(value) => value,
+            Some(x) => (x.0, x.1.clone()),
 
             None => {
                 return Err(CodegenError::Undeclared {
@@ -349,11 +543,10 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         for value in node.values.iter() {
             let field_info = &info.fields[value.0.as_str()];
 
+            let value = build_expression(self.cucx, &value.1)?;
+
             // To sort by offset, store offset
-            values.push((
-                field_info.offset,
-                build_expression(self.cucx, &value.1)?.get_value(),
-            ));
+            values.push((field_info.offset, value.get_value()));
         }
 
         // Sort in ascending order based on offset
@@ -404,7 +597,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         ))
     }
 
-    fn binary_op(&self, node: &Binary) -> CodegenResult<Value<'ctx>> {
+    fn binary_op(&mut self, node: &Binary) -> CodegenResult<Value<'ctx>> {
         use BinaryKind::*;
 
         match node.kind {
@@ -462,7 +655,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         )
     }
 
-    fn binary_arithmetic_op(&self, node: &Binary) -> CodegenResult<Value<'ctx>> {
+    fn binary_arithmetic_op(&mut self, node: &Binary) -> CodegenResult<Value<'ctx>> {
         use BinaryKind::*;
 
         let left = self.build(node.lhs.as_ref())?;
@@ -671,7 +864,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
     }
 
     /// Field access or module item access
-    fn access(&self, node: &Binary) -> CodegenResult<Value<'ctx>> {
+    fn access(&mut self, node: &Binary) -> CodegenResult<Value<'ctx>> {
         assert!(matches!(node.kind, BinaryKind::Access));
 
         if let ExprKind::Ident(modname) = &node.lhs.kind {
@@ -845,7 +1038,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         build_tuple_indexing(self.cucx, left, index, tuple_ty, right.span)
     }
 
-    fn call_fn(&self, node: &FnCall) -> CodegenResult<Value<'ctx>> {
+    fn call_fn(&mut self, node: &FnCall) -> CodegenResult<Value<'ctx>> {
         let func = self
             .cucx
             .module

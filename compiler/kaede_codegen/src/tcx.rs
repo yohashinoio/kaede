@@ -47,7 +47,7 @@ pub struct StructInfo {
     pub fields: HashMap<String, StructFieldInfo>,
 }
 
-pub type StructTable<'ctx> = HashMap<String, (StructType<'ctx>, StructInfo)>;
+pub type StructTable<'ctx> = HashMap<String, (StructType<'ctx>, Rc<StructInfo>)>;
 
 /// Holds information necessary for typing
 #[derive(Default)]

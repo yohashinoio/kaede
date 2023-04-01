@@ -58,6 +58,12 @@ pub enum CodegenError {
     #[error("{}:{} Cannot assign '&' references to mutable", span.start.line, span.start.column)]
     CannotAssignImmutableReferencesToMut { span: Span },
 
+    #[error("{}:{} 'if' must have both main and 'else' branches if used as an expression", span.start.line, span.start.column)]
+    IfMustHaveElseUsedAsExpr { span: Span },
+
+    #[error("{}:{} `if` and `else` have incompatible types: {} vs {}", span.start.line, span.start.column, types.0, types.1)]
+    IfAndElseHaveIncompatibleTypes { types: (String, String), span: Span },
+
     /// Error issued by LLVM
     #[error("{}", .what)]
     LLVMError { what: String },

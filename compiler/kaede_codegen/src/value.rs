@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use inkwell::values::BasicValueEnum;
-use kaede_type::Ty;
+use kaede_type::{Mutability, Ty, TyKind};
 
 /// The type information in llvm's value is **insufficient**, so wrap it with our own type
 ///
@@ -19,6 +19,32 @@ impl<'ctx> Value<'ctx> {
         Self {
             val: Some(val),
             ty: Some(ty),
+        }
+    }
+
+    pub fn new_never() -> Self {
+        Self {
+            val: None,
+            ty: Some(
+                Ty {
+                    kind: TyKind::Never.into(),
+                    mutability: Mutability::Not,
+                }
+                .into(),
+            ),
+        }
+    }
+
+    pub fn new_unit() -> Self {
+        Self {
+            val: None,
+            ty: Some(
+                Ty {
+                    kind: TyKind::Unit.into(),
+                    mutability: Mutability::Not,
+                }
+                .into(),
+            ),
         }
     }
 

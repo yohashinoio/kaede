@@ -2,10 +2,7 @@ use std::rc::Rc;
 
 use kaede_ast::{
     expr::Expr,
-    stmt::{
-        Assign, AssignKind, Block, Break, Else, If, Let, LetKind, Loop, NormalLet, Return, Stmt,
-        StmtKind, TupleUnpack,
-    },
+    stmt::{Assign, AssignKind, Block, Let, LetKind, NormalLet, Stmt, StmtKind, TupleUnpack},
 };
 use kaede_lex::token::{Token, TokenKind};
 use kaede_span::{Location, Span};
@@ -45,35 +42,11 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
     /// Semicolons are **not** consumed
     pub fn stmt(&mut self) -> ParseResult<Stmt> {
-        if self.check(&TokenKind::Return) {
-            let r = self.return_()?;
-            Ok(Stmt {
-                span: r.span,
-                kind: StmtKind::Return(r),
-            })
-        } else if self.check(&TokenKind::Let) {
+        if self.check(&TokenKind::Let) {
             let l = self.let_()?;
             Ok(Stmt {
                 span: l.span,
                 kind: StmtKind::Let(l),
-            })
-        } else if self.check(&TokenKind::If) {
-            let i = self.if_()?;
-            Ok(Stmt {
-                span: i.span,
-                kind: StmtKind::If(i),
-            })
-        } else if self.check(&TokenKind::Loop) {
-            let l = self.loop_()?;
-            Ok(Stmt {
-                span: l.span,
-                kind: StmtKind::Loop(l),
-            })
-        } else if self.check(&TokenKind::Break) {
-            let b = self.break_()?;
-            Ok(Stmt {
-                span: b.span,
-                kind: StmtKind::Break(b),
             })
         } else {
             let expr = self.expr()?;
@@ -115,90 +88,6 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
 
         None
-    }
-
-    fn break_(&mut self) -> ParseResult<Break> {
-        Ok(Break {
-            span: self.consume(&TokenKind::Break).unwrap(),
-        })
-    }
-
-    fn loop_(&mut self) -> ParseResult<Loop> {
-        let start = self.consume(&TokenKind::Loop).unwrap().start;
-
-        let body = self.block()?;
-
-        Ok(Loop {
-            span: Span::new(start, body.span.finish),
-            body,
-        })
-    }
-
-    /// Needed to **avoid confusion** between struct literals and block statements
-    ///
-    /// if x {}
-    ///
-    /// In such code as above,
-    /// `then block` of `if statement` is not parsed as an initializer of a struct literals
-    fn cond_expr(&mut self) -> ParseResult<Expr> {
-        self.in_cond_expr = true;
-        let cond = self.expr();
-        self.in_cond_expr = false;
-        cond
-    }
-
-    fn if_(&mut self) -> ParseResult<If> {
-        let start = self.consume(&TokenKind::If).unwrap().start;
-
-        let cond = self.cond_expr()?;
-
-        let then = self.block()?;
-
-        let else_ = self.else_()?.map(Box::new);
-
-        let finish = match else_.as_ref() {
-            Some(else_) => match else_.as_ref() {
-                Else::Block(block) => block.span.finish,
-                Else::If(if_) => if_.span.finish,
-            },
-
-            None => then.span.finish,
-        };
-
-        Ok(If {
-            cond,
-            then,
-            else_,
-            span: Span::new(start, finish),
-        })
-    }
-
-    /// `None` if there is no else
-    fn else_(&mut self) -> ParseResult<Option<Else>> {
-        if !self.consume_b(&TokenKind::Else) {
-            return Ok(None);
-        }
-
-        if self.check(&TokenKind::If) {
-            return Ok(Some(Else::If(self.if_()?)));
-        }
-
-        Ok(Some(Else::Block(self.block()?)))
-    }
-
-    fn return_(&mut self) -> ParseResult<Return> {
-        let span = self.consume(&TokenKind::Return).unwrap();
-
-        if self.check_semi() {
-            return Ok(Return { val: None, span });
-        }
-
-        let expr = self.expr()?;
-
-        Ok(Return {
-            span: Span::new(span.start, expr.span.finish),
-            val: Some(expr),
-        })
     }
 
     fn let_(&mut self) -> ParseResult<Let> {

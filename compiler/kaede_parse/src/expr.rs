@@ -1,8 +1,8 @@
 use std::collections::VecDeque;
 
 use kaede_ast::expr::{
-    Args, ArrayLiteral, Binary, BinaryKind, Borrow, Deref, Expr, ExprKind, FnCall, Ident, Index,
-    Int, IntKind, LogicalNot, StructLiteral, TupleLiteral,
+    Args, ArrayLiteral, Binary, BinaryKind, Borrow, Break, Deref, Else, Expr, ExprKind, FnCall,
+    Ident, If, Indexing, Int, IntKind, LogicalNot, Loop, Return, StructLiteral, TupleLiteral,
 };
 use kaede_lex::token::{Token, TokenKind};
 use kaede_span::{Location, Span};
@@ -278,7 +278,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                 let span = Span::new(node.span.start, finish);
                 node = Expr {
                     span,
-                    kind: ExprKind::Indexing(Index {
+                    kind: ExprKind::Indexing(Indexing {
                         operand: node.into(),
                         index: index.into(),
                         span,
@@ -316,17 +316,35 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             });
         }
 
+        if self.check(&TokenKind::Break) {
+            return self.break_();
+        }
+
+        if self.check(&TokenKind::Loop) {
+            return self.loop_();
+        }
+
+        if self.check(&TokenKind::If) {
+            let node = self.if_()?;
+            return Ok(Expr {
+                span: node.span,
+                kind: ExprKind::If(node),
+            });
+        }
+
+        if self.check(&TokenKind::Return) {
+            return self.return_();
+        }
+
         // Array literal
         if self.check(&TokenKind::OpenBracket) {
             return self.array_literal();
         }
 
-        // String literal
         if let Some(lit) = self.string_literal() {
             return Ok(lit);
         }
 
-        // Boolean literal
         if let Some(lit) = self.boolean_literal() {
             return Ok(lit);
         }
@@ -572,6 +590,90 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             expected: "identifier".to_string(),
             but: self.first().kind.to_string(),
             span: self.first().span,
+        })
+    }
+
+    fn break_(&mut self) -> ParseResult<Expr> {
+        let span = self.consume(&TokenKind::Break).unwrap();
+
+        Ok(Expr {
+            kind: ExprKind::Break(Break { span }),
+            span,
+        })
+    }
+
+    fn loop_(&mut self) -> ParseResult<Expr> {
+        let start = self.consume(&TokenKind::Loop).unwrap().start;
+
+        let body = self.block()?;
+
+        let span = Span::new(start, body.span.finish);
+
+        Ok(Expr {
+            kind: ExprKind::Loop(Loop { span, body }),
+            span,
+        })
+    }
+
+    fn if_(&mut self) -> ParseResult<If> {
+        let start = self.consume(&TokenKind::If).unwrap().start;
+
+        let cond = self.cond_expr()?;
+
+        let then = self.block()?;
+
+        let else_ = self.else_()?.map(Box::new);
+
+        let finish = match else_.as_ref() {
+            Some(else_) => match else_.as_ref() {
+                Else::Block(block) => block.span.finish,
+                Else::If(if_) => if_.span.finish,
+            },
+
+            None => then.span.finish,
+        };
+
+        Ok(If {
+            cond: cond.into(),
+            then,
+            else_,
+            span: Span::new(start, finish),
+        })
+    }
+
+    /// `None` if there is no else
+    fn else_(&mut self) -> ParseResult<Option<Else>> {
+        if !self.consume_b(&TokenKind::Else) {
+            return Ok(None);
+        }
+
+        if self.check(&TokenKind::If) {
+            return Ok(Some(Else::If(self.if_()?)));
+        }
+
+        Ok(Some(Else::Block(self.block()?)))
+    }
+
+    fn return_(&mut self) -> ParseResult<Expr> {
+        let span = self.consume(&TokenKind::Return).unwrap();
+
+        if self.check_semi() {
+            return Ok(Expr {
+                kind: ExprKind::Return(Return { val: None, span }),
+                span,
+            });
+        }
+
+        let expr = self.expr()?;
+
+        let span = Span::new(span.start, expr.span.finish);
+
+        Ok(Expr {
+            kind: ExprKind::Return(Return {
+                span,
+                val: Some(expr.into()),
+            }),
+            span,
         })
     }
 }

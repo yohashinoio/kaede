@@ -16,7 +16,7 @@ use kaede_type::Ty;
 use crate::{
     error::{CodegenError, CodegenResult},
     mangle::{mangle_external_name, mangle_name},
-    stmt::{build_block, StmtContext},
+    stmt::build_block,
     tcx::{StructFieldInfo, StructInfo, SymbolTable},
     CompileUnitContext,
 };
@@ -180,7 +180,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
         // Push parameter table
         self.cucx.tcx.push_symbol_table(param_table);
 
-        build_block(self.cucx, &mut StmtContext::new(), node.body)?;
+        build_block(self.cucx, &node.body)?;
 
         self.cucx.tcx.pop_symbol_table();
 
@@ -249,6 +249,6 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
         self.cucx
             .tcx
             .struct_table
-            .insert(node.name.name, (ty, StructInfo { fields }));
+            .insert(node.name.name, (ty, StructInfo { fields }.into()));
     }
 }

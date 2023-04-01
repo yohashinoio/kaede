@@ -107,7 +107,7 @@ fn empty_function() -> anyhow::Result<()> {
 }
 
 #[test]
-fn return_stmt() -> anyhow::Result<()> {
+fn return_() -> anyhow::Result<()> {
     assert_eq!(
         run_test("fn test() -> i32 { return (48*2 +10 * 2) / 2}")?,
         58
@@ -117,7 +117,7 @@ fn return_stmt() -> anyhow::Result<()> {
 }
 
 #[test]
-fn empty_return_stmt() -> anyhow::Result<()> {
+fn empty_return() -> anyhow::Result<()> {
     let program = r"fn f() {
         return
     }
@@ -171,7 +171,7 @@ fn let_statement() -> anyhow::Result<()> {
 }
 
 #[test]
-fn call_func() -> anyhow::Result<()> {
+fn call_function() -> anyhow::Result<()> {
     let program = r"fn f1() -> i32 {
         return 48
     }
@@ -190,7 +190,7 @@ fn call_func() -> anyhow::Result<()> {
 }
 
 #[test]
-fn fn_params() -> anyhow::Result<()> {
+fn function_parameters() -> anyhow::Result<()> {
     let program = r"fn f(n: i32) -> i32 {
         return n
     }
@@ -205,7 +205,7 @@ fn fn_params() -> anyhow::Result<()> {
 }
 
 #[test]
-fn fn_call_one_arg() -> anyhow::Result<()> {
+fn function_call_with_one_argument() -> anyhow::Result<()> {
     let program = r"fn f(n: i32) -> i32 {
         return n
     }
@@ -220,7 +220,7 @@ fn fn_call_one_arg() -> anyhow::Result<()> {
 }
 
 #[test]
-fn fn_call_multi_args() -> anyhow::Result<()> {
+fn function_call_with_multi_args() -> anyhow::Result<()> {
     let program = r"fn f(x: i32, y: i32) -> i32 {
         return x + y
     }
@@ -235,7 +235,7 @@ fn fn_call_multi_args() -> anyhow::Result<()> {
 }
 
 #[test]
-fn simple_if_statement() -> anyhow::Result<()> {
+fn simple_if() -> anyhow::Result<()> {
     let program = r"fn test() -> i32 {
         if 58 == 58 {
             return 58
@@ -250,7 +250,7 @@ fn simple_if_statement() -> anyhow::Result<()> {
 }
 
 #[test]
-fn if_else_statement() -> anyhow::Result<()> {
+fn if_else() -> anyhow::Result<()> {
     let program = r"fn test() -> i32 {
         if 48 == 10 {
             return 48
@@ -286,7 +286,7 @@ fn equality_operation() -> anyhow::Result<()> {
 }
 
 #[test]
-fn loop_statement() -> anyhow::Result<()> {
+fn loop_() -> anyhow::Result<()> {
     let program = r"fn test() -> i32 {
         let mut n = 0
 
@@ -307,7 +307,7 @@ fn loop_statement() -> anyhow::Result<()> {
 }
 
 #[test]
-fn break_statement() -> anyhow::Result<()> {
+fn break_() -> anyhow::Result<()> {
     let program = r"fn test() -> i32 {
         loop {
             break
@@ -1158,4 +1158,106 @@ fn assign_immutable_ref_to_mutable_variable() {
         run_test(program),
         Err(CodegenError::CannotAssignImmutableReferencesToMut { .. })
     ));
+}
+
+#[test]
+fn if_expr_to_initializers_1() -> anyhow::Result<()> {
+    let program = r#"fn test() -> i32 {
+        let x = if true {
+            58
+        } else {
+            123
+        }
+
+        return x
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn if_expr_to_initializers_2() -> anyhow::Result<()> {
+    let program = r#"fn test() -> i32 {
+        let x = if true {
+            58
+        } else {
+            return 123
+        }
+
+        return x
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn if_expr_to_initializers_3() -> anyhow::Result<()> {
+    let program = r#"fn test() -> i32 {
+        let x = if false {
+            123
+        } else {
+            return 58
+        }
+
+        return x
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn if_expr_to_initializers_4() -> anyhow::Result<()> {
+    let program = r#"fn test() -> i32 {
+        let n = 4810
+
+        let x = if false {
+            123
+        } else if n == 4810 {
+            58
+        } else {
+            return 123
+        }
+
+        return x
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn if_expr_in_return_1() -> anyhow::Result<()> {
+    let program = r#"fn test() -> i32 {
+        return if true {
+            58
+        } else {
+            123
+        }
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn if_expr_in_return_2() -> anyhow::Result<()> {
+    let program = r#"fn test() -> i32 {
+        return if false {
+            123
+        } else {
+            return 58
+        }
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
 }

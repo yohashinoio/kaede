@@ -5,6 +5,19 @@ use inkwell::{
     types::{BasicType, BasicTypeEnum},
 };
 
+pub fn is_same_type(t1: &Ty, t2: &Ty) -> bool {
+    if t1.kind == t2.kind {
+        return true;
+    }
+
+    // True if either one is never type
+    if matches!(t1.kind.as_ref(), TyKind::Never) || matches!(t2.kind.as_ref(), TyKind::Never) {
+        return true;
+    }
+
+    false
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Ty {
     pub kind: Rc<TyKind>,
@@ -73,6 +86,11 @@ pub enum TyKind {
 
     Tuple(Vec<Rc<Ty>> /* Element types */),
 
+    Unit,
+
+    /// Same as Rust's never type
+    Never,
+
     Inferred,
 }
 
@@ -99,6 +117,10 @@ impl std::fmt::Display for TyKind {
                     .join(",")
             ),
 
+            Self::Unit => write!(f, "()"),
+
+            Self::Never => write!(f, "!"),
+
             Self::Inferred => write!(f, "_"),
         }
     }
@@ -114,6 +136,8 @@ impl TyKind {
             Self::Array(_) => panic!("Cannot get sign information of array type!"),
             Self::Tuple(_) => panic!("Cannot get sign information of tuple type!"),
             Self::Str => panic!("Cannot get sign information of str type!"),
+            Self::Unit => panic!("Cannot get sign information of unit type!"),
+            Self::Never => panic!("Cannot get sign information of never type!"),
             Self::Inferred => panic!("Cannot get sign information of inferred type!"),
         }
     }

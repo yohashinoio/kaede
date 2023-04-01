@@ -13,7 +13,7 @@ pub fn parse(tokens: impl Iterator<Item = Token>) -> ParseResult<CompileUnit> {
 use std::iter::Peekable;
 
 use error::{ParseError, ParseResult};
-use kaede_ast::CompileUnit;
+use kaede_ast::{expr::Expr, CompileUnit};
 use kaede_lex::token::{Token, TokenKind};
 use kaede_span::Span;
 
@@ -59,6 +59,19 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
     pub fn run(&mut self) -> ParseResult<CompileUnit> {
         self.compile_unit(|self_| !self_.is_eof())
+    }
+
+    /// Needed to **avoid confusion** between struct literals and block statements
+    ///
+    /// if x {}
+    ///
+    /// In such code as above,
+    /// `then block` of `if statement` is not parsed as an initializer of a struct literals
+    pub fn cond_expr(&mut self) -> ParseResult<Expr> {
+        self.in_cond_expr = true;
+        let cond = self.expr();
+        self.in_cond_expr = false;
+        cond
     }
 
     fn is_eof(&mut self) -> bool {

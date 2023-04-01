@@ -4,6 +4,8 @@ use inkwell::{context::Context, values::IntValue};
 use kaede_span::Span;
 use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability, Ty};
 
+use crate::stmt::Block;
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct Ident {
     pub name: String,
@@ -152,9 +154,40 @@ pub struct TupleLiteral {
 
 /// Sometimes called `Array subscripting`
 #[derive(Debug, PartialEq, Eq)]
-pub struct Index {
+pub struct Indexing {
     pub operand: Box<Expr>,
     pub index: Box<Expr>,
+    pub span: Span,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct Loop {
+    pub body: Block,
+    pub span: Span,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct Break {
+    pub span: Span,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum Else {
+    If(If),
+    Block(Block),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct If {
+    pub cond: Box<Expr>,
+    pub then: Block,
+    pub else_: Option<Box<Else>>,
+    pub span: Span,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct Return {
+    pub val: Option<Box<Expr>>,
     pub span: Span,
 }
 
@@ -178,6 +211,10 @@ pub enum ExprKind {
     Deref(Deref),
     LogicalNot(LogicalNot),
     ArrayLiteral(ArrayLiteral),
-    Indexing(Index),
+    Indexing(Indexing),
     TupleLiteral(TupleLiteral),
+    Return(Return),
+    If(If),
+    Loop(Loop),
+    Break(Break),
 }
