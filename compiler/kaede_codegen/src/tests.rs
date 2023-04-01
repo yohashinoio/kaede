@@ -1261,3 +1261,57 @@ fn if_expr_in_return_2() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn nested_if_expr_1() -> anyhow::Result<()> {
+    let program = r#"fn test() -> i32 {
+        let n = 4810
+
+        let x = if n == 4810 {
+            if false {
+                123
+            } else if true {
+                58
+            } else {
+                return 124
+            }
+        } else if true {
+            125
+        } else {
+            return 126
+        }
+
+        return x
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn nested_if_expr_2() -> anyhow::Result<()> {
+    let program = r#"fn test() -> i32 {
+        let n = 4810
+
+        let x = if false {
+            123
+        } else if true {
+            if false {
+                124
+            } else if n != 4810 {
+                125
+            } else {
+                return 58
+            }
+        } else {
+            return 126
+        }
+
+        return x
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
