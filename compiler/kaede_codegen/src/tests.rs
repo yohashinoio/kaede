@@ -1263,6 +1263,21 @@ fn if_expr_in_return_2() -> anyhow::Result<()> {
 }
 
 #[test]
+fn if_expr_in_return_3() -> anyhow::Result<()> {
+    let program = r#"fn test() -> i32 {
+        return 122 + if true {
+            return 58
+        } else {
+            1
+        }
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
 fn nested_if_expr_1() -> anyhow::Result<()> {
     let program = r#"fn test() -> i32 {
         let n = 4810
