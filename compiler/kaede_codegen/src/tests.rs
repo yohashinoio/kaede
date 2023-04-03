@@ -801,6 +801,21 @@ fn array_as_argument() -> anyhow::Result<()> {
 }
 
 #[test]
+fn assign_to_array_elements() -> anyhow::Result<()> {
+    let program = r"fn test() -> i32 {
+        let mut a = [123]
+
+        a[0] = 58
+
+        return a[0]
+    }";
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
 fn tuple_indexing() -> anyhow::Result<()> {
     let program = r#"fn test() -> i32 {
         let tup = (58, true, "hello")

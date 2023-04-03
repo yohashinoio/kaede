@@ -373,7 +373,11 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             self.cucx
                 .builder
                 .build_load(array_ty_llvm.get_element_type(), gep, ""),
-            elem_ty.clone(),
+            Ty {
+                kind: elem_ty.kind.clone(),
+                mutability: array_ty.mutability,
+            }
+            .into(),
         ))
     }
 
