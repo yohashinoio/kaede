@@ -114,7 +114,11 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                     name,
                     mutability,
                     init: Some(init.into()),
-                    ty: Ty::new(TyKind::Inferred.into(), mutability).into(),
+                    ty: Ty {
+                        kind: TyKind::Inferred.into(),
+                        mutability,
+                    }
+                    .into(),
                     span,
                 }),
                 span,

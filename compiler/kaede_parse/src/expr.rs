@@ -1,8 +1,8 @@
 use std::collections::VecDeque;
 
 use kaede_ast::expr::{
-    Args, ArrayLiteral, Binary, BinaryKind, Borrow, Break, Deref, Else, Expr, ExprKind, FnCall,
-    Ident, If, Indexing, Int, IntKind, LogicalNot, Loop, Return, StructLiteral, TupleLiteral,
+    Args, ArrayLiteral, Binary, BinaryKind, Break, Else, Expr, ExprKind, FnCall, Ident, If,
+    Indexing, Int, IntKind, LogicalNot, Loop, Return, StructLiteral, TupleLiteral,
 };
 use kaede_lex::token::{Token, TokenKind};
 use kaede_span::{Location, Span};
@@ -201,49 +201,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             });
         }
 
-        // Borrow
-        if self.check(&TokenKind::And) {
-            return self.borrow();
-        }
-
-        // Dereference
-        if self.check(&TokenKind::Asterisk) {
-            return self.deref();
-        }
-
         self.access()
-    }
-
-    fn deref(&mut self) -> ParseResult<Expr> {
-        let start = self.consume(&TokenKind::Asterisk).unwrap().start;
-
-        let operand = Box::new(self.access()?);
-
-        let span = Span::new(start, operand.span.finish);
-
-        Ok(Expr {
-            kind: ExprKind::Deref(Deref { span, operand }),
-            span,
-        })
-    }
-
-    fn borrow(&mut self) -> ParseResult<Expr> {
-        let start = self.consume(&TokenKind::And).unwrap().start;
-
-        let mutability = self.consume_b(&TokenKind::Mut).into();
-
-        let operand = Box::new(self.access()?);
-
-        let span = Span::new(start, operand.span.finish);
-
-        Ok(Expr {
-            kind: ExprKind::Borrow(Borrow {
-                span,
-                operand,
-                mutability,
-            }),
-            span,
-        })
     }
 
     /// Field access or module item access or tuple indexing

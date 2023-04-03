@@ -2,7 +2,6 @@ use std::rc::Rc;
 
 use crate::{
     error::{CodegenError, CodegenResult},
-    get_loaded_pointer,
     mangle::mangle_name,
     stmt::{build_block, build_statement},
     tcx::SymbolTable,
@@ -11,20 +10,20 @@ use crate::{
 };
 
 use inkwell::{
-    values::{BasicValue, IntValue, PointerValue},
+    values::{BasicValue, BasicValueEnum, IntValue, PointerValue},
     IntPredicate,
 };
 use kaede_ast::{
     expr::{
-        ArrayLiteral, Binary, BinaryKind, Borrow, Break, Deref, Else, Expr, ExprKind, FnCall,
-        Ident, If, Indexing, LogicalNot, Loop, Return, StructLiteral, TupleLiteral,
+        ArrayLiteral, Binary, BinaryKind, Break, Else, Expr, ExprKind, FnCall, Ident, If, Indexing,
+        LogicalNot, Loop, Return, StructLiteral, TupleLiteral,
     },
     stmt::{Block, StmtKind},
 };
 use kaede_span::Span;
 use kaede_type::{
     is_same_type, make_fundamental_type, FundamentalTypeKind, Mutability, RefrenceType, Ty, TyKind,
-    UDType,
+    UserDefinedType,
 };
 
 /// Unit value if the end of the block is not an expression
@@ -110,6 +109,34 @@ pub fn build_tuple_indexing<'ctx>(
     ))
 }
 
+pub fn create_struct_alloca<'ctx>(
+    cucx: &mut CompileUnitContext<'ctx, '_, '_>,
+    struct_ty: &Ty,
+    inits: &Vec<BasicValueEnum<'ctx>>,
+) -> PointerValue<'ctx> {
+    let alloca = cucx.create_entry_block_alloca("structtmp", &struct_ty);
+
+    let struct_llvm_ty = cucx.to_llvm_type(struct_ty);
+
+    for (index, init) in inits.iter().enumerate() {
+        let gep = unsafe {
+            cucx.builder.build_in_bounds_gep(
+                struct_llvm_ty,
+                alloca,
+                &[
+                    cucx.context().i32_type().const_zero(),
+                    cucx.context().i32_type().const_int(index as u64, false),
+                ],
+                "",
+            )
+        };
+
+        cucx.builder.build_store(gep, *init);
+    }
+
+    alloca
+}
+
 struct ExprBuilder<'a, 'ctx, 'm, 'c> {
     cucx: &'a mut CompileUnitContext<'ctx, 'm, 'c>,
 }
@@ -147,11 +174,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             ExprKind::True => self.boolean_literal(true),
             ExprKind::False => self.boolean_literal(false),
 
-            ExprKind::Borrow(node) => self.borrow(node)?,
-
-            ExprKind::Deref(node) => self.deref(node)?,
-
-            ExprKind::Indexing(node) => self.indexing(node)?,
+            ExprKind::Indexing(node) => self.array_indexing(node)?,
 
             ExprKind::Break(node) => self.break_(node)?,
 
@@ -307,6 +330,56 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         Ok(Value::new(phi.as_basic_value(), ty))
     }
 
+    fn struct_literal(&mut self, node: &StructLiteral) -> CodegenResult<Value<'ctx>> {
+        let struct_info = match self.cucx.tcx.struct_table.get(node.struct_name.as_str()) {
+            Some(x) => x.clone(),
+
+            None => {
+                return Err(CodegenError::Undeclared {
+                    span: node.struct_name.span,
+                    name: node.struct_name.name.clone(),
+                })
+            }
+        };
+
+        let struct_ty = Ty {
+            kind: TyKind::UserDefined(UserDefinedType {
+                name: node.struct_name.name.clone(),
+            })
+            .into(),
+            mutability: Mutability::Not,
+        };
+
+        let mut values = Vec::new();
+
+        for value in node.values.iter() {
+            let field_info = &struct_info.1.fields[value.0.as_str()];
+
+            let value = build_expression(self.cucx, &value.1)?;
+
+            // To sort by offset, store offset
+            values.push((field_info.offset, value.get_value()));
+        }
+
+        // Sort in ascending order based on offset
+        values.sort_by(|a, b| a.0.cmp(&b.0));
+
+        // Remove offsets
+        let inits: Vec<_> = values.iter().map(|e| e.1).collect();
+
+        let alloca = create_struct_alloca(self.cucx, &struct_ty, &inits).into();
+
+        let struct_ref_ty = Ty {
+            kind: TyKind::Reference(RefrenceType {
+                refee_ty: struct_ty.into(),
+            })
+            .into(),
+            mutability: Mutability::Mut,
+        };
+
+        Ok(Value::new(alloca, struct_ref_ty.into()))
+    }
+
     fn tuple_literal(&mut self, node: &TupleLiteral) -> CodegenResult<Value<'ctx>> {
         let element_values = {
             let mut v = Vec::new();
@@ -316,66 +389,25 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             v
         };
 
+        let tuple_ty = Ty {
+            kind: TyKind::Tuple(element_values.iter().map(|v| v.get_type()).collect()).into(),
+            mutability: Mutability::Not,
+        };
+
+        let alloca = create_struct_alloca(
+            self.cucx,
+            &tuple_ty,
+            &element_values.iter().map(|v| v.get_value()).collect(),
+        );
+
         Ok(Value::new(
-            self.cucx
-                .context()
-                .const_struct(
-                    element_values
-                        .iter()
-                        .map(|v| v.get_value())
-                        .collect::<Vec<_>>()
-                        .as_slice(),
-                    true,
-                )
+            alloca.into(),
+            Ty {
+                kind: TyKind::Reference(RefrenceType {
+                    refee_ty: tuple_ty.into(),
+                })
                 .into(),
-            Ty {
-                kind: TyKind::Tuple(element_values.iter().map(|v| v.get_type()).collect()).into(),
-                mutability: Mutability::Not,
-            }
-            .into(),
-        ))
-    }
-
-    fn indexing(&mut self, node: &Indexing) -> CodegenResult<Value<'ctx>> {
-        let array = build_expression(self.cucx, &node.operand)?;
-        let array_ty = array.get_type();
-
-        let elem_ty = match array_ty.kind.as_ref() {
-            TyKind::Array((elem_ty, _)) => elem_ty,
-            _ => todo!(), /* Error */
-        };
-
-        let array_ty_llvm = self.cucx.to_llvm_type(&array_ty).into_array_type();
-
-        let load_array_inst = array.get_value().as_instruction_value().unwrap();
-
-        let ptr_to_array = get_loaded_pointer(&load_array_inst).unwrap();
-
-        // Remove load instruction as it is not needed
-        load_array_inst.erase_from_basic_block();
-
-        let index = build_expression(self.cucx, &node.index)?;
-
-        // Calculate the address of the index-th element
-        let gep = unsafe {
-            self.cucx.builder.build_in_bounds_gep(
-                array_ty_llvm,
-                ptr_to_array,
-                &[
-                    self.cucx.context().i32_type().const_zero(),
-                    index.get_value().into_int_value(),
-                ],
-                "",
-            )
-        };
-
-        Ok(Value::new(
-            self.cucx
-                .builder
-                .build_load(array_ty_llvm.get_element_type(), gep, ""),
-            Ty {
-                kind: elem_ty.kind.clone(),
-                mutability: array_ty.mutability,
+                mutability: Mutability::Mut,
             }
             .into(),
         ))
@@ -396,9 +428,9 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             mutability: Mutability::Not,
         });
 
-        let alloca = self.cucx.create_entry_block_alloca("arrtmp", &array_ty);
-
         let array_ty_llvm = self.cucx.to_llvm_type(&array_ty);
+
+        let alloca = self.cucx.create_entry_block_alloca("arrtmp", &array_ty);
 
         for (idx, elem) in elems.iter().enumerate() {
             let gep = unsafe {
@@ -417,8 +449,62 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         }
 
         Ok(Value::new(
-            self.cucx.builder.build_load(array_ty_llvm, alloca, ""),
-            array_ty,
+            alloca.into(),
+            Ty {
+                kind: TyKind::Reference(RefrenceType {
+                    refee_ty: array_ty.clone(),
+                })
+                .into(),
+                mutability: Mutability::Mut,
+            }
+            .into(),
+        ))
+    }
+
+    fn array_indexing(&mut self, node: &Indexing) -> CodegenResult<Value<'ctx>> {
+        // A raw array cannot be passed, but a pointer(reference) to an array
+        let array_ref = build_expression(self.cucx, &node.operand)?;
+
+        let array_ref_ty = array_ref.get_type();
+
+        let (array_ty, elem_ty) = match array_ref_ty.kind.as_ref() {
+            TyKind::Reference(rty) => match rty.refee_ty.kind.as_ref() {
+                TyKind::Array((elem_ty, _)) => (rty.refee_ty.clone(), elem_ty),
+
+                _ => todo!("ERROR"),
+            },
+
+            _ => unreachable!(),
+        };
+
+        let array_llvm_ty = self.cucx.to_llvm_type(&array_ty).into_array_type();
+
+        let ptr_to_array = array_ref.get_value().into_pointer_value();
+
+        let index = build_expression(self.cucx, &node.index)?;
+
+        // Calculate the address of the index-th element
+        let gep = unsafe {
+            self.cucx.builder.build_in_bounds_gep(
+                array_llvm_ty,
+                ptr_to_array,
+                &[
+                    self.cucx.context().i32_type().const_zero(),
+                    index.get_value().into_int_value(),
+                ],
+                "",
+            )
+        };
+
+        Ok(Value::new(
+            self.cucx
+                .builder
+                .build_load(array_llvm_ty.get_element_type(), gep, ""),
+            Ty {
+                kind: elem_ty.kind.clone(),
+                mutability: array_ref_ty.mutability,
+            }
+            .into(),
         ))
     }
 
@@ -445,77 +531,6 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         ))
     }
 
-    fn deref_internal(&self, operand: &Value<'ctx>, span: Span) -> CodegenResult<Value<'ctx>> {
-        let (refee_ty, mutability) = match operand.get_type().kind.as_ref() {
-            TyKind::Reference(rty) => (rty.refee_ty.clone(), rty.mutability),
-
-            kind => {
-                return Err(CodegenError::CannotDeref {
-                    ty: kind.to_string(),
-                    span,
-                })
-            }
-        };
-
-        let loaded_operand = self.cucx.builder.build_load(
-            self.cucx.to_llvm_type(&refee_ty),
-            operand.get_value().into_pointer_value(),
-            "",
-        );
-
-        Ok(Value::new(
-            loaded_operand,
-            Rc::new(Ty {
-                kind: refee_ty.kind.clone(),
-                mutability,
-            }),
-        ))
-    }
-
-    fn deref(&mut self, node: &Deref) -> CodegenResult<Value<'ctx>> {
-        let operand = build_expression(self.cucx, &node.operand)?;
-
-        self.deref_internal(&operand, node.span)
-    }
-
-    fn borrow(&mut self, node: &Borrow) -> CodegenResult<Value<'ctx>> {
-        let (ptr, ty) = match &node.operand.kind {
-            ExprKind::Ident(ident) => {
-                let var = self.cucx.tcx.lookup_var(ident)?;
-
-                if var.1.mutability.is_not() && node.mutability.is_mut() {
-                    return Err(CodegenError::MutableBorrowingFromImmutable {
-                        immutable_var: ident.name.clone(),
-                        span: node.span,
-                    });
-                }
-
-                (var.0, var.1.clone())
-            }
-
-            // Create a variable to take an address since the reference is to a temporary value
-            _ => {
-                let operand = build_expression(self.cucx, &node.operand)?;
-
-                let ty = operand.get_type();
-
-                let alloca = self.cucx.create_entry_block_alloca("temp", &ty);
-                self.cucx.builder.build_store(alloca, operand.get_value());
-
-                (alloca, ty)
-            }
-        };
-
-        Ok(Value::new(
-            ptr.as_basic_value_enum(),
-            Rc::new(Ty {
-                kind: TyKind::Reference(RefrenceType::new(ty, node.mutability)).into(),
-                // Pointers to references are always immutable!
-                mutability: Mutability::Not,
-            }),
-        ))
-    }
-
     fn boolean_literal(&self, value: bool) -> Value<'ctx> {
         Value::new(
             self.cucx
@@ -528,44 +543,6 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
                 Mutability::Not,
             )),
         )
-    }
-
-    fn struct_literal(&mut self, node: &StructLiteral) -> CodegenResult<Value<'ctx>> {
-        let (_ty, info) = match self.cucx.tcx.struct_table.get(node.struct_name.as_str()) {
-            Some(x) => (x.0, x.1.clone()),
-
-            None => {
-                return Err(CodegenError::Undeclared {
-                    span: node.struct_name.span,
-                    name: node.struct_name.name.clone(),
-                })
-            }
-        };
-
-        let mut values = Vec::new();
-
-        for value in node.values.iter() {
-            let field_info = &info.fields[value.0.as_str()];
-
-            let value = build_expression(self.cucx, &value.1)?;
-
-            // To sort by offset, store offset
-            values.push((field_info.offset, value.get_value()));
-        }
-
-        // Sort in ascending order based on offset
-        values.sort_by(|a, b| a.0.cmp(&b.0));
-
-        // Remove offsets
-        let inits: Vec<_> = values.iter().map(|e| e.1).collect();
-
-        Ok(Value::new(
-            self.cucx.context().const_struct(&inits, true).into(),
-            Rc::new(Ty::new(
-                TyKind::UDType(UDType(node.struct_name.name.clone())).into(),
-                Mutability::Not,
-            )),
-        ))
     }
 
     fn string_literal(&self, s: &str) -> Value<'ctx> {
@@ -586,7 +563,11 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
                     true,
                 )
                 .into(),
-            Rc::new(Ty::new(TyKind::Str.into(), Mutability::Not)),
+            Ty {
+                kind: TyKind::Str.into(),
+                mutability: Mutability::Not,
+            }
+            .into(),
         )
     }
 
@@ -892,22 +873,24 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             // ---  Field access or tuple indexing --- (Reference)
             if matches!(
                 rty.get_base_type_of_reference().kind.as_ref(),
-                TyKind::UDType(_) | TyKind::Tuple(_)
+                TyKind::UserDefined(_) | TyKind::Tuple(_)
             ) {
-                return self.field_access_or_tuple_indexing_ref(&left, node.lhs.span, &node.rhs);
+                return self.field_access_or_tuple_indexing(&left, node.lhs.span, &node.rhs);
             } else {
                 return Err(CodegenError::HasNoFields {
                     span: node.lhs.span,
                 });
             }
-        }
+        } else {
+            // No possibility of raw tuple or struct
 
-        // --- Field access or tuple indexing --- (Not reference)
-        self.field_access_or_tuple_indexing(&left, node.lhs.span, &node.rhs)
+            return Err(CodegenError::HasNoFields {
+                span: node.lhs.span,
+            });
+        }
     }
 
-    /// Expect that left hand side is a reference
-    fn field_access_or_tuple_indexing_ref(
+    fn field_access_or_tuple_indexing(
         &self,
         left: &Value<'ctx>,
         left_span: Span,
@@ -918,64 +901,17 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             TyKind::Reference(_)
         ));
 
-        let mutability = if let TyKind::Reference(rty) = left.get_type().kind.as_ref() {
-            rty.mutability
-        } else {
-            unreachable!()
-        };
-
-        let accessed_value = self.field_access_or_tuple_indexing(
-            &self.deref_internal(left, left_span)?,
-            left_span,
-            right,
-        )?;
-
-        let inst = accessed_value.get_value().as_instruction_value().unwrap();
-
-        let ptr_to_accessed = get_loaded_pointer(&inst).unwrap();
-
-        Ok(Value::new(
-            ptr_to_accessed.into(),
-            Ty {
-                kind: TyKind::Reference(RefrenceType {
-                    refee_ty: accessed_value.get_type(),
-                    mutability,
-                })
-                .into(),
-                mutability: Mutability::Not,
-            }
-            .into(),
-        ))
-    }
-
-    /// Expect that left hand side is not a reference
-    fn field_access_or_tuple_indexing(
-        &self,
-        left: &Value<'ctx>,
-        left_span: Span,
-        right: &Expr,
-    ) -> CodegenResult<Value<'ctx>> {
-        assert!(!matches!(
-            left.get_type().kind.as_ref(),
-            TyKind::Reference(_)
-        ));
-
         let left_ty = &left.get_type();
 
-        let left_inst = match left.get_value().as_instruction_value() {
-            Some(inst) => inst,
-            None => return Err(CodegenError::HasNoFields { span: left_span }),
+        let refee_ty = match left_ty.kind.as_ref() {
+            TyKind::Reference(rty) => &rty.refee_ty,
+            _ => unreachable!(),
         };
 
-        let ptr_to_left = match get_loaded_pointer(&left_inst) {
-            Some(p) => p,
-            None => return Err(CodegenError::HasNoFields { span: left_span }),
-        };
+        match refee_ty.kind.as_ref() {
+            TyKind::UserDefined(_) => self.struct_field_access(left, right, refee_ty),
 
-        match left_ty.kind.as_ref() {
-            TyKind::UDType(_) => self.struct_field_access(ptr_to_left, right, left_ty),
-
-            TyKind::Tuple(_) => self.tuple_indexing(ptr_to_left, right, left_ty),
+            TyKind::Tuple(_) => self.tuple_indexing(left, right, refee_ty),
 
             _ => Err(CodegenError::HasNoFields { span: left_span }),
         }
@@ -983,12 +919,14 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
 
     fn struct_field_access(
         &self,
-        left: PointerValue<'ctx>,
+        left: &Value<'ctx>,
         right: &Expr,
-        struct_type: &Rc<Ty>,
+        struct_ty: &Rc<Ty>,
     ) -> CodegenResult<Value<'ctx>> {
-        let struct_name = if let TyKind::UDType(ty) = struct_type.kind.as_ref() {
-            &ty.0
+        let left_value = left.get_value().into_pointer_value();
+
+        let struct_name = if let TyKind::UserDefined(ty) = struct_ty.kind.as_ref() {
+            &ty.name
         } else {
             unreachable!()
         };
@@ -998,16 +936,16 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             kind => unreachable!("{:?}", kind),
         };
 
-        let (struct_ty_llvm, struct_info) = &self.cucx.tcx.struct_table[struct_name];
+        let struct_info = &self.cucx.tcx.struct_table[struct_name];
 
-        let field_info = &struct_info.fields[field_name];
+        let field_info = &struct_info.1.fields[field_name];
 
         let offset = field_info.offset;
 
         let gep = unsafe {
             self.cucx.builder.build_in_bounds_gep(
-                *struct_ty_llvm,
-                left,
+                self.cucx.to_llvm_type(struct_ty),
+                left_value,
                 &[
                     self.cucx.context().i32_type().const_zero(),
                     self.cucx.context().i32_type().const_int(offset, false),
@@ -1022,7 +960,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
                 .build_load(self.cucx.to_llvm_type(&field_info.ty), gep, ""),
             Ty {
                 kind: field_info.ty.kind.clone(),
-                mutability: struct_type.mutability,
+                mutability: struct_ty.mutability,
             }
             .into(),
         ))
@@ -1030,7 +968,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
 
     fn tuple_indexing(
         &self,
-        left: PointerValue<'ctx>,
+        left: &Value<'ctx>,
         right: &Expr,
         tuple_ty: &Rc<Ty>,
     ) -> CodegenResult<Value<'ctx>> {
@@ -1039,7 +977,9 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             _ => return Err(CodegenError::TupleRequireAccessByIndex { span: right.span }),
         };
 
-        build_tuple_indexing(self.cucx, left, index, tuple_ty, right.span)
+        let left_value = left.get_value().into_pointer_value();
+
+        build_tuple_indexing(self.cucx, left_value, index, tuple_ty, right.span)
     }
 
     fn call_fn(&mut self, node: &FnCall) -> CodegenResult<Value<'ctx>> {
@@ -1048,44 +988,71 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             .module
             .get_function(&mangle_name(self.cucx, node.name.as_str()));
 
+        let func = match func {
+            Some(func) => func,
+
+            None => {
+                return Err(CodegenError::Undeclared {
+                    name: node.name.name.clone(),
+                    span: node.span,
+                })
+            }
+        };
+
         let args = {
             let mut args = Vec::new();
 
             for arg in node.args.iter() {
-                args.push(self.build(arg)?);
+                args.push((self.build(arg)?, arg.span));
             }
 
             args
         };
 
-        match func {
-            Some(func) => {
-                let return_value = self
-                    .cucx
-                    .builder
-                    .build_call(
-                        func,
-                        args.iter()
-                            .map(|a| a.get_value().into())
-                            .collect::<Vec<_>>()
-                            .as_slice(),
-                        "",
-                    )
-                    .try_as_basic_value()
-                    .left();
+        let param_types = &self.cucx.tcx.param_table[&func];
 
-                Ok(match return_value {
-                    Some(val) => {
-                        Value::new(val, self.cucx.tcx.return_ty_table[&func].clone().unwrap())
-                    }
-                    None => Value::new_void(),
-                })
+        self.verify_args(&args, param_types)?;
+
+        let return_value = self
+            .cucx
+            .builder
+            .build_call(
+                func,
+                args.iter()
+                    .map(|a| a.0.get_value().into())
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+                "",
+            )
+            .try_as_basic_value()
+            .left();
+
+        Ok(match return_value {
+            Some(val) => Value::new(val, self.cucx.tcx.return_ty_table[&func].clone().unwrap()),
+            None => Value::new_void(),
+        })
+    }
+
+    fn verify_args(&self, args: &Vec<(Value, Span)>, params: &Vec<Rc<Ty>>) -> CodegenResult<()> {
+        for (idx, arg) in args.iter().enumerate() {
+            let param = &params[idx];
+
+            if !is_same_type(&arg.0.get_type(), param) {
+                return Err(CodegenError::MismatchedTypes {
+                    types: (
+                        arg.0.get_type().kind.to_string(),
+                        params[idx].kind.to_string(),
+                    ),
+                    span: arg.1,
+                });
             }
 
-            None => Err(CodegenError::Undeclared {
-                name: node.name.name.clone(),
-                span: node.span,
-            }),
+            // Check mutability
+            if arg.0.get_type().mutability.is_not() && param.mutability.is_mut() {
+                return Err(CodegenError::CannotAssignImmutableToMutable { span: arg.1 });
+            }
         }
+
+        Ok(())
     }
 }

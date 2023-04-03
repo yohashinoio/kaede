@@ -1,5 +1,5 @@
 use kaede_span::Span;
-use kaede_type::Ty;
+use kaede_type::{Mutability, Ty};
 
 use crate::{expr::Ident, stmt::Block};
 
@@ -45,7 +45,7 @@ pub struct Struct {
     pub span: Span,
 }
 
-pub type Params = Vec<(Ident, Ty)>;
+pub type Params = Vec<(Ident, Mutability, Ty)>;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Fn {

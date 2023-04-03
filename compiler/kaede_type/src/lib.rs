@@ -5,6 +5,7 @@ use inkwell::{
     types::{BasicType, BasicTypeEnum},
 };
 
+/// No mutability comparisons
 pub fn is_same_type(t1: &Ty, t2: &Ty) -> bool {
     if t1.kind == t2.kind {
         return true;
@@ -22,12 +23,6 @@ pub fn is_same_type(t1: &Ty, t2: &Ty) -> bool {
 pub struct Ty {
     pub kind: Rc<TyKind>,
     pub mutability: Mutability,
-}
-
-impl Ty {
-    pub fn new(kind: Rc<TyKind>, mutability: Mutability) -> Self {
-        Self { kind, mutability }
-    }
 }
 
 /// Represents whether a value can be changed
@@ -78,7 +73,7 @@ pub enum TyKind {
     Fundamental(FundamentalType),
     Str,
 
-    UDType(UDType),
+    UserDefined(UserDefinedType),
 
     Reference(RefrenceType),
 
@@ -101,7 +96,7 @@ impl std::fmt::Display for TyKind {
 
             Self::Str => write!(f, "str"),
 
-            Self::UDType(udt) => write!(f, "{}", udt.0),
+            Self::UserDefined(udt) => write!(f, "{}", udt.name),
 
             Self::Reference(refee) => write!(f, "&{}", refee.refee_ty.kind),
 
@@ -130,7 +125,7 @@ impl TyKind {
     pub fn is_signed(&self) -> bool {
         match &self {
             Self::Fundamental(fty) => fty.is_signed(),
-            Self::UDType(_) => todo!(),
+            Self::UserDefined(_) => todo!(),
             Self::Reference(ty) => ty.refee_ty.kind.is_signed(),
 
             Self::Array(_) => panic!("Cannot get sign information of array type!"),
@@ -192,20 +187,25 @@ impl FundamentalType {
 
 /// User defined types
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct UDType(pub String);
+pub struct UserDefinedType {
+    pub name: String,
+}
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, Eq, Clone)]
 pub struct RefrenceType {
     pub refee_ty: Rc<Ty>,
-    pub mutability: Mutability,
+}
+
+impl PartialEq for RefrenceType {
+    // No mutability comparisons
+    fn eq(&self, other: &Self) -> bool {
+        *self.refee_ty.kind == *other.refee_ty.kind
+    }
 }
 
 impl RefrenceType {
-    pub fn new(refee_ty: Rc<Ty>, mutability: Mutability) -> Self {
-        Self {
-            refee_ty,
-            mutability,
-        }
+    pub fn new(refee_ty: Rc<Ty>) -> Self {
+        Self { refee_ty }
     }
 
     /// &i32 -> i32

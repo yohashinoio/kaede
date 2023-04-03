@@ -128,19 +128,6 @@ pub struct LogicalNot {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Borrow {
-    pub mutability: Mutability,
-    pub operand: Box<Expr>,
-    pub span: Span,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct Deref {
-    pub operand: Box<Expr>,
-    pub span: Span,
-}
-
-#[derive(Debug, PartialEq, Eq)]
 pub struct ArrayLiteral {
     pub elements: Vec<Expr>,
     pub span: Span,
@@ -207,8 +194,6 @@ pub enum ExprKind {
     StructLiteral(StructLiteral),
     True,
     False,
-    Borrow(Borrow),
-    Deref(Deref),
     LogicalNot(LogicalNot),
     ArrayLiteral(ArrayLiteral),
     Indexing(Indexing),

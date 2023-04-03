@@ -82,13 +82,15 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
 
         loop {
+            let mutability = self.consume_b(&TokenKind::Mut).into();
+
             let name = self.ident()?;
 
             self.consume(&TokenKind::Colon)?;
 
             let ty = self.ty()?;
 
-            params.push((name, ty));
+            params.push((name, mutability, ty));
 
             if !self.consume_b(&TokenKind::Comma) {
                 break;

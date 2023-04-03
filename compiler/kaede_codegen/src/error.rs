@@ -12,8 +12,8 @@ pub enum CodegenError {
     #[error("{}:{} `break` outside of a loop", span.start.line, span.start.column)]
     BreakOutsideOfLoop { span: Span },
 
-    #[error("{}:{} Mismatched types", span.start.line, span.start.column)]
-    MismatchedTypes { span: Span },
+    #[error("{}:{} Mismatched types: {} vs {}", span.start.line, span.start.column, types.0, types.1)]
+    MismatchedTypes { types: (String, String), span: Span },
 
     #[error("{}:{} Invalid left-hand side of assignment", span.start.line, span.start.column)]
     InvalidLeftOfAssignment { span: Span },
@@ -23,13 +23,6 @@ pub enum CodegenError {
 
     #[error("{}:{} Has no fields", span.start.line, span.start.column)]
     HasNoFields { span: Span },
-
-    #[error("{}:{} Type `{}` cannot be dereferenced", span.start.line, span.start.column, ty)]
-    CannotDeref { ty: String, span: Span },
-
-    #[error("{}:{} Cannot borrow `{}` as mutable, as it is not declared as mutable",
-    span.start.line, span.start.column, immutable_var)]
-    MutableBorrowingFromImmutable { immutable_var: String, span: Span },
 
     #[error("Failed to lookup target '{}': {}", triple, what)]
     FailedToLookupTarget { triple: String, what: String },
@@ -52,17 +45,14 @@ pub enum CodegenError {
     #[error("{}:{} Number of tuple fields does not match ({} vs {})", span.start.line, span.start.column, lens.0, lens.1)]
     NumberOfTupleFieldsDoesNotMatch { lens: (usize, usize), span: Span },
 
-    /// Example: let mut x = &y
-    ///
-    /// Correct: let mut x = &mut y
-    #[error("{}:{} Cannot assign '&' references to mutable", span.start.line, span.start.column)]
-    CannotAssignImmutableReferencesToMut { span: Span },
-
     #[error("{}:{} 'if' must have both main and 'else' branches if used as an expression", span.start.line, span.start.column)]
     IfMustHaveElseUsedAsExpr { span: Span },
 
     #[error("{}:{} `if` and `else` have incompatible types: {} vs {}", span.start.line, span.start.column, types.0, types.1)]
     IfAndElseHaveIncompatibleTypes { types: (String, String), span: Span },
+
+    #[error("{}:{} Cannot assign an immutable to a mutable", span.start.line, span.start.column)]
+    CannotAssignImmutableToMutable { span: Span },
 
     /// Error issued by LLVM
     #[error("{}", .what)]

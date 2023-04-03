@@ -156,6 +156,15 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
 
     /// Create a new stack allocation instruction in the entry block of the function
     fn create_entry_block_alloca(&self, name: &str, ty: &Ty) -> PointerValue<'ctx> {
+        self.create_entry_block_alloca_llvm_ty(name, self.to_llvm_type(ty))
+    }
+
+    /// Create a new stack allocation instruction in the entry block of the function
+    fn create_entry_block_alloca_llvm_ty(
+        &self,
+        name: &str,
+        ty: BasicTypeEnum<'ctx>,
+    ) -> PointerValue<'ctx> {
         let builder = self.context().create_builder();
 
         let entry = self.get_current_fn().get_first_basic_block().unwrap();
@@ -165,7 +174,7 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
             None => builder.position_at_end(entry),
         }
 
-        builder.build_alloca(self.to_llvm_type(ty), name)
+        builder.build_alloca(ty, name)
     }
 
     pub fn get_current_fn(&self) -> FunctionValue<'ctx> {
@@ -200,7 +209,7 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
                     .into()
             }
 
-            TyKind::UDType(name) => self.tcx.struct_table[&name.0].0.into(),
+            TyKind::UserDefined(udt) => self.tcx.struct_table[&udt.name].0.into(),
 
             TyKind::Reference(rty) => self
                 .to_llvm_type(&rty.refee_ty)

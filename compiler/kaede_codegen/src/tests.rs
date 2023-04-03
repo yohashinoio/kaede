@@ -460,116 +460,6 @@ fn has_no_fields() {
 }
 
 #[test]
-fn shared_borrow() -> anyhow::Result<()> {
-    let program = r"fn test() -> i32 {
-        let s = 58
-        let r = &s
-        return *r
-    }";
-
-    assert_eq!(run_test(program)?, 58);
-
-    Ok(())
-}
-
-#[test]
-fn reference_type_argument() -> anyhow::Result<()> {
-    let program = r"fn dref(r: &i32) -> i32 {
-        return *r
-    }
-
-    fn test() -> i32 {
-        let n = 58
-        return dref(&n)
-    }";
-
-    assert_eq!(run_test(program)?, 58);
-
-    Ok(())
-}
-
-#[test]
-fn mutable_borrow_and_deref() -> anyhow::Result<()> {
-    let program = r"fn test() -> i32 {
-        let mut s = 58
-        let m = &mut s
-        *m = 58
-        return s
-    }";
-
-    assert_eq!(run_test(program)?, 58);
-
-    Ok(())
-}
-
-#[test]
-fn borrow() -> anyhow::Result<()> {
-    let program = r"fn to_58(n: &mut i32) {
-        *n = 58
-    }
-
-    fn test() -> i32 {
-        let mut a = 123
-
-        to_58(&mut a)
-
-        return a
-    }";
-
-    assert_eq!(run_test(program)?, 58);
-
-    Ok(())
-}
-
-#[test]
-fn assign_to_immutable_reference() {
-    let program = r"fn test() -> i32 {
-        let mut n = 58
-
-        let r = &n;
-
-        *r = 123
-
-        return n
-    }";
-
-    assert!(matches!(
-        run_test(program),
-        Err(CodegenError::CannotAssignTwiceToImutable { .. })
-    ));
-}
-
-#[test]
-fn borrow_temporary_value() -> anyhow::Result<()> {
-    let program = r"fn test() -> i32 {
-        let r = &(58 / 2)
-
-        let mr = &mut 29
-        *mr = *mr + *r
-
-        return *mr
-    }";
-
-    assert_eq!(run_test(program)?, 58);
-
-    Ok(())
-}
-
-#[test]
-fn mutable_references_to_immutable_variables() {
-    let program = r"fn test() -> i32 {
-        let n = 123
-        let r = &mut n;
-        return *r
-    }";
-
-    assert!(matches!(
-        run_test(program),
-        Err(CodegenError::MutableBorrowingFromImmutable { .. })
-    ));
-}
-
-#[test]
 fn less_than() -> anyhow::Result<()> {
     let program = r"fn test() -> i32 {
         if 48 < 48 {
@@ -781,23 +671,69 @@ fn array_type() -> anyhow::Result<()> {
 
 #[test]
 fn array_as_argument() -> anyhow::Result<()> {
-    let program = r"fn add_copy(a: [i32; 2]) -> i32 {
+    let program = r"fn add(a: [i32; 2]) -> i32 {
         return a[0] + a[1]
-    }
-
-    fn add(a: &[i32; 2]) -> i32 {
-        return (*a)[0] + (*a)[1]
     }
 
     fn test() -> i32 {
         let a = [48, 10]
 
-        return add(&a) + add_copy(a)
+        return add(a)
     }";
 
-    assert_eq!(run_test(program)?, 116);
+    assert_eq!(run_test(program)?, 58);
 
     Ok(())
+}
+
+#[test]
+fn array_as_mutable_argument() -> anyhow::Result<()> {
+    let program = r"fn modify(mut a: [i32; 2]) {
+        a[0] = 48
+        a[1] = 10
+    }
+
+    fn add(a: [i32; 2]) -> i32 {
+        return a[0] + a[1]
+    }
+
+    fn test() -> i32 {
+        let mut a = [12, 34]
+
+        modify(a)
+
+        return add(a)
+    }";
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn immutable_array_as_mutable_argument() {
+    let program = r"fn modify(mut a: [i32; 2]) {
+        a[0] = 48
+        a[1] = 10
+    }
+
+    fn add(a: [i32; 2]) -> i32 {
+        return a[0] + a[1]
+    }
+
+    fn test() -> i32 {
+        let a = [123, 124]
+
+        // ERROR!
+        modify(a)
+
+        return add(a)
+    }";
+
+    assert!(matches!(
+        run_test(program),
+        Err(CodegenError::CannotAssignImmutableToMutable { .. })
+    ));
 }
 
 #[test]
@@ -864,37 +800,6 @@ fn tuple_unpacking() -> anyhow::Result<()> {
 }
 
 #[test]
-fn reference_tuple_unpacking() -> anyhow::Result<()> {
-    let program = r#"fn test() -> i32 {
-        let tup = (48, true, "hello", 10)
-
-        let (n1, f, _, n2) = &tup
-
-        if *f {
-            return *n1 + *n2
-        }
-
-        return 123
-    }"#;
-
-    assert_eq!(run_test(program)?, 58);
-
-    let program = r#"fn test() -> i32 {
-        let (n1, f, _, n2) = &(48, true, "hello", 10)
-
-        if *f {
-            return *n1 + *n2
-        }
-
-        return 123
-    }"#;
-
-    assert_eq!(run_test(program)?, 58);
-
-    Ok(())
-}
-
-#[test]
 fn tuple_as_argument() -> anyhow::Result<()> {
     let program = r"fn tup1(a: (i32, bool)) -> i32 {
         if a.1 {
@@ -904,11 +809,11 @@ fn tuple_as_argument() -> anyhow::Result<()> {
         return 123
     }
 
-    fn tup2(a: &(i32, bool)) -> i32 {
+    fn tup2(a: (i32, bool)) -> i32 {
         let (n, f) = a
 
-        if *f {
-            return *n
+        if f {
+            return n
         }
 
         return 124
@@ -917,10 +822,34 @@ fn tuple_as_argument() -> anyhow::Result<()> {
     fn test() -> i32 {
         let tup = (58, true)
 
-        return tup1(tup) + tup2(&tup)
+        return tup1(tup) + tup2(tup)
     }";
 
     assert_eq!(run_test(program)?, 116);
+
+    Ok(())
+}
+
+#[test]
+fn tuple_as_mutable_argument() -> anyhow::Result<()> {
+    let program = r"fn modify(mut tup: (i32, bool)) {
+        tup.0 = 58
+        tup.1 = true
+    }
+
+    fn test() -> i32 {
+        let mut tup = (123, false)
+
+        modify(tup)
+
+        if tup.1 {
+            return tup.0
+        }
+
+        return 123
+    }";
+
+    assert_eq!(run_test(program)?, 58);
 
     Ok(())
 }
@@ -941,49 +870,13 @@ fn tuples_require_access_by_index() {
 #[test]
 fn tuple_in_tuple() -> anyhow::Result<()> {
     let program = r"fn test() -> i32 {
-        let tuptup = ((48, true), (10, true))
+        let mut tuptup = ((48, true), (0, true))
+
+        let mut io = tuptup.1
+        io.0 = 10
 
         return tuptup.0.0 + tuptup.1.0
     }";
-
-    assert_eq!(run_test(program)?, 58);
-
-    Ok(())
-}
-
-#[test]
-fn reference_tuple_indexing() -> anyhow::Result<()> {
-    let program = r#"fn test() -> i32 {
-        let tup = &(58, true, "hello")
-
-        let t0 = tup.0
-
-        if *tup.1 {
-            return *t0
-        }
-
-        return 123
-    }"#;
-
-    assert_eq!(run_test(program)?, 58);
-
-    Ok(())
-}
-
-#[test]
-fn field_access_to_reference_struct() -> anyhow::Result<()> {
-    let program = r#"struct Person {
-        age: i32,
-        stature: i32,
-        is_male: bool,
-        is_female: bool,
-    }
-
-    fn test() -> i32 {
-        let person = &Person { is_male: false, stature: 48, age: 10, is_female: true }
-        let age = person.age
-        return *age + *person.stature
-    }"#;
 
     assert_eq!(run_test(program)?, 58);
 
@@ -1094,85 +987,6 @@ fn comments() -> anyhow::Result<()> {
     assert_eq!(run_test(program)?, 58);
 
     Ok(())
-}
-
-#[test]
-fn assign_to_reference_struct_field() -> anyhow::Result<()> {
-    let program = r#"struct Person {
-        age: i32,
-        stature: i32,
-        is_male: bool,
-        is_female: bool,
-    }
-
-    fn test() -> i32 {
-        let mut person = &mut Person {
-            is_male: false,
-            stature: 48,
-            age: 0,
-            is_female: true,
-        }
-
-        *person.age = 10
-        return *person.age + *person.stature
-    }"#;
-
-    assert_eq!(run_test(program)?, 58);
-
-    Ok(())
-}
-
-#[test]
-fn assign_to_reference_tuple_field() -> anyhow::Result<()> {
-    let program = r#"fn test() -> i32 {
-        let mut t = &mut (58, false)
-        *t.1 = true
-
-        if *t.1 {
-            return *t.0
-        }
-
-        return 123
-    }"#;
-
-    assert_eq!(run_test(program)?, 58);
-
-    Ok(())
-}
-
-#[test]
-fn assign_to_unpacked_reference_tuple_field() -> anyhow::Result<()> {
-    let program = r#"fn test() -> i32 {
-        let mut t = (123, true)
-
-        let (n, _) = &mut t
-        *n = 58
-
-        if t.1 {
-            return t.0
-        }
-
-        return 124
-    }"#;
-
-    assert_eq!(run_test(program)?, 58);
-
-    Ok(())
-}
-
-#[test]
-fn assign_immutable_ref_to_mutable_variable() {
-    let program = r#"fn test() -> i32 {
-        let n = 58
-        let mut r = &n
-        *r = 123
-        return n
-    }"#;
-
-    assert!(matches!(
-        run_test(program),
-        Err(CodegenError::CannotAssignImmutableReferencesToMut { .. })
-    ));
 }
 
 #[test]
@@ -1345,3 +1159,236 @@ fn nested_if_expr_2() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn copy_struct() -> anyhow::Result<()> {
+    let program = r#"struct Person {
+        age: i32,
+        stature: i32,
+        is_male: bool,
+        is_female: bool,
+    }
+
+    fn test() -> i32 {
+        let mut p1 = Person {
+            is_male: false,
+            stature: 48,
+            age: 0,
+            is_female: true,
+        }
+
+        let mut p2 = p1
+
+        p2.age = 10
+
+        return p1.age + p1.stature
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn copy_array() -> anyhow::Result<()> {
+    let program = r#"fn test() -> i32 {
+        let mut ar = [128, 256, 512]
+
+        let mut arr = ar
+
+        arr[0] = 58
+
+        return ar[0]
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn copy_tuple() -> anyhow::Result<()> {
+    let program = r#"fn test() -> i32 {
+        let mut tup = (false, 123)
+
+        let mut tupp = tup
+
+        tupp.0 = true
+        tupp.1 = 58
+
+        if tup.0 {
+            return tup.1
+        }
+
+        return 123
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn struct_as_mutable_argument() -> anyhow::Result<()> {
+    let program = r#"struct Person {
+        age: i32,
+        stature: i32,
+        is_male: bool,
+        is_female: bool,
+    }
+
+    fn f(mut p: Person) {
+        p.age = 10
+    }
+
+    fn test() -> i32 {
+        let mut p1 = Person {
+            is_male: false,
+            stature: 48,
+            age: 0,
+            is_female: true,
+        }
+
+        f(p1)
+
+        return p1.age + p1.stature
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn struct_in_struct() -> anyhow::Result<()> {
+    let program = r"struct Age {
+       n: i32,
+    }
+
+    struct Person {
+        age: Age,
+    }
+
+    fn test() -> i32 {
+        let mut p = Person {
+            age: Age { n: 0 },
+        }
+
+        let mut age = p.age
+        age.n = 58
+
+        return p.age.n
+    }";
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn copy_scalar_type_data() -> anyhow::Result<()> {
+    let program = r#"fn test() -> i32 {
+        let n = 58
+
+        let mut m = n
+        m = 123
+
+        return n
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn assign_to_immutable_to_mutable() {
+    // Array
+    let program = r#"fn test() -> i32 {
+        let ar = [128, 256, 512]
+
+        let mut arr = ar
+
+        return ar[0]
+    }"#;
+
+    assert!(matches!(
+        run_test(program),
+        Err(CodegenError::CannotAssignImmutableToMutable { .. })
+    ));
+
+    // Tuple
+    let program = r#"fn test() -> i32 {
+        let tup = (58, true)
+
+        let mut t = tup
+
+        return tup.0
+    }"#;
+
+    assert!(matches!(
+        run_test(program),
+        Err(CodegenError::CannotAssignImmutableToMutable { .. })
+    ));
+
+    // Struct
+    let program = r#"struct Number {
+        n: i32,
+    }
+
+    fn test() -> i32 {
+        let n = Number { n: 58 }
+
+        let mut m = n
+
+        return n.n
+    }"#;
+
+    assert!(matches!(
+        run_test(program),
+        Err(CodegenError::CannotAssignImmutableToMutable { .. })
+    ));
+}
+
+// #[test]
+// fn garbage_collection_struct() -> anyhow::Result<()> {
+//     let program = r#"struct Person {
+//         age: i32,
+//     }
+
+//     fn f() -> Person {
+//         Person { age: 48 }
+//     }
+
+//     fn test() -> i32 {
+//         let mut p = f()
+
+//         p.age = p.age + 10
+
+//         return p.age
+//     }"#;
+
+//     assert_eq!(run_test(program)?, 58);
+
+//     Ok(())
+// }
+
+// #[test]
+// fn garbage_collection_array() -> anyhow::Result<()> {
+//     todo!();
+//     let program = r#""#;
+
+//     assert_eq!(run_test(program)?, 58);
+
+//     Ok(())
+// }
+
+// #[test]
+// fn garbage_collection_tuple() -> anyhow::Result<()> {
+//     todo!();
+//     let program = r#""#;
+
+//     assert_eq!(run_test(program)?, 58);
+
+//     Ok(())
+// }

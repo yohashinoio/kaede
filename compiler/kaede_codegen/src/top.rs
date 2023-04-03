@@ -16,7 +16,7 @@ use kaede_type::Ty;
 use crate::{
     error::{CodegenError, CodegenResult},
     mangle::{mangle_external_name, mangle_name},
-    stmt::build_block,
+    stmt::{build_block, change_mutability_dup},
     tcx::{StructFieldInfo, StructInfo, SymbolTable},
     CompileUnitContext,
 };
@@ -82,7 +82,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
                 TopLevelKind::Fn(func) => {
                     self.declare_fn(
                         &mangle_external_name(import_module_name, func.name.as_str()),
-                        &func.params,
+                        func.params,
                         func.return_ty,
                         Linkage::External,
                     );
@@ -103,7 +103,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
     fn create_fn_type(&mut self, params: &Params, return_ty: &Option<Ty>) -> FunctionType<'ctx> {
         let param_types = params
             .iter()
-            .map(|e| self.cucx.to_llvm_type(&e.1).into())
+            .map(|e| self.cucx.to_llvm_type(&e.2).into())
             .collect::<Vec<_>>();
 
         match &return_ty {
@@ -120,14 +120,20 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
         }
     }
 
+    // Return function value and parameter information reflecting mutability for the types
     fn declare_fn(
         &mut self,
         mangled_name: &str,
-        params: &Params,
+        params: Params,
         return_ty: Option<Ty>,
         linkage: Linkage,
-    ) -> FunctionValue<'ctx> {
-        let fn_type = self.create_fn_type(params, &return_ty);
+    ) -> (FunctionValue<'ctx>, Vec<(Ident, Rc<Ty>)> /* Params */) {
+        let fn_type = self.create_fn_type(&params, &return_ty);
+
+        let params = params
+            .into_iter()
+            .map(|e| (e.0, change_mutability_dup(e.2.into(), e.1)))
+            .collect::<Vec<_>>();
 
         // Declaration
         let value = self
@@ -141,7 +147,13 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
             .return_ty_table
             .insert(value, return_ty.map(Rc::new));
 
-        value
+        // Store parameter information in table
+        self.cucx
+            .tcx
+            .param_table
+            .insert(value, params.iter().map(|e| e.1.clone()).collect());
+
+        (value, params)
     }
 
     fn define_fn(&mut self, node: Fn) -> CodegenResult<()> {
@@ -152,27 +164,15 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
             mangle_name(self.cucx, node.name.as_str())
         };
 
-        let fn_value = self.declare_fn(
+        let (fn_value, param_info) = self.declare_fn(
             mangled_name.as_str(),
-            &node.params,
+            node.params,
             node.return_ty,
             Linkage::External,
         );
 
         let basic_block = self.cucx.context().append_basic_block(fn_value, "entry");
         self.cucx.builder.position_at_end(basic_block);
-
-        let param_info = node
-            .params
-            .into_iter()
-            .map(|e| (e.0, Rc::new(e.1)))
-            .collect::<Vec<_>>();
-
-        // Store parameter information in table
-        self.cucx
-            .tcx
-            .param_table
-            .insert(fn_value, param_info.iter().map(|e| e.1.clone()).collect());
 
         // Allocate parameters
         let param_table = self.tabling_fn_params(param_info, fn_value);
@@ -202,17 +202,17 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
 
         assert_eq!(fn_value.count_params(), param_info.len() as u32);
 
-        for (idx, (name, ty)) in param_info.into_iter().enumerate() {
+        for (idx, (name, param_ty)) in param_info.into_iter().enumerate() {
             let alloca = self
                 .cucx
                 .builder
-                .build_alloca(self.cucx.to_llvm_type(&ty), name.as_str());
+                .build_alloca(self.cucx.to_llvm_type(&param_ty), name.as_str());
 
             self.cucx
                 .builder
                 .build_store(alloca, fn_value.get_nth_param(idx as u32).unwrap());
 
-            params.add(name.name, (alloca, ty));
+            params.add(name.name, (alloca, param_ty));
         }
 
         params

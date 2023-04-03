@@ -1,12 +1,23 @@
 use kaede_lex::token::{Token, TokenKind};
 use kaede_type::{
     make_fundamental_type, FundamentalTypeKind, Mutability, RefrenceType, Ty, TyKind,
+    UserDefinedType,
 };
 
 use crate::{
     error::{ParseError, ParseResult},
     Parser,
 };
+
+fn wrap_in_reference(refee_ty: Ty) -> Ty {
+    Ty {
+        kind: TyKind::Reference(RefrenceType {
+            refee_ty: refee_ty.into(),
+        })
+        .into(),
+        mutability: Mutability::Not,
+    }
+}
 
 impl<T: Iterator<Item = Token>> Parser<T> {
     pub fn ty(&mut self) -> ParseResult<Ty> {
@@ -17,17 +28,12 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             return self.array_ty();
         }
 
-        if self.check(&TokenKind::And) {
-            // Reference type
-            return self.reference_ty();
-        }
-
         if self.check(&TokenKind::OpenParen) {
             // Tuple type
             return self.tuple_ty();
         }
 
-        let tyname = match self.ident() {
+        let ty_name = match self.ident() {
             Ok(t) => t,
             Err(_) => {
                 return Err(ParseError::ExpectedError {
@@ -38,30 +44,18 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             }
         };
 
-        Ok(match tyname.as_str() {
+        Ok(match ty_name.as_str() {
             "i32" => make_fundamental_type(I32, Mutability::Not),
             "bool" => make_fundamental_type(Bool, Mutability::Not),
 
-            _ => unimplemented!(),
-        })
-    }
-
-    fn reference_ty(&mut self) -> ParseResult<Ty> {
-        // &mut i32
-        // ^
-        self.consume(&TokenKind::And)?;
-
-        // &mut i32
-        //  ^~~
-        let ref_mutability = self.consume_b(&TokenKind::Mut).into();
-
-        // &mut i32
-        //      ^~~
-        let refee_ty = self.ty()?;
-
-        Ok(Ty {
-            kind: TyKind::Reference(RefrenceType::new(refee_ty.into(), ref_mutability)).into(),
-            mutability: Mutability::Not,
+            // User defined type
+            _ => wrap_in_reference(
+                Ty {
+                    kind: TyKind::UserDefined(UserDefinedType { name: ty_name.name }).into(),
+                    mutability: Mutability::Not,
+                }
+                .into(),
+            ),
         })
     }
 
@@ -103,10 +97,10 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         //         ^
         self.consume(&TokenKind::CloseBracket)?;
 
-        Ok(Ty {
+        Ok(wrap_in_reference(Ty {
             kind: TyKind::Array((element_ty.into(), size)).into(),
             mutability: Mutability::Not,
-        })
+        }))
     }
 
     fn tuple_ty(&mut self) -> ParseResult<Ty> {
@@ -122,10 +116,10 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             field_types.push(self.ty()?.into());
 
             if self.consume_b(&TokenKind::CloseParen) {
-                return Ok(Ty {
+                return Ok(wrap_in_reference(Ty {
                     kind: TyKind::Tuple(field_types).into(),
                     mutability: Mutability::Not,
-                });
+                }));
             }
 
             self.consume(&TokenKind::Comma)?;

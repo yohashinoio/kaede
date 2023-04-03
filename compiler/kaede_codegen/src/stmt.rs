@@ -6,7 +6,7 @@ use kaede_ast::stmt::{
     Assign, AssignKind, Block, Let, LetKind, NormalLet, Stmt, StmtKind, TupleUnpack,
 };
 use kaede_span::Span;
-use kaede_type::{Mutability, RefrenceType, Ty, TyKind};
+use kaede_type::{is_same_type, Mutability, RefrenceType, Ty, TyKind};
 
 use crate::expr::build_tuple_indexing;
 use crate::value::Value;
@@ -36,6 +36,27 @@ pub fn build_statement(cucx: &mut CompileUnitContext, node: &Stmt) -> CodegenRes
     builder.build(node)?;
 
     Ok(())
+}
+
+/// Duplicate the type, change the mutability, and return the duplicated type
+pub fn change_mutability_dup(ty: Rc<Ty>, mutability: Mutability) -> Rc<Ty> {
+    let mut var_ty = (*ty).clone();
+
+    var_ty.mutability = mutability;
+
+    if let TyKind::Reference(rty) = var_ty.kind.as_ref() {
+        let new_refee_ty = Ty {
+            kind: rty.refee_ty.kind.clone(),
+            mutability: mutability,
+        };
+
+        var_ty.kind = TyKind::Reference(RefrenceType {
+            refee_ty: new_refee_ty.into(),
+        })
+        .into();
+    };
+
+    var_ty.into()
 }
 
 struct StmtBuilder<'a, 'ctx, 'm, 'c> {
@@ -83,6 +104,16 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
 
         let right = build_expression(self.cucx, &node.rhs)?;
 
+        if !is_same_type(&left.get_type(), &right.get_type()) {
+            return Err(CodegenError::MismatchedTypes {
+                types: (
+                    left.get_type().kind.to_string(),
+                    right.get_type().kind.to_string(),
+                ),
+                span: node.span,
+            });
+        }
+
         match node.kind {
             AssignKind::Simple => self
                 .cucx
@@ -109,41 +140,43 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
         span: Span,
     ) -> CodegenResult<()> {
         if let Some(init) = init {
+            if matches!(init.get_type().kind.as_ref(), TyKind::Reference(_))
+                && mutability.is_mut()
+                && init.get_type().mutability.is_not()
+            {
+                return Err(CodegenError::CannotAssignImmutableToMutable { span });
+            }
+
+            let var_ty = change_mutability_dup(init.get_type(), mutability);
+
             let alloca = if specified_ty.kind.is_inferred() {
                 // No type information was available, so infer from an initializer
-
-                if let TyKind::Reference(rty) = init.get_type().kind.as_ref() {
-                    // Example: let mut x = &y
-                    if mutability.is_mut() && rty.mutability.is_not() {
-                        return Err(CodegenError::CannotAssignImmutableReferencesToMut { span });
-                    }
-                }
-
-                let mut ty = (*init.get_type()).clone();
-                ty.mutability = mutability;
-
-                let alloca = self.cucx.create_entry_block_alloca(name.as_str(), &ty);
+                let alloca = self.cucx.create_entry_block_alloca(name.as_str(), &var_ty);
 
                 self.cucx
                     .tcx
-                    .add_symbol(name.name.clone(), (alloca, ty.into()));
+                    .add_symbol(name.name.clone(), (alloca, var_ty.into()));
 
                 alloca
             } else {
                 // Type information is available
 
                 // Check if an initializer type and type match
-                if specified_ty != init.get_type() {
-                    return Err(CodegenError::MismatchedTypes { span });
+                if !is_same_type(&specified_ty, &init.get_type()) {
+                    return Err(CodegenError::MismatchedTypes {
+                        types: (
+                            specified_ty.kind.to_string(),
+                            init.get_type().kind.to_string(),
+                        ),
+                        span,
+                    });
                 }
 
-                let alloca = self
-                    .cucx
-                    .create_entry_block_alloca(name.as_str(), &specified_ty);
+                let alloca = self.cucx.create_entry_block_alloca(name.as_str(), &var_ty);
 
                 self.cucx
                     .tcx
-                    .add_symbol(name.name.clone(), (alloca, specified_ty));
+                    .add_symbol(name.name.clone(), (alloca, var_ty.into()));
 
                 alloca
             };
@@ -175,34 +208,12 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
     fn tuple_unpacking(&mut self, node: &TupleUnpack) -> CodegenResult<()> {
         let tuple = build_expression(self.cucx, &node.init)?;
 
-        // The tuple is a temporary object, allocate it in memory
-        let tuple = if tuple.get_value().as_instruction_value().is_none() {
-            let alloca = self
-                .cucx
-                .create_entry_block_alloca("tupletmp", &tuple.get_type());
+        let tuple_ref_ty = tuple.get_type();
 
-            self.cucx.builder.build_store(alloca, tuple.get_value());
-
-            Value::new(
-                self.cucx
-                    .builder
-                    .build_load(self.cucx.to_llvm_type(&tuple.get_type()), alloca, ""),
-                tuple.get_type(),
-            )
-        } else {
-            tuple
-        };
-
-        let tuple_ty = tuple.get_type();
-
-        let (tuple_field_len, tuple_mutability) = match tuple_ty.kind.as_ref() {
-            TyKind::Tuple(ts) => (ts.len(), Mutability::Not),
-
-            TyKind::Reference(rty) => {
-                let tuple_ty = rty.get_base_type_of_reference();
-
-                match tuple_ty.kind.as_ref() {
-                    TyKind::Tuple(ts) => (ts.len(), tuple_ty.mutability),
+        let (tuple_len, tuple_mutability) =
+            if let TyKind::Reference(rty) = tuple_ref_ty.kind.as_ref() {
+                match rty.refee_ty.kind.as_ref() {
+                    TyKind::Tuple(tuple_ty) => (tuple_ty.len(), tuple_ref_ty.mutability),
 
                     _ => {
                         return Err(CodegenError::InitializerTupleUnpackingMustBeTuple {
@@ -210,18 +221,15 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
                         })
                     }
                 }
-            }
-
-            _ => {
+            } else {
                 return Err(CodegenError::InitializerTupleUnpackingMustBeTuple {
                     span: node.init.span,
-                })
-            }
-        };
+                });
+            };
 
-        if node.names.len() != tuple_field_len {
+        if node.names.len() != tuple_len {
             return Err(CodegenError::NumberOfTupleFieldsDoesNotMatch {
-                lens: (node.names.len(), tuple_field_len),
+                lens: (node.names.len(), tuple_len),
                 span: node.span,
             });
         }
@@ -229,7 +237,7 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
         // Unpacking
         for (index, name_and_mutability) in node.names.iter().enumerate() {
             let (name, mutability) = match name_and_mutability {
-                Some(nam) => (&nam.0, nam.1),
+                Some(x) => (&x.0, x.1),
 
                 // Ignore field
                 None => continue,
@@ -239,52 +247,13 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
                 todo!("ERROR")
             }
 
-            self.tuple_unpacking_internal(&tuple, index as u64, name, mutability, node.span)?;
+            self.unpack_one_tuple_field(&tuple, index as u64, name, mutability, node.span)?;
         }
 
         Ok(())
     }
 
-    fn tuple_unpacking_internal(
-        &mut self,
-        tuple: &Value<'ctx>,
-        index: u64,
-        unpacked_name: &Ident,
-        unpacked_mutability: Mutability,
-        span: Span,
-    ) -> CodegenResult<()> {
-        if matches!(tuple.get_type().kind.as_ref(), TyKind::Reference(_)) {
-            return self.reference_tuple_unpacking(
-                tuple,
-                index,
-                unpacked_name,
-                unpacked_mutability,
-                span,
-            );
-        }
-
-        let ptr_to_tuple =
-            get_loaded_pointer(&tuple.get_value().as_instruction_value().unwrap()).unwrap();
-
-        let unpacked_value =
-            build_tuple_indexing(self.cucx, ptr_to_tuple, index, &tuple.get_type(), span)?;
-
-        self.normal_let_internal(
-            unpacked_name,
-            unpacked_mutability,
-            Some(unpacked_value),
-            Ty {
-                kind: TyKind::Inferred.into(),
-                mutability: unpacked_mutability,
-            }
-            .into(),
-            span,
-        )?;
-
-        Ok(())
-    }
-
-    fn reference_tuple_unpacking(
+    fn unpack_one_tuple_field(
         &mut self,
         tuple: &Value<'ctx>,
         index: u64,
@@ -297,39 +266,26 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
             TyKind::Reference(_)
         ));
 
-        let ref_tuple_ty = tuple.get_type();
-        let ref_tuple_ty = if let TyKind::Reference(rty) = ref_tuple_ty.kind.as_ref() {
+        let tuple_ref_ty = tuple.get_type();
+
+        let tuple_ty = if let TyKind::Reference(rty) = tuple_ref_ty.kind.as_ref() {
             rty
         } else {
             unreachable!();
         };
 
-        let ptr_to_tuple = tuple.get_value().into_pointer_value();
-
-        let unpacked_value =
-            build_tuple_indexing(self.cucx, ptr_to_tuple, index, &ref_tuple_ty.refee_ty, span)?;
-
-        let ptr_to_unpacked_value =
-            get_loaded_pointer(&unpacked_value.get_value().as_instruction_value().unwrap())
-                .unwrap();
-
-        let unpacked_value_reference = Value::new(
-            ptr_to_unpacked_value.into(),
-            Ty {
-                kind: TyKind::Reference(RefrenceType {
-                    refee_ty: unpacked_value.get_type(),
-                    mutability: ref_tuple_ty.mutability,
-                })
-                .into(),
-                mutability: Mutability::Not,
-            }
-            .into(),
-        );
+        let unpacked_value = build_tuple_indexing(
+            self.cucx,
+            tuple.get_value().into_pointer_value(),
+            index,
+            &tuple_ty.refee_ty,
+            span,
+        )?;
 
         self.normal_let_internal(
             unpacked_name,
             unpacked_mutability,
-            Some(unpacked_value_reference),
+            Some(unpacked_value),
             Ty {
                 kind: TyKind::Inferred.into(),
                 mutability: unpacked_mutability,
