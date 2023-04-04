@@ -112,9 +112,9 @@ pub fn build_tuple_indexing<'ctx>(
 pub fn create_struct_alloca<'ctx>(
     cucx: &mut CompileUnitContext<'ctx, '_, '_>,
     struct_ty: &Ty,
-    inits: &Vec<BasicValueEnum<'ctx>>,
+    inits: &[BasicValueEnum<'ctx>],
 ) -> PointerValue<'ctx> {
-    let alloca = cucx.create_entry_block_alloca("structtmp", &struct_ty);
+    let alloca = cucx.create_entry_block_alloca("structtmp", struct_ty);
 
     let struct_llvm_ty = cucx.to_llvm_type(struct_ty);
 
@@ -397,7 +397,11 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         let alloca = create_struct_alloca(
             self.cucx,
             &tuple_ty,
-            &element_values.iter().map(|v| v.get_value()).collect(),
+            element_values
+                .iter()
+                .map(|v| v.get_value())
+                .collect::<Vec<_>>()
+                .as_slice(),
         );
 
         Ok(Value::new(
@@ -877,16 +881,16 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             ) {
                 return self.field_access_or_tuple_indexing(&left, node.lhs.span, &node.rhs);
             } else {
-                return Err(CodegenError::HasNoFields {
+                Err(CodegenError::HasNoFields {
                     span: node.lhs.span,
-                });
+                })
             }
         } else {
             // No possibility of raw tuple or struct
 
-            return Err(CodegenError::HasNoFields {
+            Err(CodegenError::HasNoFields {
                 span: node.lhs.span,
-            });
+            })
         }
     }
 
@@ -1033,7 +1037,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         })
     }
 
-    fn verify_args(&self, args: &Vec<(Value, Span)>, params: &Vec<Rc<Ty>>) -> CodegenResult<()> {
+    fn verify_args(&self, args: &[(Value, Span)], params: &[Rc<Ty>]) -> CodegenResult<()> {
         for (idx, arg) in args.iter().enumerate() {
             let param = &params[idx];
 

@@ -47,7 +47,7 @@ pub fn change_mutability_dup(ty: Rc<Ty>, mutability: Mutability) -> Rc<Ty> {
     if let TyKind::Reference(rty) = var_ty.kind.as_ref() {
         let new_refee_ty = Ty {
             kind: rty.refee_ty.kind.clone(),
-            mutability: mutability,
+            mutability,
         };
 
         var_ty.kind = TyKind::Reference(RefrenceType {
@@ -155,7 +155,7 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
 
                 self.cucx
                     .tcx
-                    .add_symbol(name.name.clone(), (alloca, var_ty.into()));
+                    .add_symbol(name.name.clone(), (alloca, var_ty));
 
                 alloca
             } else {
@@ -176,7 +176,7 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
 
                 self.cucx
                     .tcx
-                    .add_symbol(name.name.clone(), (alloca, var_ty.into()));
+                    .add_symbol(name.name.clone(), (alloca, var_ty));
 
                 alloca
             };

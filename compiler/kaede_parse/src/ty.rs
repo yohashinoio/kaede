@@ -53,8 +53,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                 Ty {
                     kind: TyKind::UserDefined(UserDefinedType { name: ty_name.name }).into(),
                     mutability: Mutability::Not,
-                }
-                .into(),
+                },
             ),
         })
     }
