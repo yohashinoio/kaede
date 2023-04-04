@@ -49,12 +49,10 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             "bool" => make_fundamental_type(Bool, Mutability::Not),
 
             // User defined type
-            _ => wrap_in_reference(
-                Ty {
-                    kind: TyKind::UserDefined(UserDefinedType { name: ty_name.name }).into(),
-                    mutability: Mutability::Not,
-                },
-            ),
+            _ => wrap_in_reference(Ty {
+                kind: TyKind::UserDefined(UserDefinedType { name: ty_name.name }).into(),
+                mutability: Mutability::Not,
+            }),
         })
     }
 
