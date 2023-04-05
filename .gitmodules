@@ -1,0 +1,3 @@
+[submodule "library/bdwgc"]
+	path = library/bdwgc
+	url = git@github.com:ivmai/bdwgc.git
