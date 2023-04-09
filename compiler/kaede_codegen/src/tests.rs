@@ -27,6 +27,7 @@ fn run_test(program: &str) -> CodegenResult<i32> {
         &module,
         PathBuf::from("test"),
         parse(lex(program)).unwrap(),
+        OptimizationLevel::Aggressive,
     )?;
 
     Ok(jit_compile_test(&module))
@@ -1350,45 +1351,61 @@ fn assign_to_immutable_to_mutable() {
     ));
 }
 
-// #[test]
-// fn garbage_collection_struct() -> anyhow::Result<()> {
-//     let program = r#"struct Person {
-//         age: i32,
-//     }
+#[test]
+fn return_struct() -> anyhow::Result<()> {
+    let program = r#"struct Person {
+        age: i32,
+    }
 
-//     fn f() -> Person {
-//         Person { age: 48 }
-//     }
+    fn f() -> Person {
+        return Person { age: 58 }
+    }
 
-//     fn test() -> i32 {
-//         let mut p = f()
+    fn test() -> i32 {
+        let s = f()
 
-//         p.age = p.age + 10
+        return s.age
+    }"#;
 
-//         return p.age
-//     }"#;
+    assert_eq!(run_test(program)?, 58);
 
-//     assert_eq!(run_test(program)?, 58);
+    Ok(())
+}
 
-//     Ok(())
-// }
+#[test]
+fn return_tuple() -> anyhow::Result<()> {
+    let program = r#"fn f() -> (i32, bool) {
+        return (58, true)
+    }
 
-// #[test]
-// fn garbage_collection_array() -> anyhow::Result<()> {
-//     todo!();
-//     let program = r#""#;
+    fn test() -> i32 {
+        let t = f()
 
-//     assert_eq!(run_test(program)?, 58);
+        if t.1 {
+            return t.0
+        }
 
-//     Ok(())
-// }
+        return 123
+    }"#;
 
-// #[test]
-// fn garbage_collection_tuple() -> anyhow::Result<()> {
-//     todo!();
-//     let program = r#""#;
+    assert_eq!(run_test(program)?, 58);
 
-//     assert_eq!(run_test(program)?, 58);
+    Ok(())
+}
 
-//     Ok(())
-// }
+#[test]
+fn return_array() -> anyhow::Result<()> {
+    let program = r#"fn f() -> [i32; 2] {
+        return [48, 10]
+    }
+
+    fn test() -> i32 {
+        let ar = f()
+
+        return ar[0] + ar[1]
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}

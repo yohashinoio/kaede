@@ -1,8 +1,9 @@
+use core::panic;
 use std::{fs, path::PathBuf, vec};
 
 use anyhow::{anyhow, Context as _};
 use clap::Parser;
-use inkwell::context::Context;
+use inkwell::{context::Context, OptimizationLevel};
 use kaede_codegen::{codegen, CodegenContext};
 use kaede_lex::lex;
 use kaede_parse::parse;
@@ -19,6 +20,28 @@ struct Args {
         help = "Instead of a file, we receive a program on the command line"
     )]
     program: Option<String>,
+
+    /// Optimization level
+    ///
+    /// 0 `None`
+    ///
+    /// 1 `Less`
+    ///
+    /// 2 `Default`
+    ///
+    /// 3 `Aggressive`
+    #[arg(short = 'O', default_value_t = 2)]
+    opt_level: u8,
+}
+
+fn to_inkwell_opt_level(level: u8) -> OptimizationLevel {
+    match level {
+        0 => OptimizationLevel::None,
+        1 => OptimizationLevel::Less,
+        2 => OptimizationLevel::Default,
+        3 => OptimizationLevel::Aggressive,
+        _ => panic!("Optimization levels range from 0 to 3!"),
+    }
 }
 
 struct CompileUnitInfo {
@@ -26,7 +49,7 @@ struct CompileUnitInfo {
     pub program: String,
 }
 
-fn compile(unit_infos: Vec<CompileUnitInfo>) -> anyhow::Result<()> {
+fn compile(unit_infos: Vec<CompileUnitInfo>, opt_level: OptimizationLevel) -> anyhow::Result<()> {
     let context = Context::create();
 
     let mut compiled_modules = Vec::new();
@@ -42,7 +65,7 @@ fn compile(unit_infos: Vec<CompileUnitInfo>) -> anyhow::Result<()> {
         module.set_source_file_name(file_path.to_str().unwrap());
 
         let cgcx = CodegenContext::new(&context)?;
-        codegen(&cgcx, &module, file_path, ast)?;
+        codegen(&cgcx, &module, file_path, ast, opt_level)?;
 
         compiled_modules.push(module);
     }
@@ -66,11 +89,16 @@ fn main() -> anyhow::Result<()> {
 
     let file_paths = args.files;
 
+    let opt_level = to_inkwell_opt_level(args.opt_level);
+
     if let Some(program) = args.program {
-        compile(vec![CompileUnitInfo {
-            file_path: PathBuf::from("<commandline>"),
-            program,
-        }])?;
+        compile(
+            vec![CompileUnitInfo {
+                file_path: PathBuf::from("<commandline>"),
+                program,
+            }],
+            opt_level,
+        )?;
 
         return Ok(());
     }
@@ -91,7 +119,7 @@ fn main() -> anyhow::Result<()> {
         });
     }
 
-    compile(programs)?;
+    compile(programs, opt_level)?;
 
     Ok(())
 }

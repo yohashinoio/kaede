@@ -6,6 +6,7 @@ use inkwell::{
     builder::Builder,
     context::Context,
     module::Module,
+    passes::{PassManager, PassManagerBuilder},
     targets::{CodeModel, InitializationConfig, RelocMode, Target, TargetData, TargetMachine},
     types::{AnyType, BasicType, BasicTypeEnum},
     values::{BasicValueEnum, FunctionValue, InstructionValue, PointerValue},
@@ -46,8 +47,9 @@ pub fn codegen<'ctx>(
     module: &Module<'ctx>,
     file_path: PathBuf,
     cu: CompileUnit,
+    opt_level: OptimizationLevel,
 ) -> CodegenResult<()> {
-    CompileUnitContext::new(ctx, module, file_path)?.codegen(cu.top_levels)?;
+    CompileUnitContext::new(ctx, module, file_path)?.codegen(cu.top_levels, opt_level)?;
 
     Ok(())
 }
@@ -229,17 +231,37 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
         }
     }
 
-    pub fn codegen(&mut self, top_levels: Vec<TopLevel>) -> CodegenResult<()> {
-        for top in top_levels {
-            build_top_level(self, top)?;
-        }
+    fn opt_module(&self, opt_level: OptimizationLevel) {
+        let pm_builder = PassManagerBuilder::create();
+        pm_builder.set_optimization_level(opt_level);
 
+        let pm = PassManager::create(());
+        pm_builder.populate_module_pass_manager(&pm);
+
+        pm.run_on(self.module);
+    }
+
+    fn verify_module(&self) -> CodegenResult<()> {
         self.module.verify().map_err(|e| {
             self.module.print_to_stderr();
             CodegenError::LLVMError {
                 what: e.to_string(),
             }
-        })?;
+        })
+    }
+
+    pub fn codegen(
+        &mut self,
+        top_levels: Vec<TopLevel>,
+        opt_level: OptimizationLevel,
+    ) -> CodegenResult<()> {
+        for top in top_levels {
+            build_top_level(self, top)?;
+        }
+
+        self.verify_module()?;
+
+        self.opt_module(opt_level);
 
         Ok(())
     }
