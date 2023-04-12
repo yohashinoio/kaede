@@ -1416,3 +1416,32 @@ fn return_array() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn if_in_loop() -> anyhow::Result<()> {
+    let program = r#"struct Person {
+        age: i32,
+    }
+
+    fn get_age(p: Person) -> i32 {
+        return p.age
+    }
+
+    fn test() -> i32 {
+        let mut p = Person { age: 0 }
+
+        loop {
+            if get_age(p) == 58 {
+                break
+            } else {
+                p.age = p.age + 1
+            }
+        }
+
+        return get_age(p)
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}

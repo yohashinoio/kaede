@@ -54,7 +54,10 @@ pub fn build_block_expression<'ctx>(
         StmtKind::Expr(e) => build_expression(cucx, e)?,
 
         // The end of the block is not an expression
-        _ => Value::new_unit(),
+        _ => {
+            build_statement(cucx, last_stmt)?;
+            Value::new_unit()
+        }
     };
 
     cucx.tcx.pop_symbol_table();
