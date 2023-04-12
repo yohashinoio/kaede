@@ -26,6 +26,9 @@ jobs:
             ./llvm
           key: llvm-15.0
 
+      - name: Install cmake
+        run: sudo apt install cmake
+
       - name: Install llvm
         uses: KyleMayes/install-llvm-action@v1
         with:
@@ -38,6 +41,9 @@ jobs:
           toolchain: stable
           components: rustfmt, clippy
 
+      - name: Build libraries
+        run: cd library && chmod +x build.sh && sudo ./build.sh
+
       - name: Run format
         run: cargo fmt --all -- --check
 
@@ -45,4 +51,5 @@ jobs:
         run: cargo clippy -- -D warnings
 
       - name: Run test
-        run: cargo test --release --all-features
+        # More test threads may cause errors (unknown cause) (GC related)
+        run: cargo test --release --all-features -- --test-threads=1
