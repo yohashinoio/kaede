@@ -114,7 +114,7 @@ pub fn create_struct_alloca<'ctx>(
     struct_ty: &Ty,
     inits: &[BasicValueEnum<'ctx>],
 ) -> PointerValue<'ctx> {
-    let alloca = cucx.create_entry_block_alloca("structtmp", struct_ty);
+    let mallocd = cucx.gc_malloc(struct_ty);
 
     let struct_llvm_ty = cucx.to_llvm_type(struct_ty);
 
@@ -122,7 +122,7 @@ pub fn create_struct_alloca<'ctx>(
         let gep = unsafe {
             cucx.builder.build_in_bounds_gep(
                 struct_llvm_ty,
-                alloca,
+                mallocd,
                 &[
                     cucx.context().i32_type().const_zero(),
                     cucx.context().i32_type().const_int(index as u64, false),
@@ -134,7 +134,7 @@ pub fn create_struct_alloca<'ctx>(
         cucx.builder.build_store(gep, *init);
     }
 
-    alloca
+    mallocd
 }
 
 struct ExprBuilder<'a, 'ctx, 'm, 'c> {
@@ -213,7 +213,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
     fn loop_(&mut self, node: &Loop) -> CodegenResult<Value<'ctx>> {
         let parent = self.cucx.get_current_fn();
 
-        let body_bb = self.cucx.context().append_basic_block(parent, "body");
+        let body_bb = self.cucx.context().append_basic_block(parent, "loopbody");
 
         let cont_bb = self.cucx.context().append_basic_block(parent, "loopcont");
 
@@ -434,13 +434,13 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
 
         let array_ty_llvm = self.cucx.to_llvm_type(&array_ty);
 
-        let alloca = self.cucx.create_entry_block_alloca("arrtmp", &array_ty);
+        let mallocd = self.cucx.gc_malloc(&array_ty);
 
         for (idx, elem) in elems.iter().enumerate() {
             let gep = unsafe {
                 self.cucx.builder.build_in_bounds_gep(
                     array_ty_llvm,
-                    alloca,
+                    mallocd,
                     &[
                         self.cucx.context().i32_type().const_zero(),
                         self.cucx.context().i32_type().const_int(idx as u64, false),
@@ -453,7 +453,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         }
 
         Ok(Value::new(
-            alloca.into(),
+            mallocd.into(),
             Ty {
                 kind: TyKind::Reference(RefrenceType {
                     refee_ty: array_ty.clone(),

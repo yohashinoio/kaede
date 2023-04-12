@@ -1,10 +1,6 @@
 use std::{fs, rc::Rc};
 
-use inkwell::{
-    module::Linkage,
-    types::{BasicType, FunctionType},
-    values::FunctionValue,
-};
+use inkwell::{module::Linkage, values::FunctionValue};
 use kaede_ast::{
     expr::Ident,
     top::{Fn, Import, Params, Struct, TopLevel, TopLevelKind},
@@ -80,7 +76,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
 
             match top_level.kind {
                 TopLevelKind::Fn(func) => {
-                    self.declare_fn(
+                    self.decl_fn(
                         &mangle_external_name(import_module_name, func.name.as_str()),
                         func.params,
                         func.return_ty,
@@ -99,61 +95,27 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
         Ok(())
     }
 
-    // If return_ty is `None`, treat as void
-    fn create_fn_type(&mut self, params: &Params, return_ty: &Option<Ty>) -> FunctionType<'ctx> {
-        let param_types = params
-            .iter()
-            .map(|e| self.cucx.to_llvm_type(&e.2).into())
-            .collect::<Vec<_>>();
-
-        match &return_ty {
-            Some(ty) => self
-                .cucx
-                .to_llvm_type(ty)
-                .fn_type(param_types.as_slice(), false),
-
-            None => self
-                .cucx
-                .context()
-                .void_type()
-                .fn_type(param_types.as_slice(), false),
-        }
-    }
-
     // Return function value and parameter information reflecting mutability for the types
-    fn declare_fn(
+    fn decl_fn(
         &mut self,
         mangled_name: &str,
         params: Params,
         return_ty: Option<Ty>,
         linkage: Linkage,
     ) -> (FunctionValue<'ctx>, Vec<(Ident, Rc<Ty>)> /* Params */) {
-        let fn_type = self.create_fn_type(&params, &return_ty);
-
         let params = params
             .into_iter()
             .map(|e| (e.0, change_mutability_dup(e.2.into(), e.1)))
             .collect::<Vec<_>>();
 
-        // Declaration
-        let value = self
-            .cucx
-            .module
-            .add_function(mangled_name, fn_type, Some(linkage));
+        let fn_value = self.cucx.decl_fn(
+            mangled_name,
+            params.iter().map(|e| e.1.clone()).collect(),
+            return_ty.map(Rc::new),
+            Some(linkage),
+        );
 
-        // Store return type information in table
-        self.cucx
-            .tcx
-            .return_ty_table
-            .insert(value, return_ty.map(Rc::new));
-
-        // Store parameter information in table
-        self.cucx
-            .tcx
-            .param_table
-            .insert(value, params.iter().map(|e| e.1.clone()).collect());
-
-        (value, params)
+        (fn_value, params)
     }
 
     fn define_fn(&mut self, node: Fn) -> CodegenResult<()> {
@@ -164,7 +126,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
             mangle_name(self.cucx, node.name.as_str())
         };
 
-        let (fn_value, param_info) = self.declare_fn(
+        let (fn_value, param_info) = self.decl_fn(
             mangled_name.as_str(),
             node.params,
             node.return_ty,

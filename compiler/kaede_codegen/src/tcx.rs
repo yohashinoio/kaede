@@ -9,7 +9,7 @@ use kaede_type::Ty;
 
 use crate::error::{CodegenError, CodegenResult};
 
-type Symbol<'ctx> = (PointerValue<'ctx>, Rc<Ty>);
+type Symbol<'ctx> = (PointerValue<'ctx>, Rc<Ty> /* Variable type */);
 
 pub struct SymbolTable<'ctx>(HashMap<String, Symbol<'ctx>>);
 

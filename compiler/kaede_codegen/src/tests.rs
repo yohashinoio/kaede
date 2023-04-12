@@ -1,19 +1,26 @@
-use inkwell::{context::Context, module::Module, OptimizationLevel};
+use inkwell::{
+    context::Context, module::Module, support::load_library_permanently, OptimizationLevel,
+};
 
 use kaede_lex::lex;
 use kaede_parse::parse;
 
 use super::*;
 
-type TestFunc = unsafe extern "C" fn() -> i32;
-
 // Expects that a test function of type TestFunc is defined in the module
 fn jit_compile_test(module: &Module) -> i32 {
+    // Load bdw-gc (boehm-gc)
+    load_library_permanently("/usr/local/lib/libgc.so");
+
     let ee = module
-        .create_jit_execution_engine(OptimizationLevel::Default)
+        .create_jit_execution_engine(OptimizationLevel::None)
         .unwrap();
 
-    unsafe { ee.get_function::<TestFunc>("test.test").unwrap().call() }
+    unsafe {
+        ee.get_function::<unsafe extern "C" fn() -> i32>("test.test")
+            .unwrap()
+            .call()
+    }
 }
 
 fn run_test(program: &str) -> CodegenResult<i32> {
@@ -27,7 +34,7 @@ fn run_test(program: &str) -> CodegenResult<i32> {
         &module,
         PathBuf::from("test"),
         parse(lex(program)).unwrap(),
-        OptimizationLevel::Aggressive,
+        OptimizationLevel::None,
     )?;
 
     Ok(jit_compile_test(&module))

@@ -1,19 +1,19 @@
-use std::{collections::HashSet, path::PathBuf};
+use std::{collections::HashSet, path::PathBuf, rc::Rc};
 
 use error::{CodegenError, CodegenResult};
 use inkwell::{
     basic_block::BasicBlock,
     builder::Builder,
     context::Context,
-    module::Module,
+    module::{Linkage, Module},
     passes::{PassManager, PassManagerBuilder},
     targets::{CodeModel, InitializationConfig, RelocMode, Target, TargetData, TargetMachine},
-    types::{AnyType, BasicType, BasicTypeEnum},
+    types::{AnyType, BasicType, BasicTypeEnum, FunctionType},
     values::{BasicValueEnum, FunctionValue, InstructionValue, PointerValue},
     AddressSpace, OptimizationLevel,
 };
 use kaede_ast::{top::TopLevel, CompileUnit};
-use kaede_type::{Ty, TyKind};
+use kaede_type::{FundamentalType, FundamentalTypeKind, Mutability, RefrenceType, Ty, TyKind};
 use tcx::TypeContext;
 use top::build_top_level;
 
@@ -49,7 +49,11 @@ pub fn codegen<'ctx>(
     cu: CompileUnit,
     opt_level: OptimizationLevel,
 ) -> CodegenResult<()> {
-    CompileUnitContext::new(ctx, module, file_path)?.codegen(cu.top_levels, opt_level)?;
+    let mut cucx = CompileUnitContext::new(ctx, module, file_path)?;
+
+    cucx.init_gc();
+
+    cucx.codegen(cu.top_levels, opt_level)?;
 
     Ok(())
 }
@@ -148,7 +152,7 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
         })
     }
 
-    pub fn context(&self) -> &'ctx Context {
+    fn context(&self) -> &'ctx Context {
         self.cgcx.context
     }
 
@@ -158,15 +162,6 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
 
     /// Create a new stack allocation instruction in the entry block of the function
     fn create_entry_block_alloca(&self, name: &str, ty: &Ty) -> PointerValue<'ctx> {
-        self.create_entry_block_alloca_llvm_ty(name, self.to_llvm_type(ty))
-    }
-
-    /// Create a new stack allocation instruction in the entry block of the function
-    fn create_entry_block_alloca_llvm_ty(
-        &self,
-        name: &str,
-        ty: BasicTypeEnum<'ctx>,
-    ) -> PointerValue<'ctx> {
         let builder = self.context().create_builder();
 
         let entry = self.get_current_fn().get_first_basic_block().unwrap();
@@ -176,10 +171,97 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
             None => builder.position_at_end(entry),
         }
 
-        builder.build_alloca(ty, name)
+        builder.build_alloca(self.to_llvm_type(ty), name)
     }
 
-    pub fn get_current_fn(&self) -> FunctionValue<'ctx> {
+    // If return_ty is `None`, treat as void
+    fn create_fn_type(
+        &mut self,
+        params: &[Rc<Ty>],
+        return_ty: &Option<Rc<Ty>>,
+    ) -> FunctionType<'ctx> {
+        let param_types = params
+            .iter()
+            .map(|t| self.to_llvm_type(t).into())
+            .collect::<Vec<_>>();
+
+        match &return_ty {
+            Some(ty) => self.to_llvm_type(ty).fn_type(param_types.as_slice(), false),
+
+            None => self
+                .context()
+                .void_type()
+                .fn_type(param_types.as_slice(), false),
+        }
+    }
+
+    fn decl_fn(
+        &mut self,
+        name: &str,
+        param_types: Vec<Rc<Ty>>,
+        return_ty: Option<Rc<Ty>>,
+        linkage: Option<Linkage>,
+    ) -> FunctionValue<'ctx> {
+        let fn_type = self.create_fn_type(&param_types, &return_ty);
+
+        let fn_value = self.module.add_function(name, fn_type, linkage);
+
+        // Store return type information in table
+        self.tcx.return_ty_table.insert(fn_value, return_ty);
+
+        // Store parameter information in table
+        self.tcx.param_table.insert(fn_value, param_types);
+
+        fn_value
+    }
+
+    // Initialize garbage collector
+    fn init_gc(&mut self) {
+        // Init GC_malloc (boehm-gc)
+        let return_ty = Ty {
+            kind: TyKind::Reference(RefrenceType {
+                refee_ty: Ty {
+                    kind: TyKind::Fundamental(FundamentalType {
+                        kind: FundamentalTypeKind::I8,
+                    })
+                    .into(),
+                    mutability: Mutability::Mut,
+                }
+                .into(),
+            })
+            .into(),
+            mutability: Mutability::Mut,
+        }
+        .into();
+        let param_types = vec![Ty {
+            kind: TyKind::Fundamental(FundamentalType {
+                kind: FundamentalTypeKind::U64,
+            })
+            .into(),
+            mutability: Mutability::Not,
+        }
+        .into()];
+        self.decl_fn("GC_malloc", param_types, Some(return_ty), None);
+    }
+
+    fn gc_malloc(&self, ty: &Ty) -> PointerValue<'ctx> {
+        let gc_mallocd = self.module.get_function("GC_malloc").unwrap();
+
+        let addr = self
+            .builder
+            .build_call(
+                gc_mallocd,
+                &[self.to_llvm_type(ty).size_of().unwrap().into()],
+                "",
+            )
+            .try_as_basic_value()
+            .left()
+            .unwrap();
+
+        addr.into_pointer_value()
+    }
+
+    fn get_current_fn(&self) -> FunctionValue<'ctx> {
         self.builder
             .get_insert_block()
             .unwrap()
@@ -188,7 +270,7 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
     }
 
     /// `True` if there is **not** a terminator in the current block
-    pub fn no_terminator(&self) -> bool {
+    fn no_terminator(&self) -> bool {
         self.builder
             .get_insert_block()
             .unwrap()
@@ -196,7 +278,7 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
             .is_none()
     }
 
-    pub fn to_llvm_type(&self, ty: &Ty) -> BasicTypeEnum<'ctx> {
+    fn to_llvm_type(&self, ty: &Ty) -> BasicTypeEnum<'ctx> {
         let context = self.context();
 
         match ty.kind.as_ref() {
@@ -250,7 +332,7 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
         })
     }
 
-    pub fn codegen(
+    fn codegen(
         &mut self,
         top_levels: Vec<TopLevel>,
         opt_level: OptimizationLevel,

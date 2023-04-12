@@ -57,6 +57,7 @@ impl Mutability {
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum FundamentalTypeKind {
     I32,
+    I8,
     U64,
     Bool,
 }
@@ -144,16 +145,19 @@ impl TyKind {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct FundamentalType {
-    kind: FundamentalTypeKind,
+    pub kind: FundamentalTypeKind,
 }
 
 impl std::fmt::Display for FundamentalType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.kind {
-            FundamentalTypeKind::I32 => write!(f, "i32"),
-            FundamentalTypeKind::U64 => write!(f, "u32"),
+        use FundamentalTypeKind::*;
 
-            FundamentalTypeKind::Bool => write!(f, "bool"),
+        match self.kind {
+            I32 => write!(f, "i32"),
+            I8 => write!(f, "i8"),
+            U64 => write!(f, "u32"),
+
+            Bool => write!(f, "bool"),
         }
     }
 }
@@ -168,6 +172,7 @@ impl FundamentalType {
 
         match self.kind {
             I32 => context.i32_type().as_basic_type_enum(),
+            I8 => context.i8_type().as_basic_type_enum(),
             U64 => context.i64_type().as_basic_type_enum(),
 
             Bool => context.bool_type().as_basic_type_enum(),
@@ -179,6 +184,7 @@ impl FundamentalType {
 
         match self.kind {
             I32 => true,
+            I8 => true,
             U64 => false,
             Bool => false,
         }
