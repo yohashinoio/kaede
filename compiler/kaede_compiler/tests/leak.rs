@@ -65,7 +65,12 @@ fn leak_check_with_valgrind() -> anyhow::Result<()> {
         .args(["--leak-check=full", exe.path().to_str().unwrap()])
         .assert()
         .code(predicate::eq(58))
-        .stderr(predicate::str::contains("definitely lost").count(0));
+        .stderr(
+            // Valgrind results display changes depending on version
+            predicate::str::contains("definitely lost: 0")
+                .count(0)
+                .or(predicate::str::contains("definitely lost").count(0)),
+        );
 
     tmp_dir.close()?;
 

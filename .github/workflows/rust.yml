@@ -29,10 +29,10 @@ jobs:
           key: llvm-15.0
 
       - name: Install cmake
-        run: sudo apt install cmake
+        run: sudo apt install -y cmake
 
       - name: Install valgrind
-        run: sudo apt install valgrind
+        run: sudo apt install -y valgrind
 
       - name: Install llvm
         uses: KyleMayes/install-llvm-action@v1
