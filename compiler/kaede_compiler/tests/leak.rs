@@ -68,7 +68,6 @@ fn leak_check_with_valgrind() -> anyhow::Result<()> {
         .stderr(
             // Valgrind results display changes depending on version
             predicate::str::contains("definitely lost: 0")
-                .count(0)
                 .or(predicate::str::contains("definitely lost").count(0)),
         );
 
