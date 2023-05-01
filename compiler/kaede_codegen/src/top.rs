@@ -96,7 +96,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
 
         match node.kind {
             FnKind::Method => {
-                push_self_to_front(&mut node.params, impl_for.to_string(), Mutability::Not);
+                push_self_to_front(&mut node.params, impl_for.to_string(), node.self_mutability);
                 self.func_internal(&mangled_name, node)?;
             }
 

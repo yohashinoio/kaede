@@ -88,6 +88,8 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             FnKind::Method => self.consume(&TokenKind::Mt).unwrap().start,
         };
 
+        let self_mutability = self.consume_b(&TokenKind::Mut).into();
+
         let name = self.ident()?;
 
         let params_start = self.consume(&TokenKind::OpenParen)?.start;
@@ -110,6 +112,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         Ok(Fn {
             kind,
+            self_mutability,
             name,
             params,
             body,

@@ -1488,7 +1488,7 @@ fn mutable_method() -> anyhow::Result<()> {
     }
 
     fn test() -> i32 {
-        let p = Person { age: 123 }
+        let mut p = Person { age: 123 }
 
         p.change_age_to(58)
 
@@ -1498,4 +1498,64 @@ fn mutable_method() -> anyhow::Result<()> {
     assert_eq!(run_test(program)?, 58);
 
     Ok(())
+}
+
+#[test]
+fn call_mutable_methods_from_immutable() {
+    let program = r#"struct Person {
+        age: i32,
+    }
+
+    impl Person {
+        mt get_age() -> i32 {
+            return self.age
+        }
+
+        mt mut change_age_to(new_age: i32) {
+            self.age = new_age
+        }
+    }
+
+    fn test() -> i32 {
+        let p = Person { age: 123 }
+
+        p.change_age_to(58)
+
+        return p.get_age()
+    }"#;
+
+    assert!(matches!(
+        run_test(program),
+        Err(CodegenError::CannotAssignImmutableToMutable { .. })
+    ));
+}
+
+#[test]
+fn modify_fields_in_immutable_methods() {
+    let program = r#"struct Person {
+        age: i32,
+    }
+
+    impl Person {
+        mt get_age() -> i32 {
+            return self.age
+        }
+
+        mt change_age_to(new_age: i32) {
+            self.age = new_age
+        }
+    }
+
+    fn test() -> i32 {
+        let mut p = Person { age: 123 }
+
+        p.change_age_to(58)
+
+        return p.get_age()
+    }"#;
+
+    assert!(matches!(
+        run_test(program),
+        Err(CodegenError::CannotAssignTwiceToImutable { .. })
+    ));
 }

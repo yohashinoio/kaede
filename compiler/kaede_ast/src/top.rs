@@ -67,6 +67,7 @@ pub enum FnKind {
 #[derive(Debug, PartialEq, Eq)]
 pub struct Fn {
     pub kind: FnKind,
+    pub self_mutability: Mutability,
     pub name: Ident,
     pub params: Params,
     pub body: Block,
