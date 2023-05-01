@@ -25,7 +25,8 @@ pub struct StructLiteral {
     pub values: Vec<(Ident, Expr)>,
 }
 
-pub type Args = Vec<Expr>;
+#[derive(Debug, PartialEq, Eq)]
+pub struct Args(pub VecDeque<Expr>, pub Span);
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct FnCall {

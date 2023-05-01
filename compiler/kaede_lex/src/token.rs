@@ -73,6 +73,8 @@ pub enum TokenKind {
     // Reserved words
     /// "fn"
     Fn,
+    /// "mt"
+    Mt,
     /// "return"
     Return,
     /// "let"
@@ -91,8 +93,10 @@ pub enum TokenKind {
     Struct,
     /// "mod"
     Import,
-    // "pub"
+    /// "pub"
     Pub,
+    /// "impl"
+    Impl,
 
     /// "true"
     True,
@@ -144,6 +148,7 @@ impl std::fmt::Display for TokenKind {
             LogicalOr => write!(f, "'||'"),
 
             Fn => write!(f, "'fn'"),
+            Mt => write!(f, "'mt'"),
             Return => write!(f, "'return'"),
             Let => write!(f, "'let'"),
             Mut => write!(f, "'mut'"),
@@ -154,6 +159,7 @@ impl std::fmt::Display for TokenKind {
             Struct => write!(f, "'struct'"),
             Import => write!(f, "'import'"),
             Pub => write!(f, "'pub'"),
+            Impl => write!(f, "'impl'"),
 
             True => write!(f, "'true'"),
             False => write!(f, "'false'"),

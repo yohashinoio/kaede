@@ -476,13 +476,10 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     }
 
     fn fn_call(&mut self, name: Ident) -> ParseResult<Expr> {
-        self.consume(&TokenKind::OpenParen)?;
-
         let args = self.fn_call_args()?;
 
         let start = name.span.start;
-        let finish = self.consume(&TokenKind::CloseParen)?.finish;
-        let span = Span::new(start, finish);
+        let span = Span::new(start, args.1.finish);
 
         Ok(Expr {
             kind: ExprKind::FnCall(FnCall { name, args, span }),
@@ -492,22 +489,25 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
     /// Works with zero arguments
     fn fn_call_args(&mut self) -> ParseResult<Args> {
-        let mut args = Args::new();
+        let start = self.consume(&TokenKind::OpenParen)?.start;
 
-        if self.check(&TokenKind::CloseParen) {
+        let mut args = VecDeque::new();
+
+        if let Ok(span) = self.consume(&TokenKind::CloseParen) {
             // No arguments
-            return Ok(args);
+            return Ok(Args(args, Span::new(start, span.finish)));
         }
 
         loop {
-            args.push(self.expr()?);
+            args.push_back(self.expr()?);
 
             if !self.consume_b(&TokenKind::Comma) {
                 break;
             }
         }
 
-        Ok(args)
+        let finish = self.consume(&TokenKind::CloseParen)?.finish;
+        Ok(Args(args, Span::new(start, finish)))
     }
 
     pub fn integer(&mut self) -> ParseResult<Int> {

@@ -6,7 +6,7 @@ use kaede_type::{Mutability, Ty, TyKind};
 /// The type information in llvm's value is **insufficient**, so wrap it with our own type
 ///
 /// For example, there is **no** sign information in the integer value of llvm
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Value<'ctx> {
     /// None if void
     val: Option<BasicValueEnum<'ctx>>,

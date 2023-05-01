@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use kaede_span::Span;
 use kaede_type::{Mutability, Ty};
 
@@ -45,10 +47,26 @@ pub struct Struct {
     pub span: Span,
 }
 
-pub type Params = Vec<(Ident, Mutability, Ty)>;
+#[derive(Debug, PartialEq, Eq)]
+pub struct Param {
+    pub name: Ident,
+    pub mutability: Mutability,
+    pub ty: Ty,
+}
+
+/// Deque because sometimes it is necessary to insert self (C++ style: this) at the front
+#[derive(Debug, PartialEq, Eq)]
+pub struct Params(pub VecDeque<Param>, pub Span);
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Copy)]
+pub enum FnKind {
+    Normal,
+    Method,
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Fn {
+    pub kind: FnKind,
     pub name: Ident,
     pub params: Params,
     pub body: Block,
@@ -58,7 +76,14 @@ pub struct Fn {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Import {
-    pub modpath: Ident,
+    pub module_path: Ident,
+    pub span: Span,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct Impl {
+    pub name: Ident,
+    pub items: Vec<TopLevel>,
     pub span: Span,
 }
 
@@ -74,4 +99,5 @@ pub enum TopLevelKind {
     Fn(Fn),
     Struct(Struct),
     Import(Import),
+    Impl(Impl),
 }

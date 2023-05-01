@@ -174,6 +174,7 @@ impl Cursor<'_> {
                 match ident.as_str() {
                     // Reserved words
                     "fn" => self.create_token(TokenKind::Fn),
+                    "mt" => self.create_token(TokenKind::Mt),
                     "return" => self.create_token(TokenKind::Return),
                     "let" => self.create_token(TokenKind::Let),
                     "if" => self.create_token(TokenKind::If),
@@ -186,6 +187,9 @@ impl Cursor<'_> {
                     "false" => self.create_token(TokenKind::False),
                     "import" => self.create_token(TokenKind::Import),
                     "pub" => self.create_token(TokenKind::Pub),
+                    "impl" => self.create_token(TokenKind::Impl),
+
+                    // Identifier
                     _ => self.create_token(TokenKind::Ident(ident)),
                 }
             }

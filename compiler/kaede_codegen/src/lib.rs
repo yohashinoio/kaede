@@ -117,7 +117,7 @@ pub struct CompileUnitContext<'ctx, 'm, 'c> {
 
     pub file_path: PathBuf,
 
-    pub modname: String,
+    pub module_name: String,
     pub imported_modules: HashSet<String>,
 
     /// Block to jump to when a `break` is executed
@@ -137,7 +137,7 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
         module: &'m Module<'ctx>,
         file_path: PathBuf,
     ) -> CodegenResult<Self> {
-        let modname = module.get_name().to_str().unwrap().to_string();
+        let module_name = module.get_name().to_str().unwrap().to_string();
 
         Ok(Self {
             builder: ctx.context.create_builder(),
@@ -145,7 +145,7 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
             module,
             tcx: Default::default(),
             file_path,
-            modname,
+            module_name,
             imported_modules: HashSet::new(),
             loop_break_bb_stk: Vec::new(),
             is_if_statement: false,

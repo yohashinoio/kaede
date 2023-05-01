@@ -3,15 +3,15 @@ use std::{fs, rc::Rc};
 use inkwell::{module::Linkage, values::FunctionValue};
 use kaede_ast::{
     expr::Ident,
-    top::{Fn, Import, Params, Struct, TopLevel, TopLevelKind},
+    top::{Fn, FnKind, Impl, Import, Param, Params, Struct, TopLevel, TopLevelKind},
 };
 use kaede_lex::lex;
 use kaede_parse::parse;
-use kaede_type::Ty;
+use kaede_type::{Mutability, RefrenceType, Ty, TyKind, UserDefinedType};
 
 use crate::{
     error::{CodegenError, CodegenResult},
-    mangle::{mangle_external_name, mangle_name},
+    mangle::{mangle_external_name, mangle_method, mangle_name},
     stmt::{build_block, change_mutability_dup},
     tcx::{StructFieldInfo, StructInfo, SymbolTable},
     CompileUnitContext,
@@ -23,6 +23,33 @@ pub fn build_top_level(ctx: &mut CompileUnitContext, node: TopLevel) -> CodegenR
     builder.build(node)?;
 
     Ok(())
+}
+
+pub fn push_self_to_front(v: &mut Params, struct_name: String, mutability: Mutability) {
+    let span = v.1;
+
+    let self_ident = Ident {
+        name: "self".to_string(),
+        span,
+    };
+
+    let struct_ty = Ty {
+        kind: TyKind::UserDefined(UserDefinedType { name: struct_name }).into(),
+        mutability,
+    }
+    .into();
+
+    v.0.push_front(Param {
+        name: self_ident,
+        mutability,
+        ty: Ty {
+            kind: TyKind::Reference(RefrenceType {
+                refee_ty: struct_ty,
+            })
+            .into(),
+            mutability,
+        },
+    });
 }
 
 struct TopLevelBuilder<'a, 'ctx, 'm, 'c> {
@@ -37,18 +64,55 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
     /// Generate top-level code
     fn build(&mut self, node: TopLevel) -> CodegenResult<()> {
         match node.kind {
-            TopLevelKind::Import(node) => self.import_module(node)?,
+            TopLevelKind::Import(node) => self.import_(node)?,
 
-            TopLevelKind::Fn(node) => self.define_fn(node)?,
+            TopLevelKind::Fn(node) => self.func(node)?,
 
-            TopLevelKind::Struct(node) => self.define_struct(node),
+            TopLevelKind::Struct(node) => self.struct_(node),
+
+            TopLevelKind::Impl(node) => self.impl_(node)?,
         }
 
         Ok(())
     }
 
-    fn import_module(&mut self, node: Import) -> CodegenResult<()> {
-        let import_module_name = node.modpath.as_str();
+    fn impl_(&mut self, node: Impl) -> CodegenResult<()> {
+        for item in node.items {
+            match item.kind {
+                TopLevelKind::Fn(fn_) => self.method(node.name.as_str(), fn_)?,
+
+                _ => todo!("ERROR"),
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Static method can also be handled by this function
+    ///
+    /// If kind is `Normal`, it becomes a static method (said in C++ style)
+    fn method(&mut self, impl_for: &str, mut node: Fn) -> CodegenResult<()> {
+        let mangled_name = mangle_method(self.cucx, impl_for, node.name.as_str());
+
+        match node.kind {
+            FnKind::Method => {
+                push_self_to_front(&mut node.params, impl_for.to_string(), Mutability::Not);
+                self.func_internal(&mangled_name, node)?;
+            }
+
+            // Static method
+            FnKind::Normal => self.func_internal(&mangled_name, node)?,
+        }
+
+        Ok(())
+    }
+
+    fn import_(&mut self, node: Import) -> CodegenResult<()> {
+        self.import_module(node.module_path)
+    }
+
+    fn import_module(&mut self, module_path: Ident) -> CodegenResult<()> {
+        let import_module_name = module_path.as_str();
 
         let path = self
             .cucx
@@ -60,8 +124,8 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
 
         if !path.exists() {
             return Err(CodegenError::FileNotFoundForModule {
-                span: node.span,
-                mod_name: node.modpath.name,
+                span: module_path.span,
+                mod_name: module_path.name,
             });
         }
 
@@ -87,12 +151,26 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
                 TopLevelKind::Struct(_) => todo!(),
 
                 TopLevelKind::Import(_) => todo!(),
+
+                TopLevelKind::Impl(_) => todo!(),
             }
         }
 
-        self.cucx.imported_modules.insert(node.modpath.name);
+        self.cucx.imported_modules.insert(module_path.name);
 
         Ok(())
+    }
+
+    fn func(&mut self, node: Fn) -> CodegenResult<()> {
+        assert_eq!(node.kind, FnKind::Normal);
+
+        // Suppress mangling of main function
+        if node.name.as_str() == "main" {
+            self.func_internal("main", node)
+        } else {
+            let mangled_name = mangle_name(self.cucx, node.name.as_str());
+            self.func_internal(&mangled_name, node)
+        }
     }
 
     // Return function value and parameter information reflecting mutability for the types
@@ -104,8 +182,9 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
         linkage: Linkage,
     ) -> (FunctionValue<'ctx>, Vec<(Ident, Rc<Ty>)> /* Params */) {
         let params = params
+            .0
             .into_iter()
-            .map(|e| (e.0, change_mutability_dup(e.2.into(), e.1)))
+            .map(|e| (e.name, change_mutability_dup(e.ty.into(), e.mutability)))
             .collect::<Vec<_>>();
 
         let fn_value = self.cucx.decl_fn(
@@ -118,20 +197,9 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
         (fn_value, params)
     }
 
-    fn define_fn(&mut self, node: Fn) -> CodegenResult<()> {
-        // Suppress mangling of main function
-        let mangled_name = if node.name.as_str() == "main" {
-            node.name.name
-        } else {
-            mangle_name(self.cucx, node.name.as_str())
-        };
-
-        let (fn_value, param_info) = self.decl_fn(
-            mangled_name.as_str(),
-            node.params,
-            node.return_ty,
-            Linkage::External,
-        );
+    fn func_internal(&mut self, mangled_name: &str, node: Fn) -> CodegenResult<()> {
+        let (fn_value, param_info) =
+            self.decl_fn(mangled_name, node.params, node.return_ty, Linkage::External);
 
         let basic_block = self.cucx.context().append_basic_block(fn_value, "entry");
         self.cucx.builder.position_at_end(basic_block);
@@ -180,7 +248,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
         params
     }
 
-    fn define_struct(&mut self, node: Struct) {
+    fn struct_(&mut self, node: Struct) {
         let mangled_name = mangle_name(self.cucx, node.name.as_str());
 
         let field_tys: Vec<_> = node

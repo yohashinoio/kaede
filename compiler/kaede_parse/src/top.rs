@@ -1,4 +1,9 @@
-use kaede_ast::top::{Fn, Import, Params, Struct, StructField, TopLevel, TopLevelKind, Visibility};
+use std::collections::VecDeque;
+
+use kaede_ast::top::{
+    Fn, FnKind, Impl, Import, Param, Params, Struct, StructField, TopLevel, TopLevelKind,
+    Visibility,
+};
 use kaede_lex::token::{Token, TokenKind};
 use kaede_span::Span;
 
@@ -17,13 +22,23 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             }
 
             TokenKind::Fn => {
-                let kind = self.func()?;
+                let kind = self.func(FnKind::Normal)?;
+                (kind.span, TopLevelKind::Fn(kind))
+            }
+
+            TokenKind::Mt => {
+                let kind = self.func(FnKind::Method)?;
                 (kind.span, TopLevelKind::Fn(kind))
             }
 
             TokenKind::Struct => {
                 let kind = self.struct_()?;
                 (kind.span, TopLevelKind::Struct(kind))
+            }
+
+            TokenKind::Impl => {
+                let kind = self.impl_()?;
+                (kind.span, TopLevelKind::Impl(kind))
             }
 
             _ => unreachable!("{:?}", token.kind),
@@ -34,26 +49,54 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         Ok(TopLevel { kind, vis, span })
     }
 
-    fn import(&mut self) -> ParseResult<Import> {
-        let start = self.consume(&TokenKind::Import).unwrap().start;
-
-        let modpath = self.ident()?;
-
-        let span = Span::new(start, modpath.span.finish);
-
-        Ok(Import { modpath, span })
-    }
-
-    fn func(&mut self) -> ParseResult<Fn> {
-        let start = self.consume(&TokenKind::Fn).unwrap().start;
+    fn impl_(&mut self) -> ParseResult<Impl> {
+        let start = self.consume(&TokenKind::Impl).unwrap().start;
 
         let name = self.ident()?;
 
-        self.consume(&TokenKind::OpenParen)?;
+        self.consume(&TokenKind::OpenBrace)?;
+
+        let mut items = Vec::new();
+
+        loop {
+            if let Ok(span) = self.consume(&TokenKind::CloseBrace) {
+                return Ok(Impl {
+                    name,
+                    items,
+                    span: Span::new(start, span.finish),
+                });
+            }
+
+            items.push(self.top_level()?);
+        }
+    }
+
+    fn import(&mut self) -> ParseResult<Import> {
+        let start = self.consume(&TokenKind::Import).unwrap().start;
+
+        let module_path = self.ident()?;
+
+        let span = Span::new(start, module_path.span.finish);
+
+        Ok(Import { module_path, span })
+    }
+
+    /// Include methods
+    fn func(&mut self, kind: FnKind) -> ParseResult<Fn> {
+        let start = match kind {
+            FnKind::Normal => self.consume(&TokenKind::Fn).unwrap().start,
+            FnKind::Method => self.consume(&TokenKind::Mt).unwrap().start,
+        };
+
+        let name = self.ident()?;
+
+        let params_start = self.consume(&TokenKind::OpenParen)?.start;
 
         let params = self.fn_params()?;
 
-        self.consume(&TokenKind::CloseParen)?;
+        let params_finish = self.consume(&TokenKind::CloseParen)?.finish;
+
+        let params = Params(params, Span::new(params_start, params_finish));
 
         let return_ty = if self.consume_b(&TokenKind::Arrow) {
             Some(self.ty()?)
@@ -66,6 +109,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         let span = Span::new(start, body.span.finish);
 
         Ok(Fn {
+            kind,
             name,
             params,
             body,
@@ -74,8 +118,8 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         })
     }
 
-    fn fn_params(&mut self) -> ParseResult<Params> {
-        let mut params = Params::new();
+    fn fn_params(&mut self) -> ParseResult<VecDeque<Param>> {
+        let mut params = VecDeque::new();
 
         if self.check(&TokenKind::CloseParen) {
             return Ok(params);
@@ -90,7 +134,11 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
             let ty = self.ty()?;
 
-            params.push((name, mutability, ty));
+            params.push_back(Param {
+                name,
+                mutability,
+                ty,
+            });
 
             if !self.consume_b(&TokenKind::Comma) {
                 break;

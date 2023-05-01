@@ -1445,3 +1445,57 @@ fn if_in_loop() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn simple_method() -> anyhow::Result<()> {
+    let program = r#"struct Person {
+        age: i32,
+    }
+
+    impl Person {
+        mt get_age() -> i32 {
+            return self.age
+        }
+    }
+
+    fn test() -> i32 {
+        let mut p = Person { age: 123 }
+
+        p.age = 58
+
+        return p.get_age()
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn mutable_method() -> anyhow::Result<()> {
+    let program = r#"struct Person {
+        age: i32,
+    }
+
+    impl Person {
+        mt get_age() -> i32 {
+            return self.age
+        }
+
+        mt mut change_age_to(new_age: i32) {
+            self.age = new_age
+        }
+    }
+
+    fn test() -> i32 {
+        let p = Person { age: 123 }
+
+        p.change_age_to(58)
+
+        return p.get_age()
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}

@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{collections::VecDeque, rc::Rc};
 
 use crate::{
     error::{CodegenError, CodegenResult},
@@ -855,7 +855,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         })
     }
 
-    /// Field access or module item access
+    /// Struct access or module item access
     fn access(&mut self, node: &Binary) -> CodegenResult<Value<'ctx>> {
         assert!(matches!(node.kind, BinaryKind::Access));
 
@@ -867,7 +867,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
                 let value = build_expression(self.cucx, &node.rhs);
 
                 // Revert to the current module name
-                self.cucx.module.set_name(&self.cucx.modname);
+                self.cucx.module.set_name(&self.cucx.module_name);
                 return value;
             }
         }
@@ -877,12 +877,12 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         let left_ty = &left.get_type();
 
         if let TyKind::Reference(rty) = left_ty.kind.as_ref() {
-            // ---  Field access or tuple indexing --- (Reference)
+            // ---  Struct access or tuple indexing ---
             if matches!(
                 rty.get_base_type_of_reference().kind.as_ref(),
                 TyKind::UserDefined(_) | TyKind::Tuple(_)
             ) {
-                return self.field_access_or_tuple_indexing(&left, node.lhs.span, &node.rhs);
+                return self.struct_access_or_tuple_indexing(&left, node.lhs.span, &node.rhs);
             } else {
                 Err(CodegenError::HasNoFields {
                     span: node.lhs.span,
@@ -897,8 +897,8 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         }
     }
 
-    fn field_access_or_tuple_indexing(
-        &self,
+    fn struct_access_or_tuple_indexing(
+        &mut self,
         left: &Value<'ctx>,
         left_span: Span,
         right: &Expr,
@@ -916,7 +916,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         };
 
         match refee_ty.kind.as_ref() {
-            TyKind::UserDefined(_) => self.struct_field_access(left, right, refee_ty),
+            TyKind::UserDefined(_) => self.struct_access(left, right, refee_ty),
 
             TyKind::Tuple(_) => self.tuple_indexing(left, right, refee_ty),
 
@@ -924,25 +924,39 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         }
     }
 
-    fn struct_field_access(
-        &self,
+    /// Field access or method access
+    fn struct_access(
+        &mut self,
         left: &Value<'ctx>,
         right: &Expr,
         struct_ty: &Rc<Ty>,
     ) -> CodegenResult<Value<'ctx>> {
-        let left_value = left.get_value().into_pointer_value();
-
         let struct_name = if let TyKind::UserDefined(ty) = struct_ty.kind.as_ref() {
             &ty.name
         } else {
             unreachable!()
         };
 
-        let field_name = match &right.kind {
-            ExprKind::Ident(s) => s.as_str(),
-            kind => unreachable!("{:?}", kind),
-        };
+        match &right.kind {
+            // Field
+            ExprKind::Ident(field_name) => {
+                self.struct_field_access(left, struct_name, struct_ty, field_name.as_str())
+            }
 
+            // Method
+            ExprKind::FnCall(node) => self.struct_method_access(left, struct_name, node),
+
+            kind => unreachable!("{:?}", kind),
+        }
+    }
+
+    fn struct_field_access(
+        &self,
+        struct_value: &Value<'ctx>,
+        struct_name: &str,
+        struct_ty: &Rc<Ty>,
+        field_name: &str,
+    ) -> CodegenResult<Value<'ctx>> {
         let struct_info = &self.cucx.tcx.struct_table[struct_name];
 
         let field_info = &struct_info.1.fields[field_name];
@@ -952,7 +966,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         let gep = unsafe {
             self.cucx.builder.build_in_bounds_gep(
                 self.cucx.to_llvm_type(struct_ty),
-                left_value,
+                struct_value.get_value().into_pointer_value(),
                 &[
                     self.cucx.context().i32_type().const_zero(),
                     self.cucx.context().i32_type().const_int(offset, false),
@@ -973,6 +987,33 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         ))
     }
 
+    fn struct_method_access(
+        &mut self,
+        struct_value: &Value<'ctx>,
+        struct_name: &str,
+        call_node: &FnCall,
+    ) -> CodegenResult<Value<'ctx>> {
+        // For 'get_age' method of 'Person' structure
+        // Person.get_age
+        let actual_method_name = format!("{}.{}", struct_name, call_node.name.as_str());
+
+        // Convert arguments(exprs) to values
+        let mut args = {
+            let mut args = VecDeque::new();
+
+            for arg in call_node.args.0.iter() {
+                args.push_back((self.build(arg)?, arg.span));
+            }
+
+            args
+        };
+
+        // Push self to front
+        args.push_front((struct_value.clone(), call_node.args.1));
+
+        self.call_fn_internal(&actual_method_name, args, call_node.span)
+    }
+
     fn tuple_indexing(
         &self,
         left: &Value<'ctx>,
@@ -990,30 +1031,36 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
     }
 
     fn call_fn(&mut self, node: &FnCall) -> CodegenResult<Value<'ctx>> {
-        let func = self
-            .cucx
-            .module
-            .get_function(&mangle_name(self.cucx, node.name.as_str()));
+        let args = {
+            let mut args = VecDeque::new();
+
+            for arg in node.args.0.iter() {
+                args.push_back((self.build(arg)?, arg.span));
+            }
+
+            args
+        };
+
+        self.call_fn_internal(node.name.as_str(), args, node.span)
+    }
+
+    fn call_fn_internal(
+        &mut self,
+        name: &str,
+        args: VecDeque<(Value<'ctx>, Span)>,
+        span: Span,
+    ) -> CodegenResult<Value<'ctx>> {
+        let func = self.cucx.module.get_function(&mangle_name(self.cucx, name));
 
         let func = match func {
             Some(func) => func,
 
             None => {
                 return Err(CodegenError::Undeclared {
-                    name: node.name.name.clone(),
-                    span: node.span,
+                    name: name.to_string(),
+                    span,
                 })
             }
-        };
-
-        let args = {
-            let mut args = Vec::new();
-
-            for arg in node.args.iter() {
-                args.push((self.build(arg)?, arg.span));
-            }
-
-            args
         };
 
         let param_types = &self.cucx.tcx.param_table[&func];
@@ -1040,7 +1087,11 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         })
     }
 
-    fn verify_args(&self, args: &[(Value, Span)], params: &[Rc<Ty>]) -> CodegenResult<()> {
+    fn verify_args(
+        &self,
+        args: &VecDeque<(Value<'ctx>, Span)>,
+        params: &[Rc<Ty>],
+    ) -> CodegenResult<()> {
         for (idx, arg) in args.iter().enumerate() {
             let param = &params[idx];
 
