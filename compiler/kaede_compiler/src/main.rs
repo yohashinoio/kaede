@@ -1,16 +1,25 @@
 use core::panic;
-use std::{fs, path::PathBuf, vec};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    process::Command,
+    vec,
+};
 
 use anyhow::{anyhow, Context as _};
 use clap::Parser;
-use inkwell::{context::Context, OptimizationLevel};
+use inkwell::{context::Context, module::Module, OptimizationLevel};
 use kaede_codegen::{codegen, CodegenContext};
 use kaede_lex::lex;
 use kaede_parse::parse;
+use tempfile::{NamedTempFile, TempPath};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
+    #[arg(long)]
+    display_llvm_ir: bool,
+
     #[arg(value_name = "FILE")]
     files: Vec<PathBuf>,
 
@@ -49,7 +58,62 @@ struct CompileUnitInfo {
     pub program: String,
 }
 
-fn compile(unit_infos: Vec<CompileUnitInfo>, opt_level: OptimizationLevel) -> anyhow::Result<()> {
+fn emit_bitcode_to_tempfile(module: &Module) -> anyhow::Result<TempPath> {
+    let tempfile = NamedTempFile::new()?;
+
+    let temppath = tempfile.into_temp_path();
+
+    module.write_bitcode_to_path(&temppath);
+
+    Ok(temppath)
+}
+
+/// Use `llc`
+fn emit_object_file_to_tempfile(ir_path: &Path) -> anyhow::Result<TempPath> {
+    let tempfile = NamedTempFile::new()?;
+
+    let temppath = tempfile.into_temp_path();
+
+    let status = Command::new("llc")
+        .args([
+            "-filetype=obj",
+            "-relocation-model=pic", // Set relocation model
+            "-o",
+            temppath.to_str().unwrap(),
+            ir_path.to_str().unwrap(),
+        ])
+        .status()?;
+
+    if !status.success() {
+        anyhow::bail!("Failed to emit object file using 'llc'")
+    }
+
+    Ok(temppath)
+}
+
+// Use `cc`
+fn emit_exe_file(obj_path: &Path, output: &Path) -> anyhow::Result<()> {
+    let status = Command::new("cc")
+        .args([
+            "-o",
+            output.to_str().unwrap(),
+            obj_path.to_str().unwrap(),
+            "-lgc", // Link bdwgc
+        ])
+        .status()?;
+
+    if !status.success() {
+        anyhow::bail!("Failed to emit executable file using 'cc'")
+    }
+
+    Ok(())
+}
+
+fn compile(
+    unit_infos: Vec<CompileUnitInfo>,
+    opt_level: OptimizationLevel,
+    display_llvm_ir: bool,
+) -> anyhow::Result<()> {
     let context = Context::create();
 
     let mut compiled_modules = Vec::new();
@@ -79,7 +143,18 @@ fn compile(unit_infos: Vec<CompileUnitInfo>, opt_level: OptimizationLevel) -> an
             .map_err(|e| anyhow!(e.to_string()))?;
     }
 
-    println!("{}", module.to_string());
+    // Emit
+    if display_llvm_ir {
+        // Print llvm ir to stdout
+        print!("{}", module.to_string());
+    } else {
+        // Emit executable file
+        let ir_path = emit_bitcode_to_tempfile(&module)?;
+
+        let obj_path = emit_object_file_to_tempfile(&ir_path)?;
+
+        emit_exe_file(&obj_path, Path::new("a.out"))?;
+    }
 
     Ok(())
 }
@@ -91,6 +166,8 @@ fn main() -> anyhow::Result<()> {
 
     let opt_level = to_inkwell_opt_level(args.opt_level);
 
+    let display_llvmir = args.display_llvm_ir;
+
     if let Some(program) = args.program {
         compile(
             vec![CompileUnitInfo {
@@ -98,6 +175,7 @@ fn main() -> anyhow::Result<()> {
                 program,
             }],
             opt_level,
+            display_llvmir,
         )?;
 
         return Ok(());
@@ -119,7 +197,7 @@ fn main() -> anyhow::Result<()> {
         });
     }
 
-    compile(programs, opt_level)?;
+    compile(programs, opt_level, display_llvmir)?;
 
     Ok(())
 }

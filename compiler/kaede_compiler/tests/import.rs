@@ -25,7 +25,12 @@ fn import_functions() -> anyhow::Result<()> {
     main.write_str("import m1\nimport m2\nfn main() -> i32 { return m1.yoha() + m2.io() }")?;
 
     let mut cmd = Command::cargo_bin(env!("CARGO_PKG_NAME"))?;
-    cmd.args([main.path(), mod_1.path(), mod_2.path()]);
+    cmd.args([
+        "--display-llvm-ir",
+        main.path().to_str().unwrap(),
+        mod_1.path().to_str().unwrap(),
+        mod_2.path().to_str().unwrap(),
+    ]);
     let success = cmd.assert().success();
 
     let ir = assert_fs::NamedTempFile::new("ir")?;

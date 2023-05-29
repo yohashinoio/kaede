@@ -32,7 +32,7 @@ fn leak_check_with_valgrind() -> anyhow::Result<()> {
 
     // Compile
     let mut cmd = Command::cargo_bin(env!("CARGO_PKG_NAME"))?;
-    cmd.args(["-O0", file.path().to_str().unwrap()]);
+    cmd.args(["-O0", "--display-llvm-ir", file.path().to_str().unwrap()]);
     let success = cmd.assert().success();
 
     let ir = assert_fs::NamedTempFile::new("ir.ll")?;
