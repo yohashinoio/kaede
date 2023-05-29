@@ -14,10 +14,11 @@ def install_gc():
         subprocess.run(["cmake", "-DCMAKE_BUILD_TYPE=Release",  "-S",  bdwgc_dir, "-B", bdwgc_build_dir])
         subprocess.run(["cmake", "--build", bdwgc_build_dir, "-j"])
 
-    build_bdwgc()
+    def install_bdwgc():
+        build_bdwgc()
+        subprocess.run(["cmake", "--install", bdwgc_build_dir])
 
-    # Install boehm GC
-    subprocess.run(["cmake", "--install", bdwgc_build_dir])
+    install_bdwgc()
 
 # Install libraries
 def install():
