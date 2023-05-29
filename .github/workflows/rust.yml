@@ -47,7 +47,7 @@ jobs:
           components: rustfmt, clippy
 
       - name: Install standard library
-        run: cd library && python install.sh
+        run: cd library && chmod +x install.py && sudo ./install.py
 
       - name: Run format
         run: cargo fmt --all -- --check
