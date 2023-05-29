@@ -26,20 +26,11 @@ struct Args {
     #[arg(
         short,
         long,
-        help = "Instead of a file, we receive a program on the command line"
+        help = "instead of a file, we receive a program from the commandline argument"
     )]
     program: Option<String>,
 
-    /// Optimization level
-    ///
-    /// 0 `None`
-    ///
-    /// 1 `Less`
-    ///
-    /// 2 `Default`
-    ///
-    /// 3 `Aggressive`
-    #[arg(short = 'O', default_value_t = 2)]
+    #[arg(short = 'O', default_value_t = 2, help = "optimization level (0-3)")]
     opt_level: u8,
 }
 
