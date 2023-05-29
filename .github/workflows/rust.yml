@@ -46,8 +46,8 @@ jobs:
           toolchain: stable
           components: rustfmt, clippy
 
-      - name: Build libraries
-        run: cd library && chmod +x build.sh && sudo ./build.sh
+      - name: Install standard library
+        run: cd library && python install.sh
 
       - name: Run format
         run: cargo fmt --all -- --check
