@@ -385,6 +385,22 @@ fn string_literal() -> anyhow::Result<()> {
 }
 
 #[test]
+fn string_type() -> anyhow::Result<()> {
+    let program = r#"fn f(s: str) -> str {
+        return s
+    }
+
+    fn test() -> i32 {
+        let s: str = f("Yohaio")
+        return 58
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
 fn define_struct() -> anyhow::Result<()> {
     let program = r"struct A {
         a: i32,

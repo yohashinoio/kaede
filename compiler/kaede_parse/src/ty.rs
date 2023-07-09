@@ -47,6 +47,10 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         Ok(match ty_name.as_str() {
             "i32" => make_fundamental_type(I32, Mutability::Not),
             "bool" => make_fundamental_type(Bool, Mutability::Not),
+            "str" => Ty {
+                kind: TyKind::Str.into(),
+                mutability: Mutability::Not,
+            },
 
             // User defined type
             _ => wrap_in_reference(Ty {
