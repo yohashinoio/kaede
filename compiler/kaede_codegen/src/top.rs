@@ -3,7 +3,7 @@ use std::{fs, rc::Rc};
 use inkwell::{module::Linkage, values::FunctionValue};
 use kaede_ast::{
     expr::Ident,
-    top::{Fn, FnKind, Impl, Import, Param, Params, Struct, TopLevel, TopLevelKind},
+    top::{Enum, Fn, FnKind, Impl, Import, Param, Params, Struct, TopLevel, TopLevelKind},
 };
 use kaede_lex::lex;
 use kaede_parse::parse;
@@ -13,7 +13,7 @@ use crate::{
     error::{CodegenError, CodegenResult},
     mangle::{mangle_external_name, mangle_method, mangle_name},
     stmt::{build_block, change_mutability_dup},
-    tcx::{StructFieldInfo, StructInfo, SymbolTable},
+    tcx::{EnumInfo, EnumItemInfo, ReturnType, StructFieldInfo, StructInfo, SymbolTable},
     CompileUnitContext,
 };
 
@@ -71,9 +71,29 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
             TopLevelKind::Struct(node) => self.struct_(node),
 
             TopLevelKind::Impl(node) => self.impl_(node)?,
+
+            TopLevelKind::Enum(node) => self.enum_(node),
         }
 
         Ok(())
+    }
+
+    fn enum_(&mut self, node: Enum) {
+        let items = node
+            .items
+            .into_iter()
+            .map(|e| {
+                (
+                    e.name.name,
+                    EnumItemInfo {
+                        vis: e.vis,
+                        offset: e.offset,
+                    },
+                )
+            })
+            .collect();
+
+        self.cucx.tcx.add_enum(node.name.name, EnumInfo { items });
     }
 
     fn impl_(&mut self, node: Impl) -> CodegenResult<()> {
@@ -143,7 +163,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
                     self.decl_fn(
                         &mangle_external_name(import_module_name, func.name.as_str()),
                         func.params,
-                        func.return_ty,
+                        func.return_ty.into(),
                         Linkage::External,
                     );
                 }
@@ -153,6 +173,8 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
                 TopLevelKind::Import(_) => todo!(),
 
                 TopLevelKind::Impl(_) => todo!(),
+
+                TopLevelKind::Enum(_) => todo!(),
             }
         }
 
@@ -178,7 +200,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
         &mut self,
         mangled_name: &str,
         params: Params,
-        return_ty: Option<Ty>,
+        return_ty: ReturnType,
         linkage: Linkage,
     ) -> (FunctionValue<'ctx>, Vec<(Ident, Rc<Ty>)> /* Params */) {
         let params = params
@@ -190,7 +212,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
         let fn_value = self.cucx.decl_fn(
             mangled_name,
             params.iter().map(|e| e.1.clone()).collect(),
-            return_ty.map(Rc::new),
+            return_ty,
             Some(linkage),
         );
 
@@ -198,8 +220,12 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
     }
 
     fn func_internal(&mut self, mangled_name: &str, node: Fn) -> CodegenResult<()> {
-        let (fn_value, param_info) =
-            self.decl_fn(mangled_name, node.params, node.return_ty, Linkage::External);
+        let (fn_value, param_info) = self.decl_fn(
+            mangled_name,
+            node.params,
+            node.return_ty.into(),
+            Linkage::External,
+        );
 
         let basic_block = self.cucx.context().append_basic_block(fn_value, "entry");
         self.cucx.builder.position_at_end(basic_block);
@@ -278,7 +304,6 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
 
         self.cucx
             .tcx
-            .struct_table
-            .insert(node.name.name, (ty, StructInfo { fields }.into()));
+            .add_struct(node.name.name, StructInfo { ty, fields });
     }
 }

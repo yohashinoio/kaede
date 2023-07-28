@@ -89,6 +89,21 @@ pub struct Impl {
 }
 
 #[derive(Debug, PartialEq, Eq)]
+pub struct EnumItem {
+    pub name: Ident,
+    pub ty: Option<Ty>,
+    pub vis: Visibility,
+    pub offset: u64,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct Enum {
+    pub name: Ident,
+    pub items: Vec<EnumItem>,
+    pub span: Span,
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub struct TopLevel {
     pub kind: TopLevelKind,
     pub vis: Visibility,
@@ -101,4 +116,5 @@ pub enum TopLevelKind {
     Struct(Struct),
     Import(Import),
     Impl(Impl),
+    Enum(Enum),
 }

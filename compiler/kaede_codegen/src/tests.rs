@@ -1575,3 +1575,50 @@ fn modify_fields_in_immutable_methods() {
         Err(CodegenError::CannotAssignTwiceToImutable { .. })
     ));
 }
+
+#[test]
+fn simple_enum() -> anyhow::Result<()> {
+    let program = r#"enum Simple {
+        A,
+        B,
+        C,
+    }
+
+    fn test() -> i32 {
+        let b = Simple::B
+
+        if b == Simple::B {
+            return 58
+        }
+
+        return 123
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn enum_as_argument() -> anyhow::Result<()> {
+    let program = r#"enum Simple {
+        A,
+        B,
+        C,
+    }
+
+    fn f(e: Simple) {
+        if e == Simple::A || e == Simple::B {
+            return 123
+        }
+        return 58
+    }
+
+    fn test() -> i32 {
+        return f(Simple::C)
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}

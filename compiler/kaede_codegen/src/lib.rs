@@ -14,7 +14,7 @@ use inkwell::{
 };
 use kaede_ast::{top::TopLevel, CompileUnit};
 use kaede_type::{FundamentalType, FundamentalTypeKind, Mutability, RefrenceType, Ty, TyKind};
-use tcx::TypeContext;
+use tcx::{ReturnType, TypeContext};
 use top::build_top_level;
 
 mod error;
@@ -175,20 +175,16 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
     }
 
     // If return_ty is `None`, treat as void
-    fn create_fn_type(
-        &mut self,
-        params: &[Rc<Ty>],
-        return_ty: &Option<Rc<Ty>>,
-    ) -> FunctionType<'ctx> {
+    fn create_fn_type(&mut self, params: &[Rc<Ty>], return_ty: &ReturnType) -> FunctionType<'ctx> {
         let param_types = params
             .iter()
             .map(|t| self.to_llvm_type(t).into())
             .collect::<Vec<_>>();
 
-        match &return_ty {
-            Some(ty) => self.to_llvm_type(ty).fn_type(param_types.as_slice(), false),
+        match return_ty {
+            ReturnType::Type(ty) => self.to_llvm_type(ty).fn_type(param_types.as_slice(), false),
 
-            None => self
+            ReturnType::Void => self
                 .context()
                 .void_type()
                 .fn_type(param_types.as_slice(), false),
@@ -199,7 +195,7 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
         &mut self,
         name: &str,
         param_types: Vec<Rc<Ty>>,
-        return_ty: Option<Rc<Ty>>,
+        return_ty: ReturnType,
         linkage: Option<Linkage>,
     ) -> FunctionValue<'ctx> {
         let fn_type = self.create_fn_type(&param_types, &return_ty);
@@ -207,10 +203,10 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
         let fn_value = self.module.add_function(name, fn_type, linkage);
 
         // Store return type information in table
-        self.tcx.return_ty_table.insert(fn_value, return_ty);
+        self.tcx.add_return_ty(fn_value, return_ty);
 
         // Store parameter information in table
-        self.tcx.param_table.insert(fn_value, param_types);
+        self.tcx.add_fn_params(fn_value, param_types);
 
         fn_value
     }
@@ -241,7 +237,7 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
             mutability: Mutability::Not,
         }
         .into()];
-        self.decl_fn("GC_malloc", param_types, Some(return_ty), None);
+        self.decl_fn("GC_malloc", param_types, ReturnType::Type(return_ty), None);
     }
 
     fn gc_malloc(&self, ty: &Ty) -> PointerValue<'ctx> {
@@ -293,7 +289,7 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
                     .into()
             }
 
-            TyKind::UserDefined(udt) => self.tcx.struct_table[&udt.name].0.into(),
+            TyKind::UserDefined(udt) => self.tcx.get_struct_info(&udt.name).unwrap().ty.into(),
 
             TyKind::Reference(rty) => self
                 .to_llvm_type(&rty.refee_ty)

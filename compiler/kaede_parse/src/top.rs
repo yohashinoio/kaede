@@ -1,8 +1,8 @@
 use std::collections::VecDeque;
 
 use kaede_ast::top::{
-    Fn, FnKind, Impl, Import, Param, Params, Struct, StructField, TopLevel, TopLevelKind,
-    Visibility,
+    Enum, EnumItem, Fn, FnKind, Impl, Import, Param, Params, Struct, StructField, TopLevel,
+    TopLevelKind, Visibility,
 };
 use kaede_lex::token::{Token, TokenKind};
 use kaede_span::Span;
@@ -39,6 +39,11 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             TokenKind::Impl => {
                 let kind = self.impl_()?;
                 (kind.span, TopLevelKind::Impl(kind))
+            }
+
+            TokenKind::Enum => {
+                let kind = self.enum_()?;
+                (kind.span, TopLevelKind::Enum(kind))
             }
 
             _ => unreachable!("{:?}", token.kind),
@@ -149,6 +154,53 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
 
         Ok(params)
+    }
+
+    fn enum_(&mut self) -> ParseResult<Enum> {
+        let start = self.consume(&TokenKind::Enum).unwrap().start;
+
+        let name = self.ident()?;
+
+        self.consume(&TokenKind::OpenBrace)?;
+
+        let items = self.enum_items()?;
+
+        let finish = self.consume(&TokenKind::CloseBrace)?.finish;
+
+        Ok(Enum {
+            name,
+            items,
+            span: Span::new(start, finish),
+        })
+    }
+
+    fn enum_items(&mut self) -> ParseResult<Vec<EnumItem>> {
+        let mut items = Vec::new();
+
+        let mut offset = 0;
+
+        loop {
+            if self.check(&TokenKind::CloseBrace) {
+                break;
+            }
+
+            let name = self.ident()?;
+
+            if !self.consume_b(&TokenKind::Comma) {
+                break;
+            }
+
+            items.push(EnumItem {
+                name,
+                ty: None,
+                vis: Visibility::Public,
+                offset,
+            });
+
+            offset += 1;
+        }
+
+        Ok(items)
     }
 
     fn struct_(&mut self) -> ParseResult<Struct> {

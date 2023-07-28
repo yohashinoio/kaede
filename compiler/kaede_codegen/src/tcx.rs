@@ -33,9 +33,26 @@ impl<'ctx> Default for SymbolTable<'ctx> {
     }
 }
 
-pub type ReturnTypeTable<'ctx> = HashMap<FunctionValue<'ctx>, Option<Rc<Ty>>>;
+#[derive(Clone)]
+pub enum ReturnType {
+    Type(Rc<Ty>),
+    Void,
+}
 
-pub type ParamTable<'ctx> = HashMap<FunctionValue<'ctx>, Vec<Rc<Ty>>>;
+impl From<Option<Ty>> for ReturnType {
+    fn from(value: Option<Ty>) -> Self {
+        match value {
+            Some(ty) => ReturnType::Type(ty.into()),
+            None => ReturnType::Void,
+        }
+    }
+}
+
+pub type ReturnTypeTable<'ctx> = HashMap<FunctionValue<'ctx>, ReturnType>;
+
+pub type FnParams = Vec<Rc<Ty>>;
+
+pub type ParamTable<'ctx> = HashMap<FunctionValue<'ctx>, FnParams>;
 
 pub struct StructFieldInfo {
     pub ty: Rc<Ty>,
@@ -43,19 +60,32 @@ pub struct StructFieldInfo {
     pub offset: u64,
 }
 
-pub struct StructInfo {
+pub struct StructInfo<'ctx> {
+    pub ty: StructType<'ctx>,
     pub fields: HashMap<String, StructFieldInfo>,
 }
 
-pub type StructTable<'ctx> = HashMap<String, (StructType<'ctx>, Rc<StructInfo>)>;
+pub struct EnumItemInfo {
+    pub vis: Visibility,
+    pub offset: u64,
+}
+
+pub struct EnumInfo {
+    pub items: HashMap<String, EnumItemInfo>,
+}
+
+pub type StructTable<'ctx> = HashMap<String, Rc<StructInfo<'ctx>>>;
+
+pub type EnumTable = HashMap<String, Rc<EnumInfo>>;
 
 /// Holds information necessary for typing
 #[derive(Default)]
 pub struct TypeContext<'ctx> {
-    pub return_ty_table: ReturnTypeTable<'ctx>,
-    pub param_table: ParamTable<'ctx>,
-    pub struct_table: StructTable<'ctx>,
-    pub symbol_table_stack: Vec<SymbolTable<'ctx>>,
+    return_ty_table: ReturnTypeTable<'ctx>,
+    fn_params_table: ParamTable<'ctx>,
+    struct_table: StructTable<'ctx>,
+    enum_table: EnumTable,
+    symbol_table_stack: Vec<SymbolTable<'ctx>>,
 }
 
 impl<'ctx> TypeContext<'ctx> {
@@ -86,5 +116,37 @@ impl<'ctx> TypeContext<'ctx> {
 
     pub fn pop_symbol_table(&mut self) {
         self.symbol_table_stack.pop().unwrap();
+    }
+
+    pub fn add_fn_params(&mut self, fn_value: FunctionValue<'ctx>, params: FnParams) {
+        self.fn_params_table.insert(fn_value, params);
+    }
+
+    pub fn get_fn_params(&self, fn_value: FunctionValue<'ctx>) -> Option<FnParams> {
+        self.fn_params_table.get(&fn_value).cloned()
+    }
+
+    pub fn add_return_ty(&mut self, fn_value: FunctionValue<'ctx>, return_ty: ReturnType) {
+        self.return_ty_table.insert(fn_value, return_ty);
+    }
+
+    pub fn get_return_ty(&self, fn_value: FunctionValue<'ctx>) -> Option<ReturnType> {
+        self.return_ty_table.get(&fn_value).cloned()
+    }
+
+    pub fn add_struct(&mut self, name: String, info: StructInfo<'ctx>) {
+        self.struct_table.insert(name, info.into());
+    }
+
+    pub fn get_struct_info(&self, name: &str) -> Option<Rc<StructInfo<'ctx>>> {
+        self.struct_table.get(name).cloned()
+    }
+
+    pub fn add_enum(&mut self, name: String, info: EnumInfo) {
+        self.enum_table.insert(name, info.into());
+    }
+
+    pub fn get_enum_info(&self, name: &str) -> Option<Rc<EnumInfo>> {
+        self.enum_table.get(name).cloned()
     }
 }

@@ -4,7 +4,7 @@ use crate::{
     error::{CodegenError, CodegenResult},
     mangle::mangle_name,
     stmt::{build_block, build_statement},
-    tcx::SymbolTable,
+    tcx::{ReturnType, SymbolTable},
     value::{has_signed, Value},
     CompileUnitContext,
 };
@@ -334,7 +334,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
     }
 
     fn struct_literal(&mut self, node: &StructLiteral) -> CodegenResult<Value<'ctx>> {
-        let struct_info = match self.cucx.tcx.struct_table.get(node.struct_name.as_str()) {
+        let struct_info = match self.cucx.tcx.get_struct_info(node.struct_name.as_str()) {
             Some(x) => x.clone(),
 
             None => {
@@ -356,7 +356,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         let mut values = Vec::new();
 
         for value in node.values.iter() {
-            let field_info = &struct_info.1.fields[value.0.as_str()];
+            let field_info = &struct_info.fields[value.0.as_str()];
 
             let value = build_expression(self.cucx, &value.1)?;
 
@@ -957,9 +957,9 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         struct_ty: &Rc<Ty>,
         field_name: &str,
     ) -> CodegenResult<Value<'ctx>> {
-        let struct_info = &self.cucx.tcx.struct_table[struct_name];
+        let struct_info = self.cucx.tcx.get_struct_info(struct_name).unwrap();
 
-        let field_info = &struct_info.1.fields[field_name];
+        let field_info = &struct_info.fields[field_name];
 
         let offset = field_info.offset;
 
@@ -1063,9 +1063,9 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             }
         };
 
-        let param_types = &self.cucx.tcx.param_table[&func];
+        let param_types = self.cucx.tcx.get_fn_params(func).unwrap();
 
-        self.verify_args(&args, param_types)?;
+        self.verify_args(&args, &param_types)?;
 
         let return_value = self
             .cucx
@@ -1082,7 +1082,19 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             .left();
 
         Ok(match return_value {
-            Some(val) => Value::new(val, self.cucx.tcx.return_ty_table[&func].clone().unwrap()),
+            // With return value
+            Some(val) => {
+                let return_ty = self.cucx.tcx.get_return_ty(func).unwrap();
+                Value::new(
+                    val,
+                    match return_ty {
+                        ReturnType::Type(ty) => ty,
+                        ReturnType::Void => unreachable!(),
+                    },
+                )
+            }
+
+            // Without return value (void function)
             None => Value::new_void(),
         })
     }
