@@ -1622,3 +1622,85 @@ fn enum_as_argument() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn simple_generics() -> anyhow::Result<()> {
+    let program = r#"fn add_10<T>(n: T) -> T {
+        return n + 10
+    }
+
+    fn test() -> i32 {
+        return add_10<i32>(48)
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn multiple_generic_parameters() -> anyhow::Result<()> {
+    let program = r#"fn add<T, U, R>(n1: T, n2: U) -> R {
+        return n1 + n2
+    }
+
+    fn test() -> i32 {
+        return add<i32, i32, i32>(48, 10)
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn struct_as_generic_argument() -> anyhow::Result<()> {
+    let program = r#"struct Sample {
+        n: i32,
+    }
+
+    fn get_n<S>(o: S) -> i32 {
+        return o.n
+    }
+
+    fn test() -> i32 {
+        let s = Sample { n: 58 }
+        return get_n<Sample>(s)
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn tuple_as_generic_argument() -> anyhow::Result<()> {
+    let program = r#"fn get_third<T>(t: T) -> i32 {
+        return t.2
+    }
+
+    fn test() -> i32 {
+        let tup = (48, 10, 58)
+        return get_third<(i32, i32, i32)>(tup)
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn array_as_generic_argument() -> anyhow::Result<()> {
+    let program = r#"fn get_third<T>(a: T) -> i32 {
+        return a[2]
+    }
+
+    fn test() -> i32 {
+        let a = [48, 10, 58]
+        return get_third<[i32; 3]>(a)
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
