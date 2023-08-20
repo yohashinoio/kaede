@@ -72,6 +72,7 @@ pub struct EnumItemInfo {
 
 pub struct EnumInfo {
     pub items: HashMap<String, EnumItemInfo>,
+    pub ty: Rc<Ty>,
 }
 
 pub type StructTable<'ctx> = HashMap<String, Rc<StructInfo<'ctx>>>;

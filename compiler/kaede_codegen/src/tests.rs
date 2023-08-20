@@ -1600,14 +1600,14 @@ fn simple_enum() -> anyhow::Result<()> {
 }
 
 #[test]
-fn enum_as_argument() -> anyhow::Result<()> {
+fn simple_enum_as_argument() -> anyhow::Result<()> {
     let program = r#"enum Simple {
         A,
         B,
         C,
     }
 
-    fn f(e: Simple) {
+    fn f(e: Simple) -> i32 {
         if e == Simple::A || e == Simple::B {
             return 123
         }
@@ -1616,6 +1616,85 @@ fn enum_as_argument() -> anyhow::Result<()> {
 
     fn test() -> i32 {
         return f(Simple::C)
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn create_rustlike_enum() -> anyhow::Result<()> {
+    let program = r#"struct Fruits {
+        apple: i32,
+        ichigo: i32,
+    }
+
+    enum E {
+        A,
+        B(Fruits),
+    }
+
+    fn test() -> i32 {
+        let e1 = E::A
+        let e2 = E::B(Fruits { apple: 48, ichigo: 10 })
+        return 58
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn use_rustlike_enum() -> anyhow::Result<()> {
+    let program = r#"struct Fruits {
+        apple: i32,
+        ichigo: i32,
+    }
+
+    enum E {
+        A,
+        B(Fruits),
+    }
+
+    fn test() -> i32 {
+        let e = E::B(Fruits { apple: 48, ichigo: 10 })
+
+        return match e {
+            E::A => 123,
+            E::B => fruits.apple + fruits.ichigo,
+        }
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn rustlike_enum_as_argument() -> anyhow::Result<()> {
+    let program = r#"struct Fruits {
+        apple: i32,
+        ichigo: i32,
+    }
+
+    enum E {
+        A,
+        B(Fruits),
+    }
+
+    fn sum_fruits(e: E) -> i32 {
+        return match e {
+            E::A => 116,
+            E::B => fruits.apple + fruits.ichigo,
+        }
+    }
+
+    fn test() -> i32 {
+        let e1 = E::A
+        let e2 = E::B(Fruits { apple: 48, ichigo: 10 })
+        return sum_fruits(e1) - sum_fruits(e2)
     }"#;
 
     assert_eq!(run_test(program)?, 58);

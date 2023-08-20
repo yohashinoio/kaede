@@ -640,10 +640,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
                 .i32_type()
                 .const_int(enum_item.offset as u64, true)
                 .into(),
-            Rc::new(make_fundamental_type(
-                FundamentalTypeKind::I32,
-                Mutability::Not,
-            )),
+            enum_info.ty.clone(),
         ))
     }
 

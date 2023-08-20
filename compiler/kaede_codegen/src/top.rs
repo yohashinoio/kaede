@@ -93,7 +93,20 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
             })
             .collect();
 
-        self.cucx.tcx.add_enum(node.name.name, EnumInfo { items });
+        self.cucx.tcx.add_enum(
+            node.name.as_str().to_owned(),
+            EnumInfo {
+                ty: Ty {
+                    kind: TyKind::UserDefined(UserDefinedType {
+                        name: node.name.name,
+                    })
+                    .into(),
+                    mutability: Mutability::Not,
+                }
+                .into(),
+                items,
+            },
+        );
     }
 
     fn impl_(&mut self, node: Impl) -> CodegenResult<()> {
