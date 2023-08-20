@@ -67,7 +67,7 @@ pub struct StructInfo<'ctx> {
 
 pub struct EnumItemInfo {
     pub vis: Visibility,
-    pub offset: u64,
+    pub offset: i32,
 }
 
 pub struct EnumInfo {

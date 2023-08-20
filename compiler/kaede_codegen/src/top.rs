@@ -231,7 +231,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
         self.cucx.builder.position_at_end(basic_block);
 
         // Allocate parameters
-        let param_table = self.tabling_fn_params(param_info, fn_value);
+        let param_table = self.fn_params_to_symbol_table(param_info, fn_value);
 
         // Push parameter table
         self.cucx.tcx.push_symbol_table(param_table);
@@ -248,8 +248,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
         Ok(())
     }
 
-    /// Expand function parameters into a symbol table for easier handling
-    fn tabling_fn_params(
+    fn fn_params_to_symbol_table(
         &self,
         param_info: Vec<(Ident, Rc<Ty>)>,
         fn_value: FunctionValue<'ctx>,

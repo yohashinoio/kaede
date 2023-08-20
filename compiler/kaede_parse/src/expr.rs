@@ -227,7 +227,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
     /// Array subscripting
     fn indexing(&mut self) -> ParseResult<Expr> {
-        let mut node = self.primary()?;
+        let mut node = self.scope_resolution()?;
 
         loop {
             if self.consume_b(&TokenKind::OpenBracket) {
@@ -241,6 +241,27 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                         index: index.into(),
                         span,
                     }),
+                };
+            } else {
+                return Ok(node);
+            }
+        }
+    }
+
+    /// Scope resolution
+    fn scope_resolution(&mut self) -> ParseResult<Expr> {
+        let mut node = self.primary()?;
+
+        loop {
+            if self.consume_b(&TokenKind::DoubleColon) {
+                let right = self.primary()?;
+                node = Expr {
+                    span: Span::new(node.span.start, right.span.finish),
+                    kind: ExprKind::Binary(Binary::new(
+                        node.into(),
+                        BinaryKind::ScopeResolution,
+                        right.into(),
+                    )),
                 };
             } else {
                 return Ok(node);

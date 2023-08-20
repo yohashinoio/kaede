@@ -595,8 +595,56 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         match node.kind {
             Access => self.access(node),
 
+            ScopeResolution => self.scope_resolution(node),
+
             _ => self.binary_arithmetic_op(node),
         }
+    }
+
+    fn scope_resolution(&mut self, node: &Binary) -> CodegenResult<Value<'ctx>> {
+        assert!(matches!(node.kind, BinaryKind::ScopeResolution));
+
+        let left = match &node.lhs.kind {
+            ExprKind::Ident(ident) => ident.as_str(),
+            _ => todo!(),
+        };
+
+        let right = match &node.rhs.kind {
+            ExprKind::Ident(ident) => ident.as_str(),
+            _ => todo!(),
+        };
+
+        // Enum
+        let enum_info = match self.cucx.tcx.get_enum_info(left) {
+            Some(info) => info,
+            None => {
+                return Err(CodegenError::Undeclared {
+                    name: left.to_owned(),
+                    span: node.lhs.span,
+                })
+            }
+        };
+
+        let enum_item = match enum_info.items.get(right) {
+            Some(item) => item,
+            None => {
+                return Err(CodegenError::HasNoFields {
+                    span: node.rhs.span,
+                })
+            }
+        };
+
+        Ok(Value::new(
+            self.cucx
+                .context()
+                .i32_type()
+                .const_int(enum_item.offset as u64, true)
+                .into(),
+            Rc::new(make_fundamental_type(
+                FundamentalTypeKind::I32,
+                Mutability::Not,
+            )),
+        ))
     }
 
     fn logical_or(&self, b1: IntValue<'ctx>, b2: IntValue<'ctx>) -> Value<'ctx> {
@@ -852,6 +900,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             }
 
             Access => unreachable!(),
+            ScopeResolution => unreachable!(),
         })
     }
 
@@ -890,6 +939,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             }
         } else {
             // No possibility of raw tuple or struct
+            // All tuples and structs in this language are used via reference
 
             Err(CodegenError::HasNoFields {
                 span: node.lhs.span,
@@ -940,7 +990,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         match &right.kind {
             // Field
             ExprKind::Ident(field_name) => {
-                self.struct_field_access(left, struct_name, struct_ty, field_name.as_str())
+                self.struct_field_access(left, struct_name, struct_ty, field_name)
             }
 
             // Method
@@ -955,11 +1005,20 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         struct_value: &Value<'ctx>,
         struct_name: &str,
         struct_ty: &Rc<Ty>,
-        field_name: &str,
+        field_name: &Ident,
     ) -> CodegenResult<Value<'ctx>> {
         let struct_info = self.cucx.tcx.get_struct_info(struct_name).unwrap();
 
-        let field_info = &struct_info.fields[field_name];
+        let field_info = match struct_info.fields.get(field_name.as_str()) {
+            Some(field) => field,
+            None => {
+                return Err(CodegenError::NoMember {
+                    member_name: field_name.name.to_owned(),
+                    in_what: struct_name.to_owned(),
+                    span: field_name.span,
+                });
+            }
+        };
 
         let offset = field_info.offset;
 

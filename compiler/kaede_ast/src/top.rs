@@ -93,7 +93,7 @@ pub struct EnumItem {
     pub name: Ident,
     pub ty: Option<Ty>,
     pub vis: Visibility,
-    pub offset: u64,
+    pub offset: i32,
 }
 
 #[derive(Debug, PartialEq, Eq)]

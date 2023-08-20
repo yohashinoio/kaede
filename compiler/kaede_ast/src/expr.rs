@@ -107,6 +107,8 @@ pub enum BinaryKind {
 
     LogicalOr,
     LogicalAnd,
+
+    ScopeResolution,
 }
 
 #[derive(Debug, PartialEq, Eq)]

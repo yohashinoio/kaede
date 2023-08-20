@@ -54,6 +54,13 @@ pub enum CodegenError {
     #[error("{}:{} Cannot assign an immutable to a mutable", span.start.line, span.start.column)]
     CannotAssignImmutableToMutable { span: Span },
 
+    #[error("{}:{} No member named '{}' in '{}'", span.start.line, span.start.column, member_name, in_what)]
+    NoMember {
+        member_name: String,
+        in_what: String,
+        span: Span,
+    },
+
     /// Error issued by LLVM
     #[error("{}", .what)]
     LLVMError { what: String },

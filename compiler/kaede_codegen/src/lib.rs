@@ -289,7 +289,13 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
                     .into()
             }
 
-            TyKind::UserDefined(udt) => self.tcx.get_struct_info(&udt.name).unwrap().ty.into(),
+            TyKind::UserDefined(udt) => {
+                if self.tcx.get_enum_info(&udt.name).is_some() {
+                    todo!();
+                }
+
+                self.tcx.get_struct_info(&udt.name).unwrap().ty.into()
+            }
 
             TyKind::Reference(rty) => self
                 .to_llvm_type(&rty.refee_ty)
