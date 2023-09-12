@@ -186,13 +186,21 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
             let name = self.ident()?;
 
+            let ty = if self.consume_b(&TokenKind::OpenParen) {
+                let ty = self.ty()?;
+                self.consume(&TokenKind::CloseParen)?;
+                Some(ty)
+            } else {
+                None
+            };
+
             if !self.consume_b(&TokenKind::Comma) {
                 break;
             }
 
             items.push(EnumItem {
                 name,
-                ty: None,
+                ty,
                 vis: Visibility::Public,
                 offset,
             });

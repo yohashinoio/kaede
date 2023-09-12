@@ -3,7 +3,9 @@ use std::{fs, rc::Rc};
 use inkwell::{module::Linkage, values::FunctionValue};
 use kaede_ast::{
     expr::Ident,
-    top::{Enum, Fn, FnKind, Impl, Import, Param, Params, Struct, TopLevel, TopLevelKind},
+    top::{
+        Enum, EnumItem, Fn, FnKind, Impl, Import, Param, Params, Struct, TopLevel, TopLevelKind,
+    },
 };
 use kaede_lex::lex;
 use kaede_parse::parse;
@@ -79,6 +81,8 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
     }
 
     fn enum_(&mut self, node: Enum) {
+        let largest_type_size = self.get_largest_type_size_of_enum(&node.items);
+
         let items = node
             .items
             .into_iter()
@@ -93,20 +97,64 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
             })
             .collect();
 
-        self.cucx.tcx.add_enum(
-            node.name.as_str().to_owned(),
-            EnumInfo {
-                ty: Ty {
-                    kind: TyKind::UserDefined(UserDefinedType {
-                        name: node.name.name,
-                    })
-                    .into(),
-                    mutability: Mutability::Not,
-                }
-                .into(),
-                items,
-            },
-        );
+        // If there is an item with a specified type
+        // Specified: { i32, [i8; LARGEST_TYPE_SIZE_IN_BYTES] }
+        // Not specified: i32
+        match largest_type_size {
+            Some(size) => {
+                let ty = self.cucx.context().opaque_struct_type(node.name.as_str());
+
+                ty.set_body(
+                    &[
+                        self.cucx.context().i32_type().into(),
+                        self.cucx
+                            .context()
+                            .i8_type()
+                            .array_type((size / 8) as u32)
+                            .into(),
+                    ],
+                    true,
+                );
+
+                self.cucx.tcx.add_enum(
+                    node.name.as_str().to_owned(),
+                    EnumInfo {
+                        ty: ty.into(),
+                        items,
+                        is_pure_enum: false,
+                    },
+                );
+            }
+
+            None => {
+                self.cucx.tcx.add_enum(
+                    node.name.as_str().to_owned(),
+                    EnumInfo {
+                        ty: self.cucx.context().i32_type().into(),
+                        items,
+                        is_pure_enum: true,
+                    },
+                );
+            }
+        }
+    }
+
+    /// Return None if type is not specified for all (like C's enum)
+    /// The size is returned in bits
+    fn get_largest_type_size_of_enum(&mut self, enum_items: &[EnumItem]) -> Option<u64> {
+        let mut largest = 0;
+
+        for item in enum_items.iter() {
+            if let Some(ty) = &item.ty {
+                let size = self.cucx.get_size_in_bits(&self.cucx.to_llvm_type(ty));
+                largest = std::cmp::max(size, largest);
+            }
+        }
+
+        match largest {
+            0 => None,
+            _ => Some(largest),
+        }
     }
 
     fn impl_(&mut self, node: Impl) -> CodegenResult<()> {

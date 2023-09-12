@@ -290,11 +290,15 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
             }
 
             TyKind::UserDefined(udt) => {
-                if self.tcx.get_enum_info(&udt.name).is_some() {
-                    todo!();
+                if let Some(si) = self.tcx.get_struct_info(&udt.name) {
+                    return si.ty.into();
                 }
 
-                self.tcx.get_struct_info(&udt.name).unwrap().ty.into()
+                if let Some(ei) = self.tcx.get_enum_info(&udt.name) {
+                    return ei.ty;
+                }
+
+                unreachable!();
             }
 
             TyKind::Reference(rty) => self

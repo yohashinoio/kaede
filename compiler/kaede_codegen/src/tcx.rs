@@ -1,7 +1,7 @@
 use std::{collections::HashMap, rc::Rc};
 
 use inkwell::{
-    types::StructType,
+    types::{BasicTypeEnum, StructType},
     values::{FunctionValue, PointerValue},
 };
 use kaede_ast::{expr::Ident, top::Visibility};
@@ -70,14 +70,18 @@ pub struct EnumItemInfo {
     pub offset: i32,
 }
 
-pub struct EnumInfo {
+pub struct EnumInfo<'ctx> {
     pub items: HashMap<String, EnumItemInfo>,
-    pub ty: Rc<Ty>,
+    /// None if no type is specified for all members (like enum in C)
+    pub ty: BasicTypeEnum<'ctx>,
+
+    /// True if no type is specified for all members (like enum in C)
+    pub is_pure_enum: bool,
 }
 
 pub type StructTable<'ctx> = HashMap<String, Rc<StructInfo<'ctx>>>;
 
-pub type EnumTable = HashMap<String, Rc<EnumInfo>>;
+pub type EnumTable<'ctx> = HashMap<String, Rc<EnumInfo<'ctx>>>;
 
 /// Holds information necessary for typing
 #[derive(Default)]
@@ -85,7 +89,7 @@ pub struct TypeContext<'ctx> {
     return_ty_table: ReturnTypeTable<'ctx>,
     fn_params_table: ParamTable<'ctx>,
     struct_table: StructTable<'ctx>,
-    enum_table: EnumTable,
+    enum_table: EnumTable<'ctx>,
     symbol_table_stack: Vec<SymbolTable<'ctx>>,
 }
 
@@ -143,11 +147,11 @@ impl<'ctx> TypeContext<'ctx> {
         self.struct_table.get(name).cloned()
     }
 
-    pub fn add_enum(&mut self, name: String, info: EnumInfo) {
+    pub fn add_enum(&mut self, name: String, info: EnumInfo<'ctx>) {
         self.enum_table.insert(name, info.into());
     }
 
-    pub fn get_enum_info(&self, name: &str) -> Option<Rc<EnumInfo>> {
+    pub fn get_enum_info(&self, name: &str) -> Option<Rc<EnumInfo<'ctx>>> {
         self.enum_table.get(name).cloned()
     }
 }

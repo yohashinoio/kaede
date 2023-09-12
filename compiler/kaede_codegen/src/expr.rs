@@ -605,42 +605,69 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         assert!(matches!(node.kind, BinaryKind::ScopeResolution));
 
         let left = match &node.lhs.kind {
-            ExprKind::Ident(ident) => ident.as_str(),
+            ExprKind::Ident(ident) => ident,
             _ => todo!(),
         };
 
         let right = match &node.rhs.kind {
-            ExprKind::Ident(ident) => ident.as_str(),
+            ExprKind::Ident(ident) => ident,
             _ => todo!(),
         };
 
-        // Enum
-        let enum_info = match self.cucx.tcx.get_enum_info(left) {
+        self.create_enum_literal(left, right)
+    }
+
+    fn create_enum_literal(
+        &self,
+        enum_name: &Ident,
+        item_name: &Ident,
+    ) -> CodegenResult<Value<'ctx>> {
+        let enum_info = match self.cucx.tcx.get_enum_info(enum_name.as_str()) {
             Some(info) => info,
             None => {
                 return Err(CodegenError::Undeclared {
-                    name: left.to_owned(),
-                    span: node.lhs.span,
+                    name: enum_name.name.to_owned(),
+                    span: enum_name.span,
                 })
             }
         };
 
-        let enum_item = match enum_info.items.get(right) {
+        let enum_item = match enum_info.items.get(item_name.as_str()) {
             Some(item) => item,
             None => {
-                return Err(CodegenError::HasNoFields {
-                    span: node.rhs.span,
+                return Err(CodegenError::NoMember {
+                    member_name: item_name.name.to_owned(),
+                    in_what: enum_name.name.to_owned(),
+                    span: item_name.span,
                 })
             }
         };
+
+        let enum_ty = Ty {
+            kind: TyKind::UserDefined(UserDefinedType {
+                name: enum_name.name.to_owned(),
+            })
+            .into(),
+            mutability: Mutability::Not,
+        };
+
+        let offset_in_llvm = self
+            .cucx
+            .context()
+            .i32_type()
+            .const_int(enum_item.offset as u64, true)
+            .into();
+
+        if enum_info.is_pure_enum {
+            return Ok(Value::new(offset_in_llvm, enum_ty.into()));
+        }
 
         Ok(Value::new(
             self.cucx
                 .context()
-                .i32_type()
-                .const_int(enum_item.offset as u64, true)
+                .const_struct(&[offset_in_llvm, offset_in_llvm], true)
                 .into(),
-            enum_info.ty.clone(),
+            enum_ty.into(),
         ))
     }
 
