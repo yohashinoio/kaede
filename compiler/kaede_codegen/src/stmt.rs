@@ -244,7 +244,7 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
             };
 
             if mutability.is_mut() && tuple_mutability.is_not() {
-                todo!("ERROR")
+                todo!("Error")
             }
 
             self.unpack_one_tuple_field(&tuple, index as u64, name, mutability, node.span)?;

@@ -617,7 +617,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         // Create enum variant with value
         if let ExprKind::FnCall(right) = &node.rhs.kind {
             if right.args.0.len() != 1 {
-                todo!("error");
+                todo!("Error");
             }
 
             let value = right.args.0.front().unwrap();
@@ -740,8 +740,16 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         let left = self.build(node.lhs.as_ref())?;
         let right = self.build(node.rhs.as_ref())?;
 
-        let left_int = left.get_value().into_int_value();
-        let right_int = right.get_value().into_int_value();
+        let left_value = left.get_value();
+        let right_value = right.get_value();
+
+        // If operands are not int
+        if !(left_value.is_int_value() && right_value.is_int_value()) {
+            todo!("Error");
+        }
+
+        let left_int = left_value.into_int_value();
+        let right_int = right_value.into_int_value();
 
         Ok(match node.kind {
             LogicalOr => self.logical_or(left_int, right_int),

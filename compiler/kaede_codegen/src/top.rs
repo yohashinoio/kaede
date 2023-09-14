@@ -162,7 +162,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
             match item.kind {
                 TopLevelKind::Fn(fn_) => self.method(node.name.as_str(), fn_)?,
 
-                _ => todo!("ERROR"),
+                _ => todo!("Error"),
             }
         }
 
