@@ -89,7 +89,7 @@ pub struct Impl {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct EnumItem {
+pub struct EnumVariant {
     pub name: Ident,
     pub ty: Option<Ty>,
     pub vis: Visibility,
@@ -99,7 +99,7 @@ pub struct EnumItem {
 #[derive(Debug, PartialEq, Eq)]
 pub struct Enum {
     pub name: Ident,
-    pub items: Vec<EnumItem>,
+    pub variants: Vec<EnumVariant>,
     pub span: Span,
 }
 

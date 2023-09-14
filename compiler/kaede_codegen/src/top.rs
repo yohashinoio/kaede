@@ -4,7 +4,7 @@ use inkwell::{module::Linkage, values::FunctionValue};
 use kaede_ast::{
     expr::Ident,
     top::{
-        Enum, EnumItem, Fn, FnKind, Impl, Import, Param, Params, Struct, TopLevel, TopLevelKind,
+        Enum, EnumVariant, Fn, FnKind, Impl, Import, Param, Params, Struct, TopLevel, TopLevelKind,
     },
 };
 use kaede_lex::lex;
@@ -15,7 +15,7 @@ use crate::{
     error::{CodegenError, CodegenResult},
     mangle::{mangle_external_name, mangle_method, mangle_name},
     stmt::{build_block, change_mutability_dup},
-    tcx::{EnumInfo, EnumItemInfo, ReturnType, StructFieldInfo, StructInfo, SymbolTable},
+    tcx::{EnumInfo, EnumVariantInfo, ReturnType, StructFieldInfo, StructInfo, SymbolTable},
     CompileUnitContext,
 };
 
@@ -81,15 +81,15 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
     }
 
     fn enum_(&mut self, node: Enum) {
-        let largest_type_size = self.get_largest_type_size_of_enum(&node.items);
+        let largest_type_size = self.get_largest_type_size_of_enum(&node.variants);
 
         let items = node
-            .items
+            .variants
             .into_iter()
             .map(|e| {
                 (
                     e.name.name,
-                    EnumItemInfo {
+                    EnumVariantInfo {
                         vis: e.vis,
                         offset: e.offset,
                     },
@@ -120,7 +120,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
                     node.name.as_str().to_owned(),
                     EnumInfo {
                         ty: ty.into(),
-                        items,
+                        variants: items,
                         is_pure_enum: false,
                     },
                 );
@@ -131,7 +131,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
                     node.name.as_str().to_owned(),
                     EnumInfo {
                         ty: self.cucx.context().i32_type().into(),
-                        items,
+                        variants: items,
                         is_pure_enum: true,
                     },
                 );
@@ -141,7 +141,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
 
     /// Return None if type is not specified for all (like C's enum)
     /// The size is returned in bits
-    fn get_largest_type_size_of_enum(&mut self, enum_items: &[EnumItem]) -> Option<u64> {
+    fn get_largest_type_size_of_enum(&mut self, enum_items: &[EnumVariant]) -> Option<u64> {
         let mut largest = 0;
 
         for item in enum_items.iter() {

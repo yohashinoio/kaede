@@ -65,13 +65,13 @@ pub struct StructInfo<'ctx> {
     pub fields: HashMap<String, StructFieldInfo>,
 }
 
-pub struct EnumItemInfo {
+pub struct EnumVariantInfo {
     pub vis: Visibility,
     pub offset: i32,
 }
 
 pub struct EnumInfo<'ctx> {
-    pub items: HashMap<String, EnumItemInfo>,
+    pub variants: HashMap<String, EnumVariantInfo>,
     /// None if no type is specified for all members (like enum in C)
     pub ty: BasicTypeEnum<'ctx>,
 
@@ -83,7 +83,6 @@ pub type StructTable<'ctx> = HashMap<String, Rc<StructInfo<'ctx>>>;
 
 pub type EnumTable<'ctx> = HashMap<String, Rc<EnumInfo<'ctx>>>;
 
-/// Holds information necessary for typing
 #[derive(Default)]
 pub struct TypeContext<'ctx> {
     return_ty_table: ReturnTypeTable<'ctx>,

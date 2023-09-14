@@ -609,18 +609,30 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             _ => todo!(),
         };
 
-        let right = match &node.rhs.kind {
-            ExprKind::Ident(ident) => ident,
-            _ => todo!(),
-        };
+        // Create enum variant without value
+        if let ExprKind::Ident(right) = &node.rhs.kind {
+            return self.create_enum_variant(left, right, None);
+        }
 
-        self.create_enum_literal(left, right)
+        // Create enum variant with value
+        if let ExprKind::FnCall(right) = &node.rhs.kind {
+            if right.args.0.len() != 1 {
+                todo!("error");
+            }
+
+            let value = right.args.0.front().unwrap();
+
+            return self.create_enum_variant(left, &right.name, Some(value));
+        }
+
+        unreachable!()
     }
 
-    fn create_enum_literal(
-        &self,
+    fn create_enum_variant(
+        &mut self,
         enum_name: &Ident,
-        item_name: &Ident,
+        variant_name: &Ident,
+        value: Option<&Expr>,
     ) -> CodegenResult<Value<'ctx>> {
         let enum_info = match self.cucx.tcx.get_enum_info(enum_name.as_str()) {
             Some(info) => info,
@@ -632,13 +644,13 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             }
         };
 
-        let enum_item = match enum_info.items.get(item_name.as_str()) {
+        let variant = match enum_info.variants.get(variant_name.as_str()) {
             Some(item) => item,
             None => {
                 return Err(CodegenError::NoMember {
-                    member_name: item_name.name.to_owned(),
+                    member_name: variant_name.name.to_owned(),
                     in_what: enum_name.name.to_owned(),
-                    span: item_name.span,
+                    span: variant_name.span,
                 })
             }
         };
@@ -655,18 +667,21 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             .cucx
             .context()
             .i32_type()
-            .const_int(enum_item.offset as u64, true)
+            .const_int(variant.offset as u64, true)
             .into();
 
         if enum_info.is_pure_enum {
             return Ok(Value::new(offset_in_llvm, enum_ty.into()));
         }
 
+        let value = match value {
+            Some(v) => self.build(v)?.get_value(),
+
+            None => offset_in_llvm,
+        };
+
         Ok(Value::new(
-            self.cucx
-                .context()
-                .const_struct(&[offset_in_llvm, offset_in_llvm], true)
-                .into(),
+            create_struct_alloca(self.cucx, &enum_ty, &[offset_in_llvm, value]).into(),
             enum_ty.into(),
         ))
     }

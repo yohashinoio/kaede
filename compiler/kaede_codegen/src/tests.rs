@@ -1624,7 +1624,7 @@ fn simple_enum_as_argument() -> anyhow::Result<()> {
 }
 
 #[test]
-fn create_rustlike_enum() -> anyhow::Result<()> {
+fn tagged_enum() -> anyhow::Result<()> {
     let program = r#"struct Fruits {
         apple: i32,
         ichigo: i32,
@@ -1647,7 +1647,7 @@ fn create_rustlike_enum() -> anyhow::Result<()> {
 }
 
 #[test]
-fn use_rustlike_enum() -> anyhow::Result<()> {
+fn use_tagged_enum() -> anyhow::Result<()> {
     let program = r#"struct Fruits {
         apple: i32,
         ichigo: i32,
@@ -1673,7 +1673,7 @@ fn use_rustlike_enum() -> anyhow::Result<()> {
 }
 
 #[test]
-fn rustlike_enum_as_argument() -> anyhow::Result<()> {
+fn tagged_enum_as_argument() -> anyhow::Result<()> {
     let program = r#"struct Fruits {
         apple: i32,
         ichigo: i32,

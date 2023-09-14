@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 
 use kaede_ast::top::{
-    Enum, EnumItem, Fn, FnKind, Impl, Import, Param, Params, Struct, StructField, TopLevel,
+    Enum, EnumVariant, Fn, FnKind, Impl, Import, Param, Params, Struct, StructField, TopLevel,
     TopLevelKind, Visibility,
 };
 use kaede_lex::token::{Token, TokenKind};
@@ -163,19 +163,19 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         self.consume(&TokenKind::OpenBrace)?;
 
-        let items = self.enum_items()?;
+        let variants = self.enum_variants()?;
 
         let finish = self.consume(&TokenKind::CloseBrace)?.finish;
 
         Ok(Enum {
             name,
-            items,
+            variants,
             span: Span::new(start, finish),
         })
     }
 
-    fn enum_items(&mut self) -> ParseResult<Vec<EnumItem>> {
-        let mut items = Vec::new();
+    fn enum_variants(&mut self) -> ParseResult<Vec<EnumVariant>> {
+        let mut variants = Vec::new();
 
         let mut offset = 0;
 
@@ -198,7 +198,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                 break;
             }
 
-            items.push(EnumItem {
+            variants.push(EnumVariant {
                 name,
                 ty,
                 vis: Visibility::Public,
@@ -208,7 +208,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             offset += 1;
         }
 
-        Ok(items)
+        Ok(variants)
     }
 
     fn struct_(&mut self) -> ParseResult<Struct> {
