@@ -1663,7 +1663,7 @@ fn use_tagged_enum() -> anyhow::Result<()> {
 
         return match e {
             E::A => 123,
-            E::B => fruits.apple + fruits.ichigo,
+            E::B(fr) => fr.apple + fr.ichigo,
         }
     }"#;
 
