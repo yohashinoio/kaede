@@ -28,6 +28,9 @@ jobs:
             ./llvm
           key: llvm-15.0
 
+      - name: Update apt
+        run: sudo apt update
+
       - name: Install cmake
         run: sudo apt install -y cmake
 
