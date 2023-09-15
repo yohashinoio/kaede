@@ -1577,7 +1577,7 @@ fn modify_fields_in_immutable_methods() {
 }
 
 #[test]
-fn simple_enum() -> anyhow::Result<()> {
+fn create_simple_enum() -> anyhow::Result<()> {
     let program = r#"enum Simple {
         A,
         B,
@@ -1624,7 +1624,7 @@ fn simple_enum_as_argument() -> anyhow::Result<()> {
 }
 
 #[test]
-fn tagged_enum() -> anyhow::Result<()> {
+fn create_tagged_enum() -> anyhow::Result<()> {
     let program = r#"struct Fruits {
         apple: i32,
         ichigo: i32,
@@ -1647,7 +1647,7 @@ fn tagged_enum() -> anyhow::Result<()> {
 }
 
 #[test]
-fn use_tagged_enum() -> anyhow::Result<()> {
+fn match_enum() -> anyhow::Result<()> {
     let program = r#"struct Fruits {
         apple: i32,
         ichigo: i32,
@@ -1664,6 +1664,58 @@ fn use_tagged_enum() -> anyhow::Result<()> {
         return match e {
             E::A => 123,
             E::B(fr) => fr.apple + fr.ichigo,
+        }
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn match_enum_discard_value() -> anyhow::Result<()> {
+    let program = r#"struct Fruits {
+        apple: i32,
+        ichigo: i32,
+    }
+
+    enum E {
+        A,
+        B(Fruits),
+    }
+
+    fn test() -> i32 {
+        let e = E::B(Fruits { apple: 48, ichigo: 10 })
+
+        return match e {
+            E::A => 123,
+            E::B(_) => 58,
+        }
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn match_enum_wildcard() -> anyhow::Result<()> {
+    let program = r#"struct Fruits {
+        apple: i32,
+        ichigo: i32,
+    }
+
+    enum E {
+        A,
+        B(Fruits),
+    }
+
+    fn test() -> i32 {
+        let e = E::B(Fruits { apple: 48, ichigo: 10 })
+
+        return match e {
+            E::A => 123,
+            _ => 58,
         }
     }"#;
 
