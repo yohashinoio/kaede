@@ -127,8 +127,7 @@ pub struct CompileUnitContext<'ctx, 'm, 'c> {
     /// Each time a loop is nested, a basicblock is pushed
     pub loop_break_bb_stk: Vec<BasicBlock<'ctx>>,
 
-    // Flag to be used if 'if' is not used as an expression
-    pub is_if_statement: bool,
+    pub is_ifmatch_stmt: bool,
 }
 
 impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
@@ -148,7 +147,7 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
             module_name,
             imported_modules: HashSet::new(),
             loop_break_bb_stk: Vec::new(),
-            is_if_statement: false,
+            is_ifmatch_stmt: false,
         })
     }
 

@@ -93,7 +93,7 @@ pub enum TokenKind {
     Break,
     /// "struct"
     Struct,
-    /// "mod"
+    /// "import"
     Import,
     /// "pub"
     Pub,
@@ -101,6 +101,8 @@ pub enum TokenKind {
     Impl,
     /// "enum"
     Enum,
+    /// "match"
+    Match,
 
     /// "true"
     True,
@@ -166,6 +168,7 @@ impl std::fmt::Display for TokenKind {
             Pub => write!(f, "'pub'"),
             Impl => write!(f, "'impl'"),
             Enum => write!(f, "'enum'"),
+            Match => write!(f, "'match'"),
 
             True => write!(f, "'true'"),
             False => write!(f, "'false'"),

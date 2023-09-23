@@ -72,10 +72,10 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
     fn build(&mut self, stmt: &Stmt) -> CodegenResult<()> {
         match &stmt.kind {
             StmtKind::Expr(e) => {
-                if matches!(e.kind, ExprKind::If(_)) {
-                    self.cucx.is_if_statement = true;
+                if matches!(e.kind, ExprKind::If(_) | ExprKind::Match(_)) {
+                    self.cucx.is_ifmatch_stmt = true;
                     build_expression(self.cucx, e)?;
-                    self.cucx.is_if_statement = false;
+                    self.cucx.is_ifmatch_stmt = false;
                 } else {
                     build_expression(self.cucx, e)?;
                 }
@@ -131,7 +131,7 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
         }
     }
 
-    fn normal_let_internal(
+    fn build_normal_let(
         &mut self,
         name: &Ident,
         mutability: Mutability,
@@ -196,7 +196,7 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
             None => None,
         };
 
-        self.normal_let_internal(
+        self.build_normal_let(
             &node.name,
             node.mutability,
             value,
@@ -282,7 +282,7 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
             span,
         )?;
 
-        self.normal_let_internal(
+        self.build_normal_let(
             unpacked_name,
             unpacked_mutability,
             Some(unpacked_value),

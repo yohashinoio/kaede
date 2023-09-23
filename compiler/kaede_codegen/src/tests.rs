@@ -1585,13 +1585,11 @@ fn create_simple_enum() -> anyhow::Result<()> {
     }
 
     fn test() -> i32 {
+        let a = Simple::A
         let b = Simple::B
+        let c = Simple::C
 
-        if b == Simple::B {
-            return 58
-        }
-
-        return 123
+        return 58
     }"#;
 
     assert_eq!(run_test(program)?, 58);
@@ -1647,7 +1645,51 @@ fn create_tagged_enum() -> anyhow::Result<()> {
 }
 
 #[test]
-fn match_enum() -> anyhow::Result<()> {
+fn match_stmt_simple_enum() -> anyhow::Result<()> {
+    let program = r#"enum E {
+        A,
+        B,
+    }
+
+    fn test() -> i32 {
+        let e = E::A
+
+        match e {
+            E::B => return 123,
+            E::A => return 58,
+        }
+
+        return 124
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn match_simple_enum() -> anyhow::Result<()> {
+    let program = r#"enum E {
+        A,
+        B,
+    }
+
+    fn test() -> i32 {
+        let e = E::A
+
+        return match e {
+            E::B => 123,
+            E::A => 58,
+        }
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn match_tagged_enum() -> anyhow::Result<()> {
     let program = r#"struct Fruits {
         apple: i32,
         ichigo: i32,

@@ -99,7 +99,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
 
         // If there is an item with a specified type
         // Specified: { i32, [i8; LARGEST_TYPE_SIZE_IN_BYTES] }
-        // Not specified: i32
+        // Not specified: { i32 }
         match largest_type_size {
             Some(size) => {
                 let ty = self.cucx.context().opaque_struct_type(node.name.as_str());
@@ -119,20 +119,24 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
                 self.cucx.tcx.add_enum(
                     node.name.as_str().to_owned(),
                     EnumInfo {
+                        name: node.name.as_str().to_owned(),
                         ty: ty.into(),
                         variants: items,
-                        is_pure_enum: false,
                     },
                 );
             }
 
             None => {
+                let ty = self.cucx.context().opaque_struct_type(node.name.as_str());
+
+                ty.set_body(&[self.cucx.context().i32_type().into()], true);
+
                 self.cucx.tcx.add_enum(
                     node.name.as_str().to_owned(),
                     EnumInfo {
-                        ty: self.cucx.context().i32_type().into(),
+                        name: node.name.as_str().to_owned(),
+                        ty: ty.into(),
                         variants: items,
-                        is_pure_enum: true,
                     },
                 );
             }
@@ -178,11 +182,11 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
         match node.kind {
             FnKind::Method => {
                 push_self_to_front(&mut node.params, impl_for.to_string(), node.self_mutability);
-                self.func_internal(&mangled_name, node)?;
+                self.build_func(&mangled_name, node)?;
             }
 
             // Static method
-            FnKind::Normal => self.func_internal(&mangled_name, node)?,
+            FnKind::Normal => self.build_func(&mangled_name, node)?,
         }
 
         Ok(())
@@ -249,10 +253,10 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
 
         // Suppress mangling of main function
         if node.name.as_str() == "main" {
-            self.func_internal("main", node)
+            self.build_func("main", node)
         } else {
             let mangled_name = mangle_name(self.cucx, node.name.as_str());
-            self.func_internal(&mangled_name, node)
+            self.build_func(&mangled_name, node)
         }
     }
 
@@ -280,7 +284,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
         (fn_value, params)
     }
 
-    fn func_internal(&mut self, mangled_name: &str, node: Fn) -> CodegenResult<()> {
+    fn build_func(&mut self, mangled_name: &str, node: Fn) -> CodegenResult<()> {
         let (fn_value, param_info) = self.decl_fn(
             mangled_name,
             node.params,

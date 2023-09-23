@@ -57,13 +57,14 @@ pub struct Stmt {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum StmtKind {
-    Expr(Expr),
+    Expr(Rc<Expr>),
     Let(Let),
 
     Assign(Assign),
 }
 
 /// Statement list
+/// May be handled as expression
 #[derive(Debug, PartialEq, Eq)]
 pub struct Block {
     pub body: Vec<Stmt>,

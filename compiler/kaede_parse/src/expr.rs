@@ -1,8 +1,9 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, rc::Rc};
 
 use kaede_ast::expr::{
     Args, ArrayLiteral, Binary, BinaryKind, Break, Else, Expr, ExprKind, FnCall, Ident, If,
-    Indexing, Int, IntKind, LogicalNot, Loop, Return, StructLiteral, TupleLiteral,
+    Indexing, Int, IntKind, LogicalNot, Loop, Match, MatchArm, MatchArms, Return, StructLiteral,
+    TupleLiteral,
 };
 use kaede_lex::token::{Token, TokenKind};
 use kaede_span::{Location, Span};
@@ -311,6 +312,10 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             });
         }
 
+        if self.check(&TokenKind::Match) {
+            return self.match_();
+        }
+
         if self.check(&TokenKind::Return) {
             return self.return_();
         }
@@ -354,6 +359,51 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             expected: "expression".to_string(),
             but: self.first().kind.to_string(),
             span: self.first().span,
+        })
+    }
+
+    fn match_(&mut self) -> ParseResult<Expr> {
+        let start = self.consume(&TokenKind::Match)?.start;
+
+        let value = self.cond_expr()?;
+
+        self.consume(&TokenKind::OpenBrace)?;
+
+        let mut arms = Vec::new();
+
+        loop {
+            if self.check(&TokenKind::CloseBrace) {
+                break;
+            }
+
+            let pattern = self.expr()?;
+
+            self.consume(&TokenKind::Eq)?;
+            self.consume(&TokenKind::Gt)?;
+
+            let code = self.expr()?;
+
+            arms.push(MatchArm {
+                pattern,
+                code: Rc::new(code),
+            });
+
+            if !self.consume_b(&TokenKind::Comma) {
+                break;
+            }
+        }
+
+        let finish = self.consume(&TokenKind::CloseBrace)?.finish;
+
+        let span = Span::new(start, finish);
+
+        Ok(Expr {
+            span,
+            kind: ExprKind::Match(Match {
+                target: value.into(),
+                arms: MatchArms::new(arms),
+                span,
+            }),
         })
     }
 
@@ -439,17 +489,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     fn struct_literal(&mut self, struct_name: Ident) -> ParseResult<Expr> {
         let mut inits = Vec::new();
 
-        self.consume(&TokenKind::OpenBrace).unwrap();
-
-        if let Ok(finish) = self.consume(&TokenKind::CloseBrace) {
-            return Ok(Expr {
-                span: Span::new(struct_name.span.start, finish.finish),
-                kind: ExprKind::StructLiteral(StructLiteral {
-                    struct_name,
-                    values: inits,
-                }),
-            });
-        }
+        self.consume(&TokenKind::OpenBrace)?;
 
         loop {
             if self.check(&TokenKind::CloseBrace) {
@@ -599,7 +639,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         let cond = self.cond_expr()?;
 
-        let then = self.block()?;
+        let then = Rc::new(self.block()?);
 
         let else_ = self.else_()?.map(Box::new);
 
@@ -630,7 +670,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             return Ok(Some(Else::If(self.if_()?)));
         }
 
-        Ok(Some(Else::Block(self.block()?)))
+        Ok(Some(Else::Block(Rc::new(self.block()?))))
     }
 
     fn return_(&mut self) -> ParseResult<Expr> {

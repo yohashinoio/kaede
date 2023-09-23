@@ -164,13 +164,13 @@ pub struct Break {
 #[derive(Debug, PartialEq, Eq)]
 pub enum Else {
     If(If),
-    Block(Block),
+    Block(Rc<Block>),
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct If {
     pub cond: Box<Expr>,
-    pub then: Block,
+    pub then: Rc<Block>,
     pub else_: Option<Box<Else>>,
     pub span: Span,
 }
@@ -184,6 +184,54 @@ pub struct Return {
 #[derive(Debug, PartialEq, Eq)]
 pub struct Expr {
     pub kind: ExprKind,
+    pub span: Span,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct MatchArm {
+    pub pattern: Expr,
+    pub code: Rc<Expr>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct MatchArms {
+    arms: Vec<MatchArm>,
+}
+
+impl MatchArms {
+    pub fn new(arms: Vec<MatchArm>) -> Self {
+        Self { arms }
+    }
+
+    pub fn iter(&self) -> std::slice::Iter<MatchArm> {
+        self.arms.iter()
+    }
+
+    pub fn at(&self, idx: usize) -> &MatchArm {
+        &self.arms[idx]
+    }
+
+    pub fn has_wildcard(&self) -> bool {
+        for arm in &self.arms {
+            match &arm.pattern.kind {
+                ExprKind::Ident(ident) => {
+                    if ident.as_str() == "_" {
+                        return true;
+                    }
+                }
+
+                _ => continue,
+            }
+        }
+
+        false
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct Match {
+    pub target: Box<Expr>,
+    pub arms: MatchArms,
     pub span: Span,
 }
 
@@ -205,4 +253,5 @@ pub enum ExprKind {
     If(If),
     Loop(Loop),
     Break(Break),
+    Match(Match),
 }

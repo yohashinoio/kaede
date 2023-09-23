@@ -189,6 +189,7 @@ impl Cursor<'_> {
                     "pub" => self.create_token(TokenKind::Pub),
                     "impl" => self.create_token(TokenKind::Impl),
                     "enum" => self.create_token(TokenKind::Enum),
+                    "match" => self.create_token(TokenKind::Match),
 
                     // Identifier
                     _ => self.create_token(TokenKind::Ident(ident)),

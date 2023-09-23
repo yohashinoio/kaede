@@ -67,16 +67,13 @@ pub struct StructInfo<'ctx> {
 
 pub struct EnumVariantInfo {
     pub vis: Visibility,
-    pub offset: i32,
+    pub offset: u32,
 }
 
 pub struct EnumInfo<'ctx> {
+    pub name: String,
     pub variants: HashMap<String, EnumVariantInfo>,
-    /// None if no type is specified for all members (like enum in C)
     pub ty: BasicTypeEnum<'ctx>,
-
-    /// True if no type is specified for all members (like enum in C)
-    pub is_pure_enum: bool,
 }
 
 pub type StructTable<'ctx> = HashMap<String, Rc<StructInfo<'ctx>>>;

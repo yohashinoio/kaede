@@ -77,7 +77,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     fn expr_stmt(&mut self, e: Expr) -> Stmt {
         Stmt {
             span: e.span,
-            kind: StmtKind::Expr(e),
+            kind: StmtKind::Expr(Rc::new(e)),
         }
     }
 

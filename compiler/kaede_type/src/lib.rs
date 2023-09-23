@@ -5,6 +5,13 @@ use inkwell::{
     types::{BasicType, BasicTypeEnum},
 };
 
+pub fn wrap_in_ref(ty: Rc<Ty>, mutability: Mutability) -> Ty {
+    Ty {
+        kind: TyKind::Reference(RefrenceType { refee_ty: ty }).into(),
+        mutability,
+    }
+}
+
 /// No mutability comparisons
 pub fn is_same_type(t1: &Ty, t2: &Ty) -> bool {
     if t1.kind == t2.kind {

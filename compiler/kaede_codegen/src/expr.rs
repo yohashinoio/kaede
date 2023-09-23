@@ -1,10 +1,10 @@
-use std::{collections::VecDeque, rc::Rc};
+use std::{collections::VecDeque, rc::Rc, slice::Iter};
 
 use crate::{
     error::{CodegenError, CodegenResult},
     mangle::mangle_name,
     stmt::{build_block, build_statement},
-    tcx::{ReturnType, SymbolTable},
+    tcx::{EnumInfo, ReturnType, SymbolTable},
     value::{has_signed, Value},
     CompileUnitContext,
 };
@@ -16,15 +16,29 @@ use inkwell::{
 use kaede_ast::{
     expr::{
         ArrayLiteral, Binary, BinaryKind, Break, Else, Expr, ExprKind, FnCall, Ident, If, Indexing,
-        LogicalNot, Loop, Return, StructLiteral, TupleLiteral,
+        LogicalNot, Loop, Match, MatchArm, Return, StructLiteral, TupleLiteral,
     },
-    stmt::{Block, StmtKind},
+    stmt::{Block, Stmt, StmtKind},
 };
 use kaede_span::Span;
 use kaede_type::{
-    is_same_type, make_fundamental_type, FundamentalTypeKind, Mutability, RefrenceType, Ty, TyKind,
-    UserDefinedType,
+    is_same_type, make_fundamental_type, wrap_in_ref, FundamentalTypeKind, Mutability,
+    RefrenceType, Ty, TyKind, UserDefinedType,
 };
+
+/// For code generation of if to be reusable (from match, etc.)
+/// Expr is changed to Value
+struct ValuedIf<'ctx> {
+    cond: Value<'ctx>,
+    then: Rc<Block>,
+    else_: Option<Box<ValuedElse<'ctx>>>,
+    span: Span,
+}
+
+enum ValuedElse<'ctx> {
+    If(ValuedIf<'ctx>),
+    Block(Rc<Block>),
+}
 
 /// Unit value if the end of the block is not an expression
 pub fn build_block_expression<'ctx>(
@@ -112,7 +126,7 @@ pub fn build_tuple_indexing<'ctx>(
     ))
 }
 
-pub fn create_struct_alloca<'ctx>(
+pub fn create_gc_struct<'ctx>(
     cucx: &mut CompileUnitContext<'ctx, '_, '_>,
     struct_ty: &Ty,
     inits: &[BasicValueEnum<'ctx>],
@@ -186,7 +200,165 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             ExprKind::Loop(node) => self.loop_(node)?,
 
             ExprKind::If(node) => self.if_(node)?,
+
+            ExprKind::Match(node) => self.match_(node)?,
         })
+    }
+
+    fn match_(&mut self, node: &Match) -> CodegenResult<Value<'ctx>> {
+        let value = self.build(&node.target)?;
+
+        let value_ty = value.get_type();
+
+        let refee_ty = match value_ty.kind.as_ref() {
+            TyKind::Reference(refty) => refty.refee_ty.clone(),
+            _ => todo!("Error"),
+        };
+
+        let udt = match refee_ty.kind.as_ref() {
+            TyKind::UserDefined(udt) => udt,
+            _ => todo!("Error"),
+        };
+
+        // Expect enum
+        let enum_info = match self.cucx.tcx.get_enum_info(&udt.name) {
+            Some(ei) => ei,
+            None => todo!("Error"),
+        };
+
+        self.build_match_enum(&enum_info, &value, node.arms.iter(), node.span)
+    }
+
+    /// The return value is `Option` because of the recursion termination condition, so there is no problem if the caller `unwrap`s it
+    fn conv_match_arms_to_valued_if(
+        &mut self,
+        enum_info: &EnumInfo,
+        target_offset: Value<'ctx>,
+        mut arms: Iter<MatchArm>,
+        span: Span,
+    ) -> CodegenResult<Option<ValuedIf<'ctx>>> {
+        let current_arm = match arms.next() {
+            Some(c) => c,
+            None => return Ok(None),
+        };
+
+        let cond = {
+            let pattern_offset =
+                self.get_enum_variant_offset_from_pattern(enum_info, &current_arm.pattern)?;
+            self.build_int_equal(
+                target_offset.get_value().into_int_value(),
+                self.cucx
+                    .context()
+                    .i32_type()
+                    .const_int(pattern_offset as u64, false),
+            )
+        };
+
+        let then = Block {
+            body: vec![Stmt {
+                kind: StmtKind::Expr(current_arm.code.clone()),
+                span: current_arm.code.span,
+            }],
+            span: current_arm.code.span,
+        };
+
+        let else_ = self
+            .conv_match_arms_to_valued_if(enum_info, target_offset, arms, span)?
+            .map(|if_| Box::new(ValuedElse::If(if_)));
+
+        Ok(Some(ValuedIf {
+            cond,
+            then: then.into(),
+            else_,
+            span,
+        }))
+    }
+
+    /// Process 'match' that the target is an enum
+    fn build_match_enum(
+        &mut self,
+        enum_info: &EnumInfo,
+        target: &Value<'ctx>,
+        arms: Iter<MatchArm>,
+        span: Span,
+    ) -> CodegenResult<Value<'ctx>> {
+        let target_offset = self.load_enum_variant_offset_from_value(target);
+
+        let valued_if = self
+            .conv_match_arms_to_valued_if(enum_info, target_offset, arms, span)?
+            .unwrap();
+
+        self.build_if(&valued_if)
+    }
+
+    /// Equivalent to getting the first element of a struct
+    fn load_enum_variant_offset_from_value(&self, value: &Value<'ctx>) -> Value<'ctx> {
+        let gep = unsafe {
+            self.cucx.builder.build_in_bounds_gep(
+                self.cucx.context().i32_type(),
+                value.get_value().into_pointer_value(),
+                &[self.cucx.context().i32_type().const_zero()],
+                "",
+            )
+        };
+
+        Value::new(
+            self.cucx
+                .builder
+                .build_load(self.cucx.context().i32_type(), gep, ""),
+            make_fundamental_type(FundamentalTypeKind::I32, Mutability::Not).into(),
+        )
+    }
+
+    fn get_enum_variant_offset(
+        &self,
+        enum_info: &EnumInfo,
+        variant_name: (&str, Span),
+    ) -> CodegenResult<u32> {
+        let variant = match enum_info.variants.get(variant_name.0) {
+            Some(item) => item,
+            None => {
+                return Err(CodegenError::NoMember {
+                    member_name: variant_name.0.to_owned(),
+                    in_what: enum_info.name.to_owned(),
+                    span: variant_name.1,
+                })
+            }
+        };
+
+        Ok(variant.offset)
+    }
+
+    /// Pattern (like A::B) to offset
+    fn get_enum_variant_offset_from_pattern(
+        &self,
+        enum_info: &EnumInfo,
+        pattern: &Expr,
+    ) -> CodegenResult<u32> {
+        let (enum_name, variant_name) = match &pattern.kind {
+            ExprKind::Binary(b) => match b.kind {
+                BinaryKind::ScopeResolution => (b.lhs.clone(), b.rhs.clone()),
+                _ => unreachable!(),
+            },
+
+            _ => unreachable!(),
+        };
+
+        let enum_name = match &enum_name.kind {
+            ExprKind::Ident(s) => s,
+            _ => unreachable!(),
+        };
+
+        if enum_info.name != enum_name.as_str() {
+            todo!("Error");
+        }
+
+        let variant_name = match &variant_name.kind {
+            ExprKind::Ident(s) => s,
+            _ => unreachable!(),
+        };
+
+        self.get_enum_variant_offset(enum_info, (variant_name.as_str(), variant_name.span))
     }
 
     fn break_(&self, node: &Break) -> CodegenResult<Value<'ctx>> {
@@ -238,14 +410,39 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         Ok(Value::new_never())
     }
 
+    fn conv_to_valued_if(&mut self, orig: &If) -> CodegenResult<ValuedIf<'ctx>> {
+        let cond = build_expression(self.cucx, &orig.cond)?;
+
+        let else_ = match &orig.else_ {
+            Some(els) => Some(match els.as_ref() {
+                Else::If(if_) => ValuedElse::If(self.conv_to_valued_if(if_)?).into(),
+                Else::Block(block) => ValuedElse::Block(block.clone()).into(),
+            }),
+            None => None,
+        };
+
+        Ok(ValuedIf {
+            cond,
+            then: orig.then.clone(),
+            else_,
+            span: orig.span,
+        })
+    }
+
     fn if_(&mut self, node: &If) -> CodegenResult<Value<'ctx>> {
+        let valued_if = self.conv_to_valued_if(node)?;
+        self.build_if(&valued_if)
+    }
+
+    fn build_if(&mut self, node: &ValuedIf) -> CodegenResult<Value<'ctx>> {
+        let span = node.span;
+
         let parent = self.cucx.get_current_fn();
         let zero_const = self.cucx.context().bool_type().const_zero();
 
-        let cond = build_expression(self.cucx, &node.cond)?;
         let cond = self.cucx.builder.build_int_compare(
             IntPredicate::NE,
-            cond.get_value().into_int_value(),
+            node.cond.get_value().into_int_value(),
             zero_const,
             "ifcond",
         );
@@ -273,16 +470,16 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
 
         let else_val = match &node.else_ {
             Some(else_) => match else_.as_ref() {
-                Else::If(if_) => self.if_(if_)?,
-                Else::Block(block) => build_block_expression(self.cucx, block)?,
+                ValuedElse::If(if_) => self.build_if(if_)?,
+                ValuedElse::Block(block) => build_block_expression(self.cucx, block)?,
             },
 
             _ => {
                 // Check if it is used as an expression
-                if self.cucx.is_if_statement {
+                if self.cucx.is_ifmatch_stmt {
                     Value::new_unit()
                 } else {
-                    return Err(CodegenError::IfMustHaveElseUsedAsExpr { span: node.span });
+                    return Err(CodegenError::IfMustHaveElseUsedAsExpr { span });
                 }
             }
         };
@@ -296,7 +493,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
 
         self.cucx.builder.position_at_end(cont_bb);
 
-        if self.cucx.is_if_statement {
+        if self.cucx.is_ifmatch_stmt {
             // Not used as a expression
             return Ok(Value::new_unit());
         }
@@ -307,7 +504,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
                     then_val.get_type().kind.to_string(),
                     else_val.get_type().kind.to_string(),
                 ),
-                span: node.span,
+                span,
             });
         }
 
@@ -370,17 +567,10 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         // Remove offsets
         let inits: Vec<_> = values.iter().map(|e| e.1).collect();
 
-        let alloca = create_struct_alloca(self.cucx, &struct_ty, &inits).into();
-
-        let struct_ref_ty = Ty {
-            kind: TyKind::Reference(RefrenceType {
-                refee_ty: struct_ty.into(),
-            })
-            .into(),
-            mutability: Mutability::Mut,
-        };
-
-        Ok(Value::new(alloca, struct_ref_ty.into()))
+        Ok(Value::new(
+            create_gc_struct(self.cucx, &struct_ty, &inits).into(),
+            wrap_in_ref(struct_ty.into(), Mutability::Mut).into(),
+        ))
     }
 
     fn tuple_literal(&mut self, node: &TupleLiteral) -> CodegenResult<Value<'ctx>> {
@@ -397,26 +587,18 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             mutability: Mutability::Not,
         };
 
-        let alloca = create_struct_alloca(
-            self.cucx,
-            &tuple_ty,
-            element_values
-                .iter()
-                .map(|v| v.get_value())
-                .collect::<Vec<_>>()
-                .as_slice(),
-        );
-
         Ok(Value::new(
-            alloca.into(),
-            Ty {
-                kind: TyKind::Reference(RefrenceType {
-                    refee_ty: tuple_ty.into(),
-                })
-                .into(),
-                mutability: Mutability::Mut,
-            }
+            create_gc_struct(
+                self.cucx,
+                &tuple_ty,
+                element_values
+                    .iter()
+                    .map(|v| v.get_value())
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+            )
             .into(),
+            wrap_in_ref(tuple_ty.into(), Mutability::Mut).into(),
         ))
     }
 
@@ -609,11 +791,6 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             _ => todo!(),
         };
 
-        // Create enum variant without value
-        if let ExprKind::Ident(right) = &node.rhs.kind {
-            return self.create_enum_variant(left, right, None);
-        }
-
         // Create enum variant with value
         if let ExprKind::FnCall(right) = &node.rhs.kind {
             if right.args.0.len() != 1 {
@@ -625,7 +802,12 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             return self.create_enum_variant(left, &right.name, Some(value));
         }
 
-        unreachable!()
+        // Create enum variant
+        if let ExprKind::Ident(right) = &node.rhs.kind {
+            return self.create_enum_variant(left, right, None);
+        }
+
+        todo!()
     }
 
     fn create_enum_variant(
@@ -644,16 +826,8 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             }
         };
 
-        let variant = match enum_info.variants.get(variant_name.as_str()) {
-            Some(item) => item,
-            None => {
-                return Err(CodegenError::NoMember {
-                    member_name: variant_name.name.to_owned(),
-                    in_what: enum_name.name.to_owned(),
-                    span: variant_name.span,
-                })
-            }
-        };
+        let variant_offset =
+            self.get_enum_variant_offset(&enum_info, (variant_name.as_str(), variant_name.span))?;
 
         let enum_ty = Ty {
             kind: TyKind::UserDefined(UserDefinedType {
@@ -667,22 +841,17 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             .cucx
             .context()
             .i32_type()
-            .const_int(variant.offset as u64, true)
+            .const_int(variant_offset as u64, true)
             .into();
 
-        if enum_info.is_pure_enum {
-            return Ok(Value::new(offset_in_llvm, enum_ty.into()));
-        }
-
-        let value = match value {
-            Some(v) => self.build(v)?.get_value(),
-
-            None => offset_in_llvm,
+        let inits = match value {
+            Some(v) => vec![offset_in_llvm, self.build(v)?.get_value()],
+            None => vec![offset_in_llvm],
         };
 
         Ok(Value::new(
-            create_struct_alloca(self.cucx, &enum_ty, &[offset_in_llvm, value]).into(),
-            enum_ty.into(),
+            create_gc_struct(self.cucx, &enum_ty, &inits).into(),
+            wrap_in_ref(enum_ty.into(), Mutability::Mut).into(),
         ))
     }
 
@@ -727,6 +896,19 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
 
         Value::new(
             result,
+            Rc::new(make_fundamental_type(
+                FundamentalTypeKind::Bool,
+                Mutability::Not,
+            )),
+        )
+    }
+
+    fn build_int_equal(&self, left: IntValue<'ctx>, right: IntValue<'ctx>) -> Value<'ctx> {
+        Value::new(
+            self.cucx
+                .builder
+                .build_int_compare(IntPredicate::EQ, left, right, "")
+                .into(),
             Rc::new(make_fundamental_type(
                 FundamentalTypeKind::Bool,
                 Mutability::Not,
@@ -820,16 +1002,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
                 }
             }
 
-            Eq => Value::new(
-                self.cucx
-                    .builder
-                    .build_int_compare(IntPredicate::EQ, left_int, right_int, "")
-                    .into(),
-                Rc::new(make_fundamental_type(
-                    FundamentalTypeKind::Bool,
-                    Mutability::Not,
-                )),
-            ),
+            Eq => self.build_int_equal(left_int, right_int),
 
             Ne => Value::new(
                 self.cucx
@@ -1117,7 +1290,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         // Push self to front
         args.push_front((struct_value.clone(), call_node.args.1));
 
-        self.call_fn_internal(&actual_method_name, args, call_node.span)
+        self.build_call_fn(&actual_method_name, args, call_node.span)
     }
 
     fn tuple_indexing(
@@ -1147,10 +1320,10 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             args
         };
 
-        self.call_fn_internal(node.name.as_str(), args, node.span)
+        self.build_call_fn(node.name.as_str(), args, node.span)
     }
 
-    fn call_fn_internal(
+    fn build_call_fn(
         &mut self,
         name: &str,
         args: VecDeque<(Value<'ctx>, Span)>,
