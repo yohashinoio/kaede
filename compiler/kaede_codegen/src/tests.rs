@@ -1651,15 +1651,26 @@ fn match_stmt_simple_enum() -> anyhow::Result<()> {
         B,
     }
 
+    fn f() -> i32 {
+        let e = E::B
+
+        match e {
+            E::A => return 123,
+            E::B => return 58,
+        }
+
+        return 124
+    }
+
     fn test() -> i32 {
         let e = E::A
 
         match e {
-            E::B => return 123,
-            E::A => return 58,
+            E::B => return 125,
+            E::A => return f(),
         }
 
-        return 124
+        return 126
     }"#;
 
     assert_eq!(run_test(program)?, 58);
