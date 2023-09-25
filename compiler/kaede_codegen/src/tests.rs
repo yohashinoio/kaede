@@ -1778,6 +1778,30 @@ fn match_enum_wildcard() -> anyhow::Result<()> {
 }
 
 #[test]
+fn non_exhaustive_patterns() {
+    let program = r#"enum E {
+        A,
+        B,
+        C,
+    }
+
+    fn test() -> i32 {
+        let e = E::A
+
+        return match e {
+            E::A => 58,
+            E::B => return 123,
+            // There is no pattern covering E::C!
+        }
+    }"#;
+
+    assert!(matches!(
+        run_test(program),
+        Err(CodegenError::NonExhaustivePatterns { .. })
+    ));
+}
+
+#[test]
 fn tagged_enum_as_argument() -> anyhow::Result<()> {
     let program = r#"struct Fruits {
         apple: i32,

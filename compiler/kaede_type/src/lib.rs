@@ -5,6 +5,19 @@ use inkwell::{
     types::{BasicType, BasicTypeEnum},
 };
 
+pub fn create_inferred_tuple(element_len: usize) -> TyKind {
+    TyKind::Tuple({
+        let mut v = Vec::with_capacity(element_len);
+        (0..element_len).for_each(|_| {
+            v.push(Rc::new(Ty {
+                kind: Rc::new(TyKind::Inferred),
+                mutability: Mutability::Not,
+            }))
+        });
+        v
+    })
+}
+
 pub fn wrap_in_ref(ty: Rc<Ty>, mutability: Mutability) -> Ty {
     Ty {
         kind: TyKind::Reference(RefrenceType { refee_ty: ty }).into(),
@@ -117,7 +130,7 @@ impl std::fmt::Display for TyKind {
                     .iter()
                     .map(|t| t.kind.to_string())
                     .collect::<Vec<_>>()
-                    .join(",")
+                    .join(", ")
             ),
 
             Self::Unit => write!(f, "()"),

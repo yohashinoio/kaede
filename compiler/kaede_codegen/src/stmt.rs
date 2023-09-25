@@ -6,7 +6,7 @@ use kaede_ast::stmt::{
     Assign, AssignKind, Block, Let, LetKind, NormalLet, Stmt, StmtKind, TupleUnpack,
 };
 use kaede_span::Span;
-use kaede_type::{is_same_type, Mutability, RefrenceType, Ty, TyKind};
+use kaede_type::{create_inferred_tuple, is_same_type, Mutability, RefrenceType, Ty, TyKind};
 
 use crate::expr::build_tuple_indexing;
 use crate::value::Value;
@@ -215,15 +215,23 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
                 match rty.refee_ty.kind.as_ref() {
                     TyKind::Tuple(tuple_ty) => (tuple_ty.len(), tuple_ref_ty.mutability),
 
-                    _ => {
-                        return Err(CodegenError::InitializerTupleUnpackingMustBeTuple {
-                            span: node.init.span,
-                        })
+                    kind => {
+                        return Err(CodegenError::MismatchedTypes {
+                            types: (
+                                create_inferred_tuple(node.names.len()).to_string(),
+                                kind.to_string(),
+                            ),
+                            span: node.span,
+                        });
                     }
                 }
             } else {
-                return Err(CodegenError::InitializerTupleUnpackingMustBeTuple {
-                    span: node.init.span,
+                return Err(CodegenError::MismatchedTypes {
+                    types: (
+                        create_inferred_tuple(node.names.len()).to_string(),
+                        tuple_ref_ty.kind.to_string(),
+                    ),
+                    span: node.span,
                 });
             };
 

@@ -501,14 +501,12 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
                 // Check if it is used as an expression
                 if self.cucx.is_ifmatch_stmt {
                     Value::new_unit()
+                } else if unreachable_else {
+                    // Build unreachable
+                    self.cucx.builder.build_unreachable();
+                    Value::new_never()
                 } else {
-                    if unreachable_else {
-                        // Build unreachable
-                        self.cucx.builder.build_unreachable();
-                        Value::new_never()
-                    } else {
-                        return Err(CodegenError::IfMustHaveElseUsedAsExpr { span });
-                    }
+                    return Err(CodegenError::IfMustHaveElseUsedAsExpr { span });
                 }
             }
         };
