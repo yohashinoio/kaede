@@ -58,10 +58,20 @@ pub enum CodegenError {
         span: Span,
     },
 
+    #[error("{}:{} no variant named `{}` in `{}`", span.start.line, span.start.column, variant_name, in_what)]
+    NoVariant {
+        variant_name: String,
+        in_what: String,
+        span: Span,
+    },
+
+    #[error("{}:{} unreachable pattern`", span.start.line, span.start.column)]
+    UnreachablePattern { span: Span },
+
     #[error("{}:{} all control paths will be `never` (make it a statement, not an if expression)", span.start.line, span.start.column)]
     NeverIfExpr { span: Span },
 
-    #[error("{}:{} non-exhaustive patterns: `{}` not covered", span.start.line, span.start.column, non_exhaustive_patterns)]
+    #[error("{}:{} non-exhaustive patterns: {} not covered", span.start.line, span.start.column, non_exhaustive_patterns)]
     NonExhaustivePatterns {
         non_exhaustive_patterns: String,
         span: Span,

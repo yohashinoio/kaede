@@ -1,4 +1,8 @@
-use std::{collections::VecDeque, rc::Rc, slice::Iter};
+use std::{
+    collections::{BTreeSet, VecDeque},
+    rc::Rc,
+    slice::Iter,
+};
 
 use crate::{
     error::{CodegenError, CodegenResult},
@@ -16,7 +20,7 @@ use inkwell::{
 use kaede_ast::{
     expr::{
         ArrayLiteral, Binary, BinaryKind, Break, Else, Expr, ExprKind, FnCall, Ident, If, Indexing,
-        LogicalNot, Loop, Match, MatchArm, Return, StructLiteral, TupleLiteral,
+        LogicalNot, Loop, Match, MatchArm, MatchArms, Return, StructLiteral, TupleLiteral,
     },
     stmt::{Block, Stmt, StmtKind},
 };
@@ -205,6 +209,87 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         })
     }
 
+    /// A::B to ("A", "B")
+    fn disassemble_enum_pattern<'pat>(&self, pattern: &'pat Expr) -> (&'pat Ident, &'pat Ident) {
+        let (enum_name, variant_name) = match &pattern.kind {
+            ExprKind::Binary(b) => match b.kind {
+                BinaryKind::ScopeResolution => (&b.lhs, &b.rhs),
+                _ => unreachable!(),
+            },
+
+            _ => unreachable!(),
+        };
+
+        let enum_name = match &enum_name.kind {
+            ExprKind::Ident(s) => s,
+            _ => unreachable!(),
+        };
+
+        let variant_name = match &variant_name.kind {
+            ExprKind::Ident(s) => s,
+            _ => unreachable!(),
+        };
+
+        (enum_name, variant_name)
+    }
+
+    fn check_exhaustiveness_match_enum(
+        &self,
+        enum_info: &EnumInfo,
+        arms: &MatchArms,
+        span: Span,
+    ) -> CodegenResult<()> {
+        if arms.has_wildcard() {
+            return Ok(());
+        }
+
+        let variants = &enum_info.variants;
+
+        let mut pattern_variant_names = BTreeSet::new();
+
+        for arm in arms.iter() {
+            let (enum_name, variant_name) = self.disassemble_enum_pattern(&arm.pattern);
+
+            if enum_info.name != enum_name.as_str() {
+                todo!("Error");
+            }
+
+            if !variants.contains_key(variant_name.as_str()) {
+                return Err(CodegenError::NoVariant {
+                    variant_name: variant_name.name.to_owned(),
+                    in_what: enum_name.name.to_owned(),
+                    span: variant_name.span,
+                });
+            }
+
+            if !pattern_variant_names.insert(variant_name.as_str()) {
+                // There were multiple identical patterns
+                return Err(CodegenError::UnreachablePattern {
+                    span: enum_name.span,
+                });
+            }
+        }
+
+        let variant_names = variants.keys().map(|k| k.as_str()).collect::<BTreeSet<_>>();
+
+        let dif = variant_names
+            .difference(&pattern_variant_names)
+            .collect::<Vec<_>>();
+
+        if !dif.is_empty() {
+            return Err(CodegenError::NonExhaustivePatterns {
+                non_exhaustive_patterns: dif
+                    .into_iter()
+                    .map(|p| format!("`{}::{}`", enum_info.name, p))
+                    .collect::<Vec<_>>()
+                    .join(" and "),
+                span,
+            });
+        }
+
+        Ok(())
+    }
+
     fn match_(&mut self, node: &Match) -> CodegenResult<Value<'ctx>> {
         let value = self.build(&node.target)?;
 
@@ -220,11 +305,12 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             _ => todo!("Error"),
         };
 
-        // Expect enum
         let enum_info = match self.cucx.tcx.get_enum_info(&udt.name) {
             Some(ei) => ei,
             None => todo!("Error"),
         };
+
+        self.check_exhaustiveness_match_enum(&enum_info, &node.arms, node.span)?;
 
         self.build_match_enum(&enum_info, &value, node.arms.iter(), node.span)
     }
@@ -282,8 +368,6 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         arms: Iter<MatchArm>,
         span: Span,
     ) -> CodegenResult<Value<'ctx>> {
-        // TODO: Check to see if all patterns are covered
-
         let target_offset = self.load_enum_variant_offset_from_value(target);
 
         let valued_if = self
@@ -320,8 +404,8 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         let variant = match enum_info.variants.get(variant_name.0) {
             Some(item) => item,
             None => {
-                return Err(CodegenError::NoMember {
-                    member_name: variant_name.0.to_owned(),
+                return Err(CodegenError::NoVariant {
+                    variant_name: variant_name.0.to_owned(),
                     in_what: enum_info.name.to_owned(),
                     span: variant_name.1,
                 })
@@ -337,28 +421,11 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         enum_info: &EnumInfo,
         pattern: &Expr,
     ) -> CodegenResult<u32> {
-        let (enum_name, variant_name) = match &pattern.kind {
-            ExprKind::Binary(b) => match b.kind {
-                BinaryKind::ScopeResolution => (b.lhs.clone(), b.rhs.clone()),
-                _ => unreachable!(),
-            },
-
-            _ => unreachable!(),
-        };
-
-        let enum_name = match &enum_name.kind {
-            ExprKind::Ident(s) => s,
-            _ => unreachable!(),
-        };
+        let (enum_name, variant_name) = self.disassemble_enum_pattern(pattern);
 
         if enum_info.name != enum_name.as_str() {
             todo!("Error");
         }
-
-        let variant_name = match &variant_name.kind {
-            ExprKind::Ident(s) => s,
-            _ => unreachable!(),
-        };
 
         self.get_enum_variant_offset(enum_info, (variant_name.as_str(), variant_name.span))
     }
