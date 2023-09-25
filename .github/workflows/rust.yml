@@ -16,9 +16,8 @@ jobs:
         uses: actions/cache@v3
         with:
           path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
+            ~/.cargo
+            ./target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Cache llvm
@@ -27,7 +26,7 @@ jobs:
         with:
           path: |
             ./llvm
-          key: llvm-15.0
+          key: ${{ runner.os }}-llvm-15.0
 
       - name: Update apt
         run: sudo apt update
