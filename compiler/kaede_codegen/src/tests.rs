@@ -1778,6 +1778,29 @@ fn non_exhaustive_patterns() {
 }
 
 #[test]
+fn unreachable_pattern() {
+    let program = r#"enum E {
+        A,
+        B,
+    }
+
+    fn test() -> i32 {
+        let e = E::A
+
+        return match e {
+            E::A => 58,
+            E::A => 58,
+            E::B => return 123,
+        }
+    }"#;
+
+    assert!(matches!(
+        run_test(program),
+        Err(CodegenError::UnreachablePattern { .. })
+    ));
+}
+
+#[test]
 fn simple_enum_as_argument() -> anyhow::Result<()> {
     let program = r#"enum E {
         A,

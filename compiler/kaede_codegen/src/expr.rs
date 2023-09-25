@@ -257,7 +257,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             if !variants.contains_key(variant_name.as_str()) {
                 return Err(CodegenError::NoVariant {
                     variant_name: variant_name.name.to_owned(),
-                    in_what: enum_name.name.to_owned(),
+                    parent_name: enum_name.name.to_owned(),
                     span: variant_name.span,
                 });
             }
@@ -406,7 +406,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             None => {
                 return Err(CodegenError::NoVariant {
                     variant_name: variant_name.0.to_owned(),
-                    in_what: enum_info.name.to_owned(),
+                    parent_name: enum_info.name.to_owned(),
                     span: variant_name.1,
                 })
             }
@@ -1328,7 +1328,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             None => {
                 return Err(CodegenError::NoMember {
                     member_name: field_name.name.to_owned(),
-                    in_what: struct_name.to_owned(),
+                    parent_name: struct_name.to_owned(),
                     span: field_name.span,
                 });
             }

@@ -51,21 +51,21 @@ pub enum CodegenError {
     #[error("{}:{} cannot assign an immutable to a mutable", span.start.line, span.start.column)]
     CannotAssignImmutableToMutable { span: Span },
 
-    #[error("{}:{} no member named `{}` in `{}`", span.start.line, span.start.column, member_name, in_what)]
+    #[error("{}:{} no member named `{}` in `{}`", span.start.line, span.start.column, member_name, parent_name)]
     NoMember {
         member_name: String,
-        in_what: String,
+        parent_name: String,
         span: Span,
     },
 
-    #[error("{}:{} no variant named `{}` in `{}`", span.start.line, span.start.column, variant_name, in_what)]
+    #[error("{}:{} no variant named `{}` in `{}`", span.start.line, span.start.column, variant_name, parent_name)]
     NoVariant {
         variant_name: String,
-        in_what: String,
+        parent_name: String,
         span: Span,
     },
 
-    #[error("{}:{} unreachable pattern`", span.start.line, span.start.column)]
+    #[error("{}:{} unreachable pattern", span.start.line, span.start.column)]
     UnreachablePattern { span: Span },
 
     #[error("{}:{} all control paths will be `never` (make it a statement, not an if expression)", span.start.line, span.start.column)]
