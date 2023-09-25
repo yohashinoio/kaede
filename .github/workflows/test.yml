@@ -11,22 +11,22 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Cache rust
-        id: cache-rust
-        uses: actions/cache@v3
+      - name: Restore cached llvm
+        id: cache-llvm-restore
+        uses: actions/cache/restore@v3
         with:
           path: |
-            ~/.cargo
-            ./target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache llvm
-        id: cache-llvm
-        uses: actions/cache@v3
-        with:
-          path: |
-            ./llvm
+            ./llvm/
           key: ${{ runner.os }}-llvm-15.0
+
+      - name: Restore cached rust
+        id: cache-rust-restore
+        uses: actions/cache/restore@v3
+        with:
+          path: |
+            ~/.cargo/
+            ./target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Update apt
         run: sudo apt update
@@ -41,14 +41,31 @@ jobs:
         uses: KyleMayes/install-llvm-action@v1
         with:
           version: "15.0"
-          cached: ${{ steps.cache-llvm.outputs.cache-hit }}
+          cached: ${{ steps.cache-llvm-restore.outputs.cache-hit }}
+
+      - name: Save llvm
+        id: cache-llvm-save
+        uses: actions/cache/save@v3
+        with:
+          path: |
+            ./llvm/
+          key: ${{ steps.cache-llvm-restore.outputs.cache-primary-key }}
 
       - name: Install rust
         uses: dtolnay/rust-toolchain@stable
-        if: steps.cache-rust.outputs.cache-hit != 'true'
+        if: steps.cache-rust-restore.outputs.cache-hit != 'true'
         with:
           toolchain: stable
           components: rustfmt, clippy
+
+      - name: Save rust
+        id: cache-rust-save
+        uses: actions/cache/save@v3
+        with:
+          path: |
+            ~/.cargo/
+            ./target/
+          key: ${{ steps.cache-rust-restore.outputs.cache-primary-key }}
 
       - name: Install standard library
         run: cd library && chmod +x install.py && sudo ./install.py
