@@ -1598,30 +1598,6 @@ fn create_simple_enum() -> anyhow::Result<()> {
 }
 
 #[test]
-fn simple_enum_as_argument() -> anyhow::Result<()> {
-    let program = r#"enum Simple {
-        A,
-        B,
-        C,
-    }
-
-    fn f(e: Simple) -> i32 {
-        if e == Simple::A || e == Simple::B {
-            return 123
-        }
-        return 58
-    }
-
-    fn test() -> i32 {
-        return f(Simple::C)
-    }"#;
-
-    assert_eq!(run_test(program)?, 58);
-
-    Ok(())
-}
-
-#[test]
 fn create_tagged_enum() -> anyhow::Result<()> {
     let program = r#"struct Fruits {
         apple: i32,
@@ -1799,6 +1775,31 @@ fn non_exhaustive_patterns() {
         run_test(program),
         Err(CodegenError::NonExhaustivePatterns { .. })
     ));
+}
+
+#[test]
+fn simple_enum_as_argument() -> anyhow::Result<()> {
+    let program = r#"enum E {
+        A,
+        B,
+        C,
+    }
+
+    fn f(e: E) -> i32 {
+        return match e {
+            E::A => 123,
+            E::B => 124,
+            E::C => 58,
+        }
+    }
+
+    fn test() -> i32 {
+        return f(E::C)
+    }"#;
+
+    assert_eq!(run_test(program)?, 58);
+
+    Ok(())
 }
 
 #[test]
