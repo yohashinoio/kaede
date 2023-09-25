@@ -282,13 +282,15 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         arms: Iter<MatchArm>,
         span: Span,
     ) -> CodegenResult<Value<'ctx>> {
+        // TODO: Check to see if all patterns are covered
+
         let target_offset = self.load_enum_variant_offset_from_value(target);
 
         let valued_if = self
             .conv_match_arms_to_valued_if(enum_info, target_offset, arms, span)?
             .unwrap();
 
-        self.build_if(&valued_if)
+        self.build_if(&valued_if, true)
     }
 
     /// Equivalent to getting the first element of a struct
@@ -431,10 +433,31 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
 
     fn if_(&mut self, node: &If) -> CodegenResult<Value<'ctx>> {
         let valued_if = self.conv_to_valued_if(node)?;
-        self.build_if(&valued_if)
+        self.build_if(&valued_if, false)
     }
 
-    fn build_if(&mut self, node: &ValuedIf) -> CodegenResult<Value<'ctx>> {
+    /// If unreachable_else is true and there is no else, build unreachable
+    fn build_if(&mut self, node: &ValuedIf, unreachable_else: bool) -> CodegenResult<Value<'ctx>> {
+        let if_value = self.unsafe_build_if(node, unreachable_else)?;
+
+        // All control paths will be 'never'
+        if if_value.is_never_ty() {
+            return Err(CodegenError::NeverIfExpr { span: node.span });
+        }
+
+        Ok(if_value)
+    }
+
+    /// Do not use this function! (Use `build_if` instead)
+    ///
+    /// Because this function is recursive, it is difficult to handle some errors, so it is wrapped in `build_if`
+    ///
+    /// Therefore, 'unsafe' in the function name is not memory unsafe!
+    fn unsafe_build_if(
+        &mut self,
+        node: &ValuedIf,
+        unreachable_else: bool,
+    ) -> CodegenResult<Value<'ctx>> {
         let span = node.span;
 
         let parent = self.cucx.get_current_fn();
@@ -470,7 +493,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
 
         let else_val = match &node.else_ {
             Some(else_) => match else_.as_ref() {
-                ValuedElse::If(if_) => self.build_if(if_)?,
+                ValuedElse::If(if_) => self.unsafe_build_if(if_, unreachable_else)?,
                 ValuedElse::Block(block) => build_block_expression(self.cucx, block)?,
             },
 
@@ -479,7 +502,13 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
                 if self.cucx.is_ifmatch_stmt {
                     Value::new_unit()
                 } else {
-                    return Err(CodegenError::IfMustHaveElseUsedAsExpr { span });
+                    if unreachable_else {
+                        // Build unreachable
+                        self.cucx.builder.build_unreachable();
+                        Value::new_never()
+                    } else {
+                        return Err(CodegenError::IfMustHaveElseUsedAsExpr { span });
+                    }
                 }
             }
         };
@@ -509,9 +538,9 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         }
 
         // Either then_val or else_val could be never
-        let ty = if matches!(then_val.get_type().kind.as_ref(), TyKind::Never) {
+        let ty = if then_val.is_never_ty() {
             return Ok(else_val);
-        } else if matches!(else_val.get_type().kind.as_ref(), TyKind::Never) {
+        } else if else_val.is_never_ty() {
             return Ok(then_val);
         } else {
             then_val.get_type()

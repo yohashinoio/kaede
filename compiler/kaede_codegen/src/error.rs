@@ -61,6 +61,9 @@ pub enum CodegenError {
         span: Span,
     },
 
+    #[error("{}:{} All control paths will be 'never' (make it a statement, not an if expression)", span.start.line, span.start.column)]
+    NeverIfExpr { span: Span },
+
     /// Error issued by LLVM
     #[error("{}", .what)]
     LLVMError { what: String },

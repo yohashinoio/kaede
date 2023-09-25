@@ -48,6 +48,10 @@ impl<'ctx> Value<'ctx> {
         }
     }
 
+    pub fn is_never_ty(&self) -> bool {
+        matches!(self.get_type().kind.as_ref(), TyKind::Never)
+    }
+
     /// Create a `Value` representing a void value of type void
     pub fn new_void() -> Self {
         Self {

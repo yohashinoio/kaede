@@ -1689,8 +1689,8 @@ fn match_simple_enum() -> anyhow::Result<()> {
         let e = E::A
 
         return match e {
-            E::B => 123,
             E::A => 58,
+            E::B => return 123,
         }
     }"#;
 
