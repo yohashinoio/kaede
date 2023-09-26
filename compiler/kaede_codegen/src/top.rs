@@ -182,11 +182,11 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
         match node.kind {
             FnKind::Method => {
                 push_self_to_front(&mut node.params, impl_for.to_string(), node.self_mutability);
-                self.build_func(&mangled_name, node)?;
+                self.build_fn(&mangled_name, node)?;
             }
 
             // Static method
-            FnKind::Normal => self.build_func(&mangled_name, node)?,
+            FnKind::Normal => self.build_fn(&mangled_name, node)?,
         }
 
         Ok(())
@@ -253,10 +253,10 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
 
         // Suppress mangling of main function
         if node.name.as_str() == "main" {
-            self.build_func("main", node)
+            self.build_fn("kdmain", node)
         } else {
             let mangled_name = mangle_name(self.cucx, node.name.as_str());
-            self.build_func(&mangled_name, node)
+            self.build_fn(&mangled_name, node)
         }
     }
 
@@ -284,7 +284,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
         (fn_value, params)
     }
 
-    fn build_func(&mut self, mangled_name: &str, node: Fn) -> CodegenResult<()> {
+    fn build_fn(&mut self, mangled_name: &str, node: Fn) -> CodegenResult<()> {
         let (fn_value, param_info) = self.decl_fn(
             mangled_name,
             node.params,

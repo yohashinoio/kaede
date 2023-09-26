@@ -13,35 +13,34 @@ fn create_kaede_file_name(stem: &str) -> String {
 
 #[test]
 fn import_functions() -> anyhow::Result<()> {
-    let tmp_dir = assert_fs::TempDir::new()?;
+    let tempdir = assert_fs::TempDir::new()?;
 
-    let mod_1 = tmp_dir.child(create_kaede_file_name("m1"));
-    mod_1.write_str("pub fn yoha() -> i32 { return 48 }")?;
+    let module1 = tempdir.child(create_kaede_file_name("m1"));
+    module1.write_str("pub fn yoha() -> i32 { return 48 }")?;
 
-    let mod_2 = tmp_dir.child(create_kaede_file_name("m2"));
-    mod_2.write_str("pub fn io() -> i32 { return 10 }")?;
+    let module2 = tempdir.child(create_kaede_file_name("m2"));
+    module2.write_str("pub fn io() -> i32 { return 10 }")?;
 
-    let main = tmp_dir.child(create_kaede_file_name("main"));
+    let main = tempdir.child(create_kaede_file_name("main"));
     main.write_str("import m1\nimport m2\nfn main() -> i32 { return m1.yoha() + m2.io() }")?;
 
-    let mut cmd = Command::cargo_bin(env!("CARGO_PKG_NAME"))?;
-    cmd.args([
-        "--display-llvm-ir",
-        main.path().to_str().unwrap(),
-        mod_1.path().to_str().unwrap(),
-        mod_2.path().to_str().unwrap(),
-    ]);
-    let success = cmd.assert().success();
+    let compile_output = Command::cargo_bin(env!("CARGO_PKG_NAME"))?
+        .args([
+            "--display-llvm-ir",
+            main.path().to_str().unwrap(),
+            module1.path().to_str().unwrap(),
+            module2.path().to_str().unwrap(),
+        ])
+        .assert()
+        .success();
 
-    let ir = assert_fs::NamedTempFile::new("ir")?;
-    ir.write_binary(&success.get_output().stdout)?;
+    let llvm_ir = assert_fs::NamedTempFile::new("ir")?;
+    llvm_ir.write_binary(&compile_output.get_output().stdout)?;
 
     Command::new("lli")
-        .arg(ir.path())
+        .arg(llvm_ir.path())
         .assert()
         .code(predicate::eq(58));
-
-    tmp_dir.close()?;
 
     Ok(())
 }

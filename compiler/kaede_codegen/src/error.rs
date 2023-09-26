@@ -77,6 +77,9 @@ pub enum CodegenError {
         span: Span,
     },
 
+    #[error("`main` function not found")]
+    MainNotFound,
+
     /// Error issued by LLVM
     #[error("{}", .what)]
     LLVMError { what: String },

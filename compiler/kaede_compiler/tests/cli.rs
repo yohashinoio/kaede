@@ -4,10 +4,9 @@ use std::process::Command;
 
 #[test]
 fn failed_to_open_file() -> anyhow::Result<()> {
-    let mut cmd = Command::cargo_bin(env!("CARGO_PKG_NAME"))?;
-
-    cmd.arg("test/file/doesnt/exist");
-    cmd.assert()
+    Command::cargo_bin(env!("CARGO_PKG_NAME"))?
+        .arg("test/file/doesnt/exist")
+        .assert()
         .failure()
         .stderr(predicate::str::contains("Failed to open file"));
 
@@ -16,9 +15,8 @@ fn failed_to_open_file() -> anyhow::Result<()> {
 
 #[test]
 fn no_input_files() -> anyhow::Result<()> {
-    let mut cmd = Command::cargo_bin(env!("CARGO_PKG_NAME"))?;
-
-    cmd.assert()
+    Command::cargo_bin(env!("CARGO_PKG_NAME"))?
+        .assert()
         .failure()
         .stderr(predicate::str::contains("No input files"));
 

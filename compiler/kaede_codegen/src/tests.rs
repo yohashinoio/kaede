@@ -1,3 +1,8 @@
+//! This tests should be run in a single thread
+//! Because the tests is executed through JIT compilation, processing it in parallel will break the GC and cause errors
+//!
+//! I tried testing using AOT compilation, but single-threaded JIT compilation was faster
+
 use inkwell::{
     context::Context, module::Module, support::load_library_permanently, OptimizationLevel,
 };
@@ -7,8 +12,7 @@ use kaede_parse::parse;
 
 use super::*;
 
-// Expects that a test function of type TestFunc is defined in the module
-fn jit_compile_test(module: &Module) -> i32 {
+fn jit_compile(module: &Module) -> i32 {
     // Load bdw-gc (boehm-gc)
     load_library_permanently("/usr/local/lib/libgc.so");
 
@@ -17,13 +21,14 @@ fn jit_compile_test(module: &Module) -> i32 {
         .unwrap();
 
     unsafe {
-        ee.get_function::<unsafe extern "C" fn() -> i32>("test.test")
+        ee.get_function::<unsafe extern "C" fn() -> i32>("main")
             .unwrap()
             .call()
     }
 }
 
-fn run_test(program: &str) -> CodegenResult<i32> {
+/// Return exit status
+fn exec(program: &str) -> CodegenResult<i32> {
     let context = Context::create();
     let module = context.create_module("test");
 
@@ -37,47 +42,47 @@ fn run_test(program: &str) -> CodegenResult<i32> {
         OptimizationLevel::None,
     )?;
 
-    Ok(jit_compile_test(&module))
+    Ok(jit_compile(&module))
 }
 
 #[test]
 fn add() -> anyhow::Result<()> {
-    assert_eq!(run_test("fn test() -> i32 { return 48 + 10 }")?, 58);
+    assert_eq!(exec("fn main() -> i32 { return 48 + 10 }")?, 58);
 
     Ok(())
 }
 
 #[test]
 fn sub() -> anyhow::Result<()> {
-    assert_eq!(run_test("fn test() -> i32 { return 68 - 10 }")?, 58);
+    assert_eq!(exec("fn main() -> i32 { return 68 - 10 }")?, 58);
 
     Ok(())
 }
 
 #[test]
 fn mul() -> anyhow::Result<()> {
-    assert_eq!(run_test("fn test() -> i32 { return 48 * 10 }")?, 480);
+    assert_eq!(exec("fn main() -> i32 { return 48 * 10 }")?, 480);
 
     Ok(())
 }
 
 #[test]
 fn div() -> anyhow::Result<()> {
-    assert_eq!(run_test("fn test() -> i32 { return 580 / 10 }")?, 58);
+    assert_eq!(exec("fn main() -> i32 { return 580 / 10 }")?, 58);
 
     Ok(())
 }
 
 #[test]
 fn mul_precedence() -> anyhow::Result<()> {
-    assert_eq!(run_test("fn test() -> i32 { return 48 + 10 * 2 }")?, 68);
+    assert_eq!(exec("fn main() -> i32 { return 48 + 10 * 2 }")?, 68);
 
     Ok(())
 }
 
 #[test]
 fn div_precedence() -> anyhow::Result<()> {
-    assert_eq!(run_test("fn test() -> i32 { return 48 + 20 / 2 }")?, 58);
+    assert_eq!(exec("fn main() -> i32 { return 48 + 20 / 2 }")?, 58);
 
     Ok(())
 }
@@ -85,7 +90,7 @@ fn div_precedence() -> anyhow::Result<()> {
 #[test]
 fn four_arithmetic_precedence() -> anyhow::Result<()> {
     assert_eq!(
-        run_test("fn test() -> i32 { return (48 -10/ 2) + 58 * 2 }")?,
+        exec("fn main() -> i32 { return (48 -10/ 2) + 58 * 2 }")?,
         159
     );
 
@@ -94,7 +99,7 @@ fn four_arithmetic_precedence() -> anyhow::Result<()> {
 
 #[test]
 fn unary_plus_and_minus() -> anyhow::Result<()> {
-    assert_eq!(run_test("fn test() -> i32 { return +(-(-58)) }")?, 58);
+    assert_eq!(exec("fn main() -> i32 { return +(-(-58)) }")?, 58);
 
     Ok(())
 }
@@ -104,22 +109,19 @@ fn empty_function() -> anyhow::Result<()> {
     let program = r"fn f() {
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         f()
         return 58
     }";
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
 
 #[test]
 fn return_() -> anyhow::Result<()> {
-    assert_eq!(
-        run_test("fn test() -> i32 { return (48*2 +10 * 2) / 2}")?,
-        58
-    );
+    assert_eq!(exec("fn main() -> i32 { return (48*2 +10 * 2) / 2}")?, 58);
 
     Ok(())
 }
@@ -130,12 +132,12 @@ fn empty_return() -> anyhow::Result<()> {
         return
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         f()
         return 58
     }";
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
@@ -143,37 +145,37 @@ fn empty_return() -> anyhow::Result<()> {
 #[test]
 fn let_statement() -> anyhow::Result<()> {
     // Type inference
-    let program = r"fn test() -> i32 {
+    let program = r"fn main() -> i32 {
         let yoha = 48
         let io = 10
         return yoha + io
     }";
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     // Mutable, Type inference
-    let program = r"fn test() -> i32 {
+    let program = r"fn main() -> i32 {
         let mut yohaio = 58
         return yohaio
     }";
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     // Specified type
-    let program = r"fn test() -> i32 {
+    let program = r"fn main() -> i32 {
         let yohaio: i32 = 58
         return yohaio
     }";
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     // Mutable, Specified type
-    let program = r"fn test() -> i32 {
+    let program = r"fn main() -> i32 {
         let mut yohaio: i32 = 58
         return yohaio
     }";
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
@@ -188,11 +190,11 @@ fn call_function() -> anyhow::Result<()> {
         return 10
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         return f1() + f2()
     }";
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
@@ -203,11 +205,11 @@ fn function_parameters() -> anyhow::Result<()> {
         return n
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         return 58
     }";
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
@@ -218,11 +220,11 @@ fn function_call_with_one_argument() -> anyhow::Result<()> {
         return n
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         return f(58)
     }";
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
@@ -233,18 +235,18 @@ fn function_call_with_multi_args() -> anyhow::Result<()> {
         return x + y
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         return f(48, 10)
     }";
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
 
 #[test]
 fn simple_if() -> anyhow::Result<()> {
-    let program = r"fn test() -> i32 {
+    let program = r"fn main() -> i32 {
         if 58 == 58 {
             return 58
         }
@@ -252,14 +254,14 @@ fn simple_if() -> anyhow::Result<()> {
         return 123
     }";
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
 
 #[test]
 fn if_else() -> anyhow::Result<()> {
-    let program = r"fn test() -> i32 {
+    let program = r"fn main() -> i32 {
         if 48 == 10 {
             return 48
         } else if
@@ -273,14 +275,14 @@ fn if_else() -> anyhow::Result<()> {
         return 123
     }";
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
 
 #[test]
 fn equality_operation() -> anyhow::Result<()> {
-    let program = r"fn test() -> i32 {
+    let program = r"fn main() -> i32 {
         if 4810 == 4810 {
             return 58
         }
@@ -288,14 +290,14 @@ fn equality_operation() -> anyhow::Result<()> {
         return 123
     }";
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
 
 #[test]
 fn loop_() -> anyhow::Result<()> {
-    let program = r"fn test() -> i32 {
+    let program = r"fn main() -> i32 {
         let mut n = 0
 
         loop {
@@ -309,14 +311,14 @@ fn loop_() -> anyhow::Result<()> {
         return n
     }";
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
 
 #[test]
 fn break_() -> anyhow::Result<()> {
-    let program = r"fn test() -> i32 {
+    let program = r"fn main() -> i32 {
         loop {
             break
         }
@@ -324,26 +326,26 @@ fn break_() -> anyhow::Result<()> {
         return 58
     }";
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
 
 #[test]
 fn break_outside_of_loop() {
-    let program = r"fn test() -> i32 {
+    let program = r"fn main() -> i32 {
         break
     }";
 
     assert!(matches!(
-        run_test(program),
+        exec(program),
         Err(CodegenError::BreakOutsideOfLoop { .. })
     ));
 }
 
 #[test]
 fn simple_assignment() -> anyhow::Result<()> {
-    let program = r"fn test() -> i32 {
+    let program = r"fn main() -> i32 {
         let mut n = 0
 
         n = 58
@@ -351,35 +353,35 @@ fn simple_assignment() -> anyhow::Result<()> {
         return n
     }";
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
 
 #[test]
 fn assign_to_immutable() {
-    let program = r"fn test() -> i32 {
+    let program = r"fn main() -> i32 {
         let n = 58
         n = 4810
         return n
     }";
 
     assert!(matches!(
-        run_test(program),
+        exec(program),
         Err(CodegenError::CannotAssignTwiceToImutable { .. })
     ));
 }
 
 #[test]
 fn string_literal() -> anyhow::Result<()> {
-    let program = r#"fn test() -> i32 {
+    let program = r#"fn main() -> i32 {
         let s1 = "yohaio"
         let s2 = "よはいお"
 
         return 58
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
@@ -390,12 +392,12 @@ fn string_type() -> anyhow::Result<()> {
         return s
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         let s: str = f("Yohaio")
         return 58
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
@@ -409,11 +411,11 @@ fn define_struct() -> anyhow::Result<()> {
 
     struct B { a: i32, b: bool }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         return 58
     }";
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
@@ -427,19 +429,19 @@ fn struct_field_access() -> anyhow::Result<()> {
         is_female: bool,
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         let person = Person { is_male: false, stature: 48, age: 10, is_female: true }
         return person.age + person.stature
     }";
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
 
 #[test]
 fn true_() -> anyhow::Result<()> {
-    let program = r"fn test() -> i32 {
+    let program = r"fn main() -> i32 {
         let b = true
 
         if b {
@@ -449,14 +451,14 @@ fn true_() -> anyhow::Result<()> {
         return 123
     }";
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
 
 #[test]
 fn false_() -> anyhow::Result<()> {
-    let program = r"fn test() -> i32 {
+    let program = r"fn main() -> i32 {
         let b = false
 
         if b {
@@ -466,26 +468,26 @@ fn false_() -> anyhow::Result<()> {
         return 58
     }";
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
 
 #[test]
 fn has_no_fields() {
-    let program = r"fn test() -> i32 {
+    let program = r"fn main() -> i32 {
         4810.shino
     }";
 
     assert!(matches!(
-        run_test(program),
+        exec(program),
         Err(CodegenError::HasNoFields { .. })
     ));
 }
 
 #[test]
 fn less_than() -> anyhow::Result<()> {
-    let program = r"fn test() -> i32 {
+    let program = r"fn main() -> i32 {
         if 48 < 48 {
             return 123
         } else if 48 < 10 {
@@ -497,14 +499,14 @@ fn less_than() -> anyhow::Result<()> {
         return 125
     }";
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
 
 #[test]
 fn greater_than() -> anyhow::Result<()> {
-    let program = r"fn test() -> i32 {
+    let program = r"fn main() -> i32 {
         if 10 > 10 {
             return 123
         } else if 10 > 48 {
@@ -516,14 +518,14 @@ fn greater_than() -> anyhow::Result<()> {
         return 125
     }";
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
 
 #[test]
 fn less_than_or_equal() -> anyhow::Result<()> {
-    let program = r"fn test() -> i32 {
+    let program = r"fn main() -> i32 {
         if 48 <= 48 {
             return 58
         } else {
@@ -533,14 +535,14 @@ fn less_than_or_equal() -> anyhow::Result<()> {
         return 86
     }";
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
 
 #[test]
 fn greater_than_or_equal() -> anyhow::Result<()> {
-    let program = r"fn test() -> i32 {
+    let program = r"fn main() -> i32 {
         if 10 >= 10 {
             return 58
         } else {
@@ -550,14 +552,14 @@ fn greater_than_or_equal() -> anyhow::Result<()> {
         return 86
     }";
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
 
 #[test]
 fn not_equal_to() -> anyhow::Result<()> {
-    let program = r"fn test() -> i32 {
+    let program = r"fn main() -> i32 {
         if 48 != 48 {
             return 123
         } else if 48 != 10 {
@@ -567,7 +569,7 @@ fn not_equal_to() -> anyhow::Result<()> {
         return 124
     }";
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
@@ -578,7 +580,7 @@ fn logical_not() -> anyhow::Result<()> {
         return !fl
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         if !(48 != 10) {
             return 123
         }
@@ -592,25 +594,25 @@ fn logical_not() -> anyhow::Result<()> {
         return 124
     }";
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
 
 #[test]
 fn remainder() -> anyhow::Result<()> {
-    let program = r"fn test() -> i32 {
+    let program = r"fn main() -> i32 {
         return 123 % 7
     }";
 
-    assert_eq!(run_test(program)?, 4);
+    assert_eq!(exec(program)?, 4);
 
     Ok(())
 }
 
 #[test]
 fn logical_or() -> anyhow::Result<()> {
-    let program = r"fn test() -> i32 {
+    let program = r"fn main() -> i32 {
         if false || false {
             return 123
         }
@@ -626,14 +628,14 @@ fn logical_or() -> anyhow::Result<()> {
         return 124
     }";
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
 
 #[test]
 fn logical_and() -> anyhow::Result<()> {
-    let program = r"fn test() -> i32 {
+    let program = r"fn main() -> i32 {
         if false && true {
             return 123
         }
@@ -651,44 +653,44 @@ fn logical_and() -> anyhow::Result<()> {
         return 126
     }";
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
 
 #[test]
 fn array_literal() -> anyhow::Result<()> {
-    let program = r"fn test() -> i32 {
+    let program = r"fn main() -> i32 {
         let a = [48, 10]
         return 58
     }";
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
 
 #[test]
 fn array_indexing() -> anyhow::Result<()> {
-    let program = r"fn test() -> i32 {
+    let program = r"fn main() -> i32 {
         let a = [48, 10]
         return a[0] + [4][0] + a[1]
     }";
 
-    assert_eq!(run_test(program)?, 62);
+    assert_eq!(exec(program)?, 62);
 
     Ok(())
 }
 
 #[test]
 fn array_type() -> anyhow::Result<()> {
-    let program = r"fn test() -> i32 {
+    let program = r"fn main() -> i32 {
         let a: [i32; 2] = [48, 10]
         let n: [i32; 1] = [4]
         return a[0] + a[1] + n[0]
     }";
 
-    assert_eq!(run_test(program)?, 62);
+    assert_eq!(exec(program)?, 62);
 
     Ok(())
 }
@@ -699,13 +701,13 @@ fn array_as_argument() -> anyhow::Result<()> {
         return a[0] + a[1]
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         let a = [48, 10]
 
         return add(a)
     }";
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
@@ -721,7 +723,7 @@ fn array_as_mutable_argument() -> anyhow::Result<()> {
         return a[0] + a[1]
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         let mut a = [12, 34]
 
         modify(a)
@@ -729,7 +731,7 @@ fn array_as_mutable_argument() -> anyhow::Result<()> {
         return add(a)
     }";
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
@@ -745,7 +747,7 @@ fn immutable_array_as_mutable_argument() {
         return a[0] + a[1]
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         let a = [123, 124]
 
         // ERROR!
@@ -755,14 +757,14 @@ fn immutable_array_as_mutable_argument() {
     }";
 
     assert!(matches!(
-        run_test(program),
+        exec(program),
         Err(CodegenError::CannotAssignImmutableToMutable { .. })
     ));
 }
 
 #[test]
 fn assign_to_array_elements() -> anyhow::Result<()> {
-    let program = r"fn test() -> i32 {
+    let program = r"fn main() -> i32 {
         let mut a = [123]
 
         a[0] = 58
@@ -770,14 +772,14 @@ fn assign_to_array_elements() -> anyhow::Result<()> {
         return a[0]
     }";
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
 
 #[test]
 fn tuple_indexing() -> anyhow::Result<()> {
-    let program = r#"fn test() -> i32 {
+    let program = r#"fn main() -> i32 {
         let tup = (58, true, "hello")
 
         if tup.1 {
@@ -787,14 +789,14 @@ fn tuple_indexing() -> anyhow::Result<()> {
         return 123
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
 
 #[test]
 fn tuple_unpacking() -> anyhow::Result<()> {
-    let program = r#"fn test() -> i32 {
+    let program = r#"fn main() -> i32 {
         let tup = (48, true, "hello", 10)
 
         let (n1, f, _, n2) = tup
@@ -806,9 +808,9 @@ fn tuple_unpacking() -> anyhow::Result<()> {
         return 123
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
-    let program = r#"fn test() -> i32 {
+    let program = r#"fn main() -> i32 {
         let (n1, f, _, n2) = (48, true, "hello", 10)
 
         if f {
@@ -818,7 +820,7 @@ fn tuple_unpacking() -> anyhow::Result<()> {
         return 123
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
@@ -843,13 +845,13 @@ fn tuple_as_argument() -> anyhow::Result<()> {
         return 124
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         let tup = (58, true)
 
         return tup1(tup) + tup2(tup)
     }";
 
-    assert_eq!(run_test(program)?, 116);
+    assert_eq!(exec(program)?, 116);
 
     Ok(())
 }
@@ -861,7 +863,7 @@ fn tuple_as_mutable_argument() -> anyhow::Result<()> {
         tup.1 = true
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         let mut tup = (123, false)
 
         modify(tup)
@@ -873,27 +875,27 @@ fn tuple_as_mutable_argument() -> anyhow::Result<()> {
         return 123
     }";
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
 
 #[test]
 fn tuples_require_access_by_index() {
-    let program = r"fn test() -> i32 {
+    let program = r"fn main() -> i32 {
         let tup = (58, true)
         tup.llvm
     }";
 
     assert!(matches!(
-        run_test(program),
+        exec(program),
         Err(CodegenError::TupleRequireAccessByIndex { .. })
     ));
 }
 
 #[test]
 fn tuple_in_tuple() -> anyhow::Result<()> {
-    let program = r"fn test() -> i32 {
+    let program = r"fn main() -> i32 {
         let mut tuptup = ((48, true), (0, true))
 
         let mut io = tuptup.1
@@ -902,7 +904,7 @@ fn tuple_in_tuple() -> anyhow::Result<()> {
         return tuptup.0.0 + tuptup.1.0
     }";
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
@@ -916,13 +918,13 @@ fn assign_to_struct_field() -> anyhow::Result<()> {
         is_female: bool,
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         let mut person = Person { is_male: false, stature: 48, age: 0, is_female: true }
         person.age = 10
         return person.age + person.stature
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
@@ -936,21 +938,21 @@ fn assign_to_immutable_struct_field() {
         is_female: bool,
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         let person = Person { is_male: false, stature: 48, age: 0, is_female: true }
         person.age = 10
         return person.age + person.stature
     }"#;
 
     assert!(matches!(
-        run_test(program),
+        exec(program),
         Err(CodegenError::CannotAssignTwiceToImutable { .. })
     ));
 }
 
 #[test]
 fn assign_to_tuple_field() -> anyhow::Result<()> {
-    let program = r#"fn test() -> i32 {
+    let program = r#"fn main() -> i32 {
         let mut t = (58, false)
         t.1 = true
 
@@ -961,14 +963,14 @@ fn assign_to_tuple_field() -> anyhow::Result<()> {
         return 123
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
 
 #[test]
 fn assign_to_immutable_tuple_field() {
-    let program = r#"fn test() -> i32 {
+    let program = r#"fn main() -> i32 {
         let t = (58, false)
         t.1 = true
 
@@ -980,7 +982,7 @@ fn assign_to_immutable_tuple_field() {
     }"#;
 
     assert!(matches!(
-        run_test(program),
+        exec(program),
         Err(CodegenError::CannotAssignTwiceToImutable { .. })
     ));
 }
@@ -993,7 +995,7 @@ fn comments() -> anyhow::Result<()> {
     hello, world
     world, hello
      */
-    fn test() -> i32 {
+    fn main() -> i32 {
         // hello, world
         /* hello, world */
         /*
@@ -1008,14 +1010,14 @@ fn comments() -> anyhow::Result<()> {
         // hello, world
     }";
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
 
 #[test]
 fn if_expr_to_initializers_1() -> anyhow::Result<()> {
-    let program = r#"fn test() -> i32 {
+    let program = r#"fn main() -> i32 {
         let x = if true {
             58
         } else {
@@ -1025,14 +1027,14 @@ fn if_expr_to_initializers_1() -> anyhow::Result<()> {
         return x
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
 
 #[test]
 fn if_expr_to_initializers_2() -> anyhow::Result<()> {
-    let program = r#"fn test() -> i32 {
+    let program = r#"fn main() -> i32 {
         let x = if true {
             58
         } else {
@@ -1042,14 +1044,14 @@ fn if_expr_to_initializers_2() -> anyhow::Result<()> {
         return x
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
 
 #[test]
 fn if_expr_to_initializers_3() -> anyhow::Result<()> {
-    let program = r#"fn test() -> i32 {
+    let program = r#"fn main() -> i32 {
         let x = if false {
             123
         } else {
@@ -1059,14 +1061,14 @@ fn if_expr_to_initializers_3() -> anyhow::Result<()> {
         return x
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
 
 #[test]
 fn if_expr_to_initializers_4() -> anyhow::Result<()> {
-    let program = r#"fn test() -> i32 {
+    let program = r#"fn main() -> i32 {
         let n = 4810
 
         let x = if false {
@@ -1080,14 +1082,14 @@ fn if_expr_to_initializers_4() -> anyhow::Result<()> {
         return x
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
 
 #[test]
 fn if_expr_in_return_1() -> anyhow::Result<()> {
-    let program = r#"fn test() -> i32 {
+    let program = r#"fn main() -> i32 {
         return if true {
             58
         } else {
@@ -1095,14 +1097,14 @@ fn if_expr_in_return_1() -> anyhow::Result<()> {
         }
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
 
 #[test]
 fn if_expr_in_return_2() -> anyhow::Result<()> {
-    let program = r#"fn test() -> i32 {
+    let program = r#"fn main() -> i32 {
         return if false {
             123
         } else {
@@ -1110,14 +1112,14 @@ fn if_expr_in_return_2() -> anyhow::Result<()> {
         }
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
 
 #[test]
 fn if_expr_in_return_3() -> anyhow::Result<()> {
-    let program = r#"fn test() -> i32 {
+    let program = r#"fn main() -> i32 {
         return 122 + if true {
             return 58
         } else {
@@ -1125,14 +1127,14 @@ fn if_expr_in_return_3() -> anyhow::Result<()> {
         }
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
 
 #[test]
 fn nested_if_expr_1() -> anyhow::Result<()> {
-    let program = r#"fn test() -> i32 {
+    let program = r#"fn main() -> i32 {
         let n = 4810
 
         let x = if n == 4810 {
@@ -1152,14 +1154,14 @@ fn nested_if_expr_1() -> anyhow::Result<()> {
         return x
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
 
 #[test]
 fn nested_if_expr_2() -> anyhow::Result<()> {
-    let program = r#"fn test() -> i32 {
+    let program = r#"fn main() -> i32 {
         let n = 4810
 
         let x = if false {
@@ -1179,7 +1181,7 @@ fn nested_if_expr_2() -> anyhow::Result<()> {
         return x
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
@@ -1193,7 +1195,7 @@ fn copy_struct() -> anyhow::Result<()> {
         is_female: bool,
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         let mut p1 = Person {
             is_male: false,
             stature: 48,
@@ -1208,14 +1210,14 @@ fn copy_struct() -> anyhow::Result<()> {
         return p1.age + p1.stature
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
 
 #[test]
 fn copy_array() -> anyhow::Result<()> {
-    let program = r#"fn test() -> i32 {
+    let program = r#"fn main() -> i32 {
         let mut ar = [128, 256, 512]
 
         let mut arr = ar
@@ -1225,14 +1227,14 @@ fn copy_array() -> anyhow::Result<()> {
         return ar[0]
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
 
 #[test]
 fn copy_tuple() -> anyhow::Result<()> {
-    let program = r#"fn test() -> i32 {
+    let program = r#"fn main() -> i32 {
         let mut tup = (false, 123)
 
         let mut tupp = tup
@@ -1247,7 +1249,7 @@ fn copy_tuple() -> anyhow::Result<()> {
         return 123
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
@@ -1265,7 +1267,7 @@ fn struct_as_mutable_argument() -> anyhow::Result<()> {
         p.age = 10
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         let mut p1 = Person {
             is_male: false,
             stature: 48,
@@ -1278,7 +1280,7 @@ fn struct_as_mutable_argument() -> anyhow::Result<()> {
         return p1.age + p1.stature
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
@@ -1293,7 +1295,7 @@ fn struct_in_struct() -> anyhow::Result<()> {
         age: Age,
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         let mut p = Person {
             age: Age { n: 0 },
         }
@@ -1304,14 +1306,14 @@ fn struct_in_struct() -> anyhow::Result<()> {
         return p.age.n
     }";
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
 
 #[test]
 fn copy_scalar_type_data() -> anyhow::Result<()> {
-    let program = r#"fn test() -> i32 {
+    let program = r#"fn main() -> i32 {
         let n = 58
 
         let mut m = n
@@ -1320,7 +1322,7 @@ fn copy_scalar_type_data() -> anyhow::Result<()> {
         return n
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
@@ -1328,7 +1330,7 @@ fn copy_scalar_type_data() -> anyhow::Result<()> {
 #[test]
 fn assign_to_immutable_to_mutable() {
     // Array
-    let program = r#"fn test() -> i32 {
+    let program = r#"fn main() -> i32 {
         let ar = [128, 256, 512]
 
         let mut arr = ar
@@ -1337,12 +1339,12 @@ fn assign_to_immutable_to_mutable() {
     }"#;
 
     assert!(matches!(
-        run_test(program),
+        exec(program),
         Err(CodegenError::CannotAssignImmutableToMutable { .. })
     ));
 
     // Tuple
-    let program = r#"fn test() -> i32 {
+    let program = r#"fn main() -> i32 {
         let tup = (58, true)
 
         let mut t = tup
@@ -1351,7 +1353,7 @@ fn assign_to_immutable_to_mutable() {
     }"#;
 
     assert!(matches!(
-        run_test(program),
+        exec(program),
         Err(CodegenError::CannotAssignImmutableToMutable { .. })
     ));
 
@@ -1360,7 +1362,7 @@ fn assign_to_immutable_to_mutable() {
         n: i32,
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         let n = Number { n: 58 }
 
         let mut m = n
@@ -1369,7 +1371,7 @@ fn assign_to_immutable_to_mutable() {
     }"#;
 
     assert!(matches!(
-        run_test(program),
+        exec(program),
         Err(CodegenError::CannotAssignImmutableToMutable { .. })
     ));
 }
@@ -1384,13 +1386,13 @@ fn return_struct() -> anyhow::Result<()> {
         return Person { age: 58 }
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         let s = f()
 
         return s.age
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
@@ -1401,7 +1403,7 @@ fn return_tuple() -> anyhow::Result<()> {
         return (58, true)
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         let t = f()
 
         if t.1 {
@@ -1411,7 +1413,7 @@ fn return_tuple() -> anyhow::Result<()> {
         return 123
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
@@ -1422,13 +1424,13 @@ fn return_array() -> anyhow::Result<()> {
         return [48, 10]
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         let ar = f()
 
         return ar[0] + ar[1]
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
@@ -1443,7 +1445,7 @@ fn if_in_loop() -> anyhow::Result<()> {
         return p.age
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         let mut p = Person { age: 0 }
 
         loop {
@@ -1457,7 +1459,7 @@ fn if_in_loop() -> anyhow::Result<()> {
         return get_age(p)
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
@@ -1474,7 +1476,7 @@ fn simple_method() -> anyhow::Result<()> {
         }
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         let mut p = Person { age: 123 }
 
         p.age = 58
@@ -1482,7 +1484,7 @@ fn simple_method() -> anyhow::Result<()> {
         return p.get_age()
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
@@ -1503,7 +1505,7 @@ fn mutable_method() -> anyhow::Result<()> {
         }
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         let mut p = Person { age: 123 }
 
         p.change_age_to(58)
@@ -1511,7 +1513,7 @@ fn mutable_method() -> anyhow::Result<()> {
         return p.get_age()
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
@@ -1532,7 +1534,7 @@ fn call_mutable_methods_from_immutable() {
         }
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         let p = Person { age: 123 }
 
         p.change_age_to(58)
@@ -1541,7 +1543,7 @@ fn call_mutable_methods_from_immutable() {
     }"#;
 
     assert!(matches!(
-        run_test(program),
+        exec(program),
         Err(CodegenError::CannotAssignImmutableToMutable { .. })
     ));
 }
@@ -1562,7 +1564,7 @@ fn modify_fields_in_immutable_methods() {
         }
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         let mut p = Person { age: 123 }
 
         p.change_age_to(58)
@@ -1571,7 +1573,7 @@ fn modify_fields_in_immutable_methods() {
     }"#;
 
     assert!(matches!(
-        run_test(program),
+        exec(program),
         Err(CodegenError::CannotAssignTwiceToImutable { .. })
     ));
 }
@@ -1584,7 +1586,7 @@ fn create_simple_enum() -> anyhow::Result<()> {
         C,
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         let a = Simple::A
         let b = Simple::B
         let c = Simple::C
@@ -1592,7 +1594,7 @@ fn create_simple_enum() -> anyhow::Result<()> {
         return 58
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
@@ -1609,13 +1611,13 @@ fn create_tagged_enum() -> anyhow::Result<()> {
         B(Fruits),
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         let e1 = E::A
         let e2 = E::B(Fruits { apple: 48, ichigo: 10 })
         return 58
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
@@ -1638,7 +1640,7 @@ fn match_stmt_simple_enum() -> anyhow::Result<()> {
         return 124
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         let e = E::A
 
         match e {
@@ -1649,7 +1651,7 @@ fn match_stmt_simple_enum() -> anyhow::Result<()> {
         return 126
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
@@ -1661,7 +1663,7 @@ fn match_simple_enum() -> anyhow::Result<()> {
         B,
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         let e = E::A
 
         return match e {
@@ -1670,7 +1672,7 @@ fn match_simple_enum() -> anyhow::Result<()> {
         }
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
@@ -1687,7 +1689,7 @@ fn match_tagged_enum() -> anyhow::Result<()> {
         B(Fruits),
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         let e = E::B(Fruits { apple: 48, ichigo: 10 })
 
         return match e {
@@ -1696,7 +1698,7 @@ fn match_tagged_enum() -> anyhow::Result<()> {
         }
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
@@ -1713,7 +1715,7 @@ fn match_enum_discard_value() -> anyhow::Result<()> {
         B(Fruits),
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         let e = E::B(Fruits { apple: 48, ichigo: 10 })
 
         return match e {
@@ -1722,7 +1724,7 @@ fn match_enum_discard_value() -> anyhow::Result<()> {
         }
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
@@ -1739,7 +1741,7 @@ fn match_enum_wildcard() -> anyhow::Result<()> {
         B(Fruits),
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         let e = E::B(Fruits { apple: 48, ichigo: 10 })
 
         return match e {
@@ -1748,7 +1750,7 @@ fn match_enum_wildcard() -> anyhow::Result<()> {
         }
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
@@ -1761,7 +1763,7 @@ fn non_exhaustive_patterns() {
         C,
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         let e = E::A
 
         return match e {
@@ -1772,7 +1774,7 @@ fn non_exhaustive_patterns() {
     }"#;
 
     assert!(matches!(
-        run_test(program),
+        exec(program),
         Err(CodegenError::NonExhaustivePatterns { .. })
     ));
 }
@@ -1784,7 +1786,7 @@ fn unreachable_pattern() {
         B,
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         let e = E::A
 
         return match e {
@@ -1795,7 +1797,7 @@ fn unreachable_pattern() {
     }"#;
 
     assert!(matches!(
-        run_test(program),
+        exec(program),
         Err(CodegenError::UnreachablePattern { .. })
     ));
 }
@@ -1816,11 +1818,11 @@ fn simple_enum_as_argument() -> anyhow::Result<()> {
         }
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         return f(E::C)
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
@@ -1844,13 +1846,13 @@ fn tagged_enum_as_argument() -> anyhow::Result<()> {
         }
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         let e1 = E::A
         let e2 = E::B(Fruits { apple: 48, ichigo: 10 })
         return sum_fruits(e1) - sum_fruits(e2)
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
@@ -1861,11 +1863,11 @@ fn simple_generics() -> anyhow::Result<()> {
         return n + 10
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         return add_10<i32>(48)
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
@@ -1876,11 +1878,11 @@ fn multiple_generic_parameters() -> anyhow::Result<()> {
         return n1 + n2
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         return add<i32, i32, i32>(48, 10)
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
@@ -1895,12 +1897,12 @@ fn struct_as_generic_argument() -> anyhow::Result<()> {
         return o.n
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         let s = Sample { n: 58 }
         return get_n<Sample>(s)
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
@@ -1911,12 +1913,12 @@ fn tuple_as_generic_argument() -> anyhow::Result<()> {
         return t.2
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         let tup = (48, 10, 58)
         return get_third<(i32, i32, i32)>(tup)
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }
@@ -1927,12 +1929,12 @@ fn array_as_generic_argument() -> anyhow::Result<()> {
         return a[2]
     }
 
-    fn test() -> i32 {
+    fn main() -> i32 {
         let a = [48, 10, 58]
         return get_third<[i32; 3]>(a)
     }"#;
 
-    assert_eq!(run_test(program)?, 58);
+    assert_eq!(exec(program)?, 58);
 
     Ok(())
 }

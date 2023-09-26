@@ -51,7 +51,7 @@ pub fn codegen<'ctx>(
 ) -> CodegenResult<()> {
     let mut cucx = CompileUnitContext::new(ctx, module, file_path)?;
 
-    cucx.init_gc();
+    cucx.gc_init();
 
     cucx.codegen(cu.top_levels, opt_level)?;
 
@@ -210,9 +210,8 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
         fn_value
     }
 
-    // Initialize garbage collector
-    fn init_gc(&mut self) {
-        // Init GC_malloc (boehm-gc)
+    fn gc_init(&mut self) {
+        // Declare GC_malloc in boehm-gc
         let return_ty = Ty {
             kind: TyKind::Reference(RefrenceType {
                 refee_ty: Ty {
@@ -228,6 +227,7 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
             mutability: Mutability::Mut,
         }
         .into();
+
         let param_types = vec![Ty {
             kind: TyKind::Fundamental(FundamentalType {
                 kind: FundamentalTypeKind::U64,
@@ -236,6 +236,7 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
             mutability: Mutability::Not,
         }
         .into()];
+
         self.decl_fn("GC_malloc", param_types, ReturnType::Type(return_ty), None);
     }
 
@@ -337,6 +338,30 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
         })
     }
 
+    fn build_main_fn(&mut self) -> CodegenResult<()> {
+        let main_internal = match self.module.get_function("kdmain") {
+            Some(fn_v) => fn_v,
+            None => return Err(CodegenError::MainNotFound),
+        };
+
+        let main =
+            self.module
+                .add_function("main", self.context().i32_type().fn_type(&[], false), None);
+        self.builder
+            .position_at_end(self.context().append_basic_block(main, "entry"));
+
+        let exit_status = self
+            .builder
+            .build_call(main_internal, &[], "")
+            .try_as_basic_value()
+            .left()
+            .unwrap();
+
+        self.builder.build_return(Some(&exit_status));
+
+        Ok(())
+    }
+
     fn codegen(
         &mut self,
         top_levels: Vec<TopLevel>,
@@ -345,6 +370,8 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
         for top in top_levels {
             build_top_level(self, top)?;
         }
+
+        self.build_main_fn()?;
 
         self.verify_module()?;
 
