@@ -45,6 +45,7 @@ jobs:
 
       - name: Save llvm
         id: cache-llvm-save
+        if: steps.cache-llvm-restore.outputs.cache-hit == 'false'
         uses: actions/cache/save@v3
         with:
           path: |
@@ -53,13 +54,14 @@ jobs:
 
       - name: Install rust
         uses: dtolnay/rust-toolchain@stable
-        if: steps.cache-rust-restore.outputs.cache-hit != 'true'
+        if: steps.cache-rust-restore.outputs.cache-hit == 'false'
         with:
           toolchain: stable
           components: rustfmt, clippy
 
       - name: Save rust
         id: cache-rust-save
+        if: steps.cache-rust-restore.outputs.cache-hit == 'false'
         uses: actions/cache/save@v3
         with:
           path: |
