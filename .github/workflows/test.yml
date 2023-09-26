@@ -77,5 +77,5 @@ jobs:
         run: cargo clippy -- -D warnings
 
       - name: Run test
-        # More test threads may cause errors (unknown cause) (GC related)
-        run: cargo test --release --all-features -- --test-threads=1
+        # Execute in single thread because errors occur in parallel
+        run: cargo test --release --all-features --no-fail-fast -- --test-threads=1
