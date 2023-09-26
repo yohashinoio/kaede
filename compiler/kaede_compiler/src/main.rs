@@ -30,6 +30,9 @@ struct Args {
     )]
     program: Option<String>,
 
+    #[arg(short = 'o')]
+    output: Option<PathBuf>,
+
     #[arg(short = 'O', default_value_t = 2, help = "optimization level (0-3)")]
     opt_level: u8,
 }
@@ -83,11 +86,11 @@ fn emit_object_file_to_tempfile(ir_path: &Path) -> anyhow::Result<TempPath> {
 }
 
 // Use `cc`
-fn emit_exe_file(obj_path: &Path, output: &Path) -> anyhow::Result<()> {
+fn emit_exe_file(obj_path: &Path, output_file_path: &Path) -> anyhow::Result<()> {
     let status = Command::new("cc")
         .args([
             "-o",
-            output.to_str().unwrap(),
+            output_file_path.to_str().unwrap(),
             obj_path.to_str().unwrap(),
             "-lgc", // Link bdwgc
         ])
@@ -104,6 +107,7 @@ fn compile(
     unit_infos: Vec<CompileUnitInfo>,
     opt_level: OptimizationLevel,
     display_llvm_ir: bool,
+    output_file_path: &Path,
 ) -> anyhow::Result<()> {
     let context = Context::create();
 
@@ -144,7 +148,7 @@ fn compile(
 
         let obj_path = emit_object_file_to_tempfile(&ir_path)?;
 
-        emit_exe_file(&obj_path, Path::new("a.out"))?;
+        emit_exe_file(&obj_path, output_file_path)?;
     }
 
     Ok(())
@@ -159,6 +163,8 @@ fn main() -> anyhow::Result<()> {
 
     let display_llvmir = args.display_llvm_ir;
 
+    let output_file_path = &args.output.unwrap_or(PathBuf::from("a.out"));
+
     if let Some(program) = args.program {
         compile(
             vec![CompileUnitInfo {
@@ -167,6 +173,7 @@ fn main() -> anyhow::Result<()> {
             }],
             opt_level,
             display_llvmir,
+            output_file_path,
         )?;
 
         return Ok(());
@@ -188,7 +195,7 @@ fn main() -> anyhow::Result<()> {
         });
     }
 
-    compile(programs, opt_level, display_llvmir)?;
+    compile(programs, opt_level, display_llvmir, output_file_path)?;
 
     Ok(())
 }
