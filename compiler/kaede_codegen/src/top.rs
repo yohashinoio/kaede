@@ -205,7 +205,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
             .parent()
             .unwrap()
             .join(import_module_name)
-            .with_extension("kae");
+            .with_extension("kd");
 
         if !path.exists() {
             return Err(CodegenError::FileNotFoundForModule {

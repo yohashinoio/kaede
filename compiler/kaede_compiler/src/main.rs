@@ -9,7 +9,7 @@ use std::{
 use anyhow::{anyhow, Context as _};
 use clap::Parser;
 use inkwell::{context::Context, module::Module, OptimizationLevel};
-use kaede_codegen::{codegen, CodegenContext};
+use kaede_codegen::{codegen, error::CodegenError, CodegenContext};
 use kaede_lex::lex;
 use kaede_parse::parse;
 use tempfile::{NamedTempFile, TempPath};
@@ -136,6 +136,10 @@ fn compile(
         module
             .link_in_module(other_module)
             .map_err(|e| anyhow!(e.to_string()))?;
+    }
+
+    if module.get_function("main").is_none() {
+        return Err(CodegenError::MainNotFound.into());
     }
 
     // Emit

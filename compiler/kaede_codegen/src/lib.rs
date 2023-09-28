@@ -17,7 +17,7 @@ use kaede_type::{FundamentalType, FundamentalTypeKind, Mutability, RefrenceType,
 use tcx::{ReturnType, TypeContext};
 use top::build_top_level;
 
-mod error;
+pub mod error;
 mod expr;
 mod mangle;
 mod stmt;
@@ -338,10 +338,11 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
         })
     }
 
-    fn build_main_fn(&mut self) -> CodegenResult<()> {
+    /// If there was no user-defined main in the module, do nothing
+    fn build_main_fn(&mut self) {
         let main_internal = match self.module.get_function("kdmain") {
             Some(fn_v) => fn_v,
-            None => return Err(CodegenError::MainNotFound),
+            None => return,
         };
 
         let main =
@@ -358,8 +359,6 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
             .unwrap();
 
         self.builder.build_return(Some(&exit_status));
-
-        Ok(())
     }
 
     fn codegen(
@@ -371,7 +370,7 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
             build_top_level(self, top)?;
         }
 
-        self.build_main_fn()?;
+        self.build_main_fn();
 
         self.verify_module()?;
 
