@@ -1938,3 +1938,65 @@ fn array_as_generic_argument() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn block() -> anyhow::Result<()> {
+    let program = r#"fn f() -> i32 {
+        return 58
+    }
+    fn main() -> i32 {
+        let n = {
+            let a = 48
+            let b = 10
+
+            if f() != (a + b) {
+                return 123
+            }
+
+            a + b
+        }
+
+        return n
+    }"#;
+
+    assert_eq!(exec(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn match_number() -> anyhow::Result<()> {
+    let program = r#"fn main() -> i32 {
+        let n = 58
+
+        return match n {
+            48 => 10,
+            10 => 48,
+            58 => 48 + 10,
+            _ => 123,
+        }
+    }"#;
+
+    assert_eq!(exec(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn match_with_block() -> anyhow::Result<()> {
+    let program = r#"fn main() -> i32 {
+        let n = 58
+
+        return match n {
+            58 => {
+                let mut a = 29
+                a
+            }
+            _ => 123,
+        }
+    }"#;
+
+    assert_eq!(exec(program)?, 58);
+
+    Ok(())
+}
