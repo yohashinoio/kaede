@@ -195,7 +195,7 @@ pub struct MatchArm {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct MatchArms {
-    arms: Vec<MatchArm>,
+    pub arms: Vec<MatchArm>,
 }
 
 impl MatchArms {
@@ -209,6 +209,14 @@ impl MatchArms {
 
     pub fn at(&self, idx: usize) -> &MatchArm {
         &self.arms[idx]
+    }
+
+    pub fn len(&self) -> usize {
+        self.arms.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     pub fn has_wildcard(&self) -> bool {

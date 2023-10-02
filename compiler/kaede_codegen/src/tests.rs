@@ -1623,7 +1623,7 @@ fn create_tagged_enum() -> anyhow::Result<()> {
 }
 
 #[test]
-fn match_stmt_simple_enum() -> anyhow::Result<()> {
+fn match_stmt_on_simple_enum() -> anyhow::Result<()> {
     let program = r#"enum E {
         A,
         B,
@@ -1657,7 +1657,7 @@ fn match_stmt_simple_enum() -> anyhow::Result<()> {
 }
 
 #[test]
-fn match_simple_enum() -> anyhow::Result<()> {
+fn match_on_simple_enum() -> anyhow::Result<()> {
     let program = r#"enum E {
         A,
         B,
@@ -1678,7 +1678,7 @@ fn match_simple_enum() -> anyhow::Result<()> {
 }
 
 #[test]
-fn match_tagged_enum() -> anyhow::Result<()> {
+fn match_on_tagged_enum() -> anyhow::Result<()> {
     let program = r#"struct Fruits {
         apple: i32,
         ichigo: i32,
@@ -1704,7 +1704,7 @@ fn match_tagged_enum() -> anyhow::Result<()> {
 }
 
 #[test]
-fn match_enum_discard_value() -> anyhow::Result<()> {
+fn match_on_enum_discard_value() -> anyhow::Result<()> {
     let program = r#"struct Fruits {
         apple: i32,
         ichigo: i32,
@@ -1730,7 +1730,7 @@ fn match_enum_discard_value() -> anyhow::Result<()> {
 }
 
 #[test]
-fn match_enum_wildcard() -> anyhow::Result<()> {
+fn match_on_enum_wildcard() -> anyhow::Result<()> {
     let program = r#"struct Fruits {
         apple: i32,
         ichigo: i32,
@@ -1747,6 +1747,115 @@ fn match_enum_wildcard() -> anyhow::Result<()> {
         return match e {
             E::A => 123,
             _ => 58,
+        }
+    }"#;
+
+    assert_eq!(exec(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn match_on_int_without_wildcard() -> anyhow::Result<()> {
+    let program = r#"fn main() -> i32 {
+        let n = 25
+
+        return match n {
+            48 => 10,
+            10 => 48,
+            25 => 58,
+        }
+    }"#;
+
+    assert!(matches!(
+        exec(program),
+        Err(CodegenError::NonExhaustivePatterns { .. })
+    ));
+
+    Ok(())
+}
+
+#[test]
+fn match_on_int() -> anyhow::Result<()> {
+    let program = r#"fn main() -> i32 {
+        let n = 58
+
+        return match n {
+            48 => 10,
+            10 => 48,
+            58 => 48 + 10,
+            _ => 123,
+        }
+    }"#;
+
+    assert_eq!(exec(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn match_on_bool_without_true() -> anyhow::Result<()> {
+    let program = r#"fn main() -> i32 {
+        let flag = false
+
+        return match flag {
+            false => 58,
+        }
+    }"#;
+
+    assert!(matches!(
+        exec(program),
+        Err(CodegenError::NonExhaustivePatterns { .. })
+    ));
+
+    Ok(())
+}
+
+#[test]
+fn match_on_bool_without_false() -> anyhow::Result<()> {
+    let program = r#"fn main() -> i32 {
+        let flag = true
+
+        return match flag {
+            true => 58,
+        }
+    }"#;
+
+    assert!(matches!(
+        exec(program),
+        Err(CodegenError::NonExhaustivePatterns { .. })
+    ));
+
+    Ok(())
+}
+
+#[test]
+fn match_on_bool() -> anyhow::Result<()> {
+    let program = r#"fn main() -> i32 {
+        let flag = true
+
+        return match flag {
+            true => 58,
+            false => 123,
+        }
+    }"#;
+
+    assert_eq!(exec(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn match_with_block() -> anyhow::Result<()> {
+    let program = r#"fn main() -> i32 {
+        let n = 58
+
+        return match n {
+            58 => {
+                let mut a = 29
+                a
+            }
+            _ => 123,
         }
     }"#;
 
@@ -1957,43 +2066,6 @@ fn block() -> anyhow::Result<()> {
         }
 
         return n
-    }"#;
-
-    assert_eq!(exec(program)?, 58);
-
-    Ok(())
-}
-
-#[test]
-fn match_number() -> anyhow::Result<()> {
-    let program = r#"fn main() -> i32 {
-        let n = 58
-
-        return match n {
-            48 => 10,
-            10 => 48,
-            58 => 48 + 10,
-            _ => 123,
-        }
-    }"#;
-
-    assert_eq!(exec(program)?, 58);
-
-    Ok(())
-}
-
-#[test]
-fn match_with_block() -> anyhow::Result<()> {
-    let program = r#"fn main() -> i32 {
-        let n = 58
-
-        return match n {
-            58 => {
-                let mut a = 29
-                a
-            }
-            _ => 123,
-        }
     }"#;
 
     assert_eq!(exec(program)?, 58);

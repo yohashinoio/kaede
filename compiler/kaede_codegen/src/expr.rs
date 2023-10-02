@@ -26,12 +26,11 @@ use kaede_ast::{
 };
 use kaede_span::Span;
 use kaede_type::{
-    is_same_type, make_fundamental_type, wrap_in_ref, FundamentalTypeKind, Mutability,
-    RefrenceType, Ty, TyKind, UserDefinedType,
+    is_same_type, make_fundamental_type, wrap_in_ref, FundamentalType, FundamentalTypeKind,
+    Mutability, RefrenceType, Ty, TyKind, UserDefinedType,
 };
 
-/// For code generation of if to be reusable (from match, etc.)
-/// Expr is changed to Value
+/// `If` where `Expr` is changed to `Value`
 struct ValuedIf<'ctx> {
     cond: Value<'ctx>,
     then: Rc<Block>,
@@ -233,7 +232,145 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         (enum_name, variant_name)
     }
 
-    fn check_exhaustiveness_match_enum(
+    fn match_(&mut self, node: &Match) -> CodegenResult<Value<'ctx>> {
+        let value = self.build(&node.target)?;
+
+        let value_ty = value.get_type();
+
+        match value_ty.kind.as_ref() {
+            TyKind::Reference(refty) => self.build_match_on_reference(node, &value, refty),
+            TyKind::Fundamental(fty) => self.build_match_on_fundamental_value(node, &value, fty),
+            _ => todo!("Unsupported enum target"),
+        }
+    }
+
+    fn match_arms_on_int_to_if(
+        &mut self,
+        target: &Value<'ctx>,
+        mut arms: Iter<MatchArm>,
+        span: Span,
+    ) -> CodegenResult<Option<ValuedIf<'ctx>>> {
+        let current_arm = match arms.next() {
+            Some(c) => c,
+            None => return Ok(None),
+        };
+
+        let cond = {
+            let arm_value = self.build(&current_arm.pattern)?;
+
+            if !arm_value.get_type().kind.is_int_or_bool() {
+                return Err(CodegenError::MismatchedTypes {
+                    types: (
+                        target.get_type().kind.to_string(),
+                        arm_value.get_type().kind.to_string(),
+                    ),
+                    span: current_arm.pattern.span,
+                });
+            }
+
+            self.build_int_equal(
+                target.get_value().into_int_value(),
+                arm_value.get_value().into_int_value(),
+            )
+        };
+
+        let then = Block {
+            body: vec![Stmt {
+                kind: StmtKind::Expr(current_arm.code.clone()),
+                span: current_arm.code.span,
+            }],
+            span: current_arm.code.span,
+        };
+
+        let else_ = self
+            .match_arms_on_int_to_if(target, arms, span)?
+            .map(|if_| Box::new(ValuedElse::If(if_)));
+
+        Ok(Some(ValuedIf {
+            cond,
+            then: then.into(),
+            else_,
+            span,
+        }))
+    }
+
+    fn check_exhaustiveness_for_match_on_int(
+        &self,
+        target_type: &FundamentalType,
+        arms: &MatchArms,
+        span: Span,
+    ) -> CodegenResult<()> {
+        if arms.has_wildcard() {
+            Ok(())
+        } else {
+            assert!(target_type.is_int_or_bool());
+
+            if target_type.kind == FundamentalTypeKind::Bool {
+                if arms.len() == 2 {
+                    let mut has_true = false;
+                    let mut has_false = false;
+
+                    for arm in arms.iter() {
+                        match arm.pattern.kind {
+                            ExprKind::True => has_true = true,
+                            ExprKind::False => has_false = true,
+                            _ => break,
+                        }
+                    }
+
+                    if has_true && has_false {
+                        return Ok(());
+                    }
+
+                    if has_true {
+                        return Err(CodegenError::NonExhaustivePatterns {
+                            non_exhaustive_patterns: "`false`".to_owned(),
+                            span,
+                        });
+                    }
+
+                    if has_false {
+                        return Err(CodegenError::NonExhaustivePatterns {
+                            non_exhaustive_patterns: "`true`".to_owned(),
+                            span,
+                        });
+                    }
+                }
+
+                return Err(CodegenError::NonExhaustivePatterns {
+                    non_exhaustive_patterns: "`true` and `false`".to_owned(),
+                    span,
+                });
+            }
+
+            // Non-bool integer
+            Err(CodegenError::NonExhaustivePatterns {
+                non_exhaustive_patterns: "`_`".to_owned(),
+                span,
+            })
+        }
+    }
+
+    fn build_match_on_fundamental_value(
+        &mut self,
+        node: &Match,
+        target: &Value<'ctx>,
+        fty: &FundamentalType,
+    ) -> CodegenResult<Value<'ctx>> {
+        if fty.is_int_or_bool() {
+            self.check_exhaustiveness_for_match_on_int(fty, &node.arms, node.span)?;
+
+            let valued_if = self
+                .match_arms_on_int_to_if(target, node.arms.iter(), node.span)?
+                .unwrap();
+
+            return self.build_if(&valued_if, true);
+        }
+
+        todo!()
+    }
+
+    fn check_exhaustiveness_for_match_on_enum(
         &self,
         enum_info: &EnumInfo,
         arms: &MatchArms,
@@ -290,15 +427,13 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         Ok(())
     }
 
-    fn match_(&mut self, node: &Match) -> CodegenResult<Value<'ctx>> {
-        let value = self.build(&node.target)?;
-
-        let value_ty = value.get_type();
-
-        let refee_ty = match value_ty.kind.as_ref() {
-            TyKind::Reference(refty) => refty.refee_ty.clone(),
-            _ => todo!("Error"),
-        };
+    fn build_match_on_reference(
+        &mut self,
+        node: &Match,
+        target: &Value<'ctx>,
+        refty: &RefrenceType,
+    ) -> CodegenResult<Value<'ctx>> {
+        let refee_ty = &refty.refee_ty;
 
         let udt = match refee_ty.kind.as_ref() {
             TyKind::UserDefined(udt) => udt,
@@ -306,17 +441,18 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         };
 
         let enum_info = match self.cucx.tcx.get_enum_info(&udt.name) {
-            Some(ei) => ei,
+            Some(e) => e,
             None => todo!("Error"),
         };
 
-        self.check_exhaustiveness_match_enum(&enum_info, &node.arms, node.span)?;
+        self.check_exhaustiveness_for_match_on_enum(&enum_info, &node.arms, node.span)?;
 
-        self.build_match_enum(&enum_info, &value, node.arms.iter(), node.span)
+        self.build_match_on_enum(&enum_info, target, node.arms.iter(), node.span)
     }
 
+    /// Convert match arms to `ValuedIf` when target is an enum value
     /// The return value is `Option` because of the recursion termination condition, so there is no problem if the caller `unwrap`s it
-    fn conv_match_arms_to_valued_if(
+    fn match_arms_on_enum_to_if(
         &mut self,
         enum_info: &EnumInfo,
         target_offset: Value<'ctx>,
@@ -349,7 +485,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         };
 
         let else_ = self
-            .conv_match_arms_to_valued_if(enum_info, target_offset, arms, span)?
+            .match_arms_on_enum_to_if(enum_info, target_offset, arms, span)?
             .map(|if_| Box::new(ValuedElse::If(if_)));
 
         Ok(Some(ValuedIf {
@@ -361,7 +497,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
     }
 
     /// Process 'match' that the target is an enum
-    fn build_match_enum(
+    fn build_match_on_enum(
         &mut self,
         enum_info: &EnumInfo,
         target: &Value<'ctx>,
@@ -371,7 +507,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         let target_offset = self.load_enum_variant_offset_from_value(target);
 
         let valued_if = self
-            .conv_match_arms_to_valued_if(enum_info, target_offset, arms, span)?
+            .match_arms_on_enum_to_if(enum_info, target_offset, arms, span)?
             .unwrap();
 
         self.build_if(&valued_if, true)

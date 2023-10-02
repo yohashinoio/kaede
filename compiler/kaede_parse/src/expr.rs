@@ -335,7 +335,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         // Integer
         if matches!(self.first().kind, TokenKind::Int(_)) {
-            let int = self.integer()?;
+            let int = self.int()?;
             return Ok(Expr {
                 span: int.span,
                 kind: ExprKind::Int(int),
@@ -571,7 +571,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         Ok(Args(args, Span::new(start, finish)))
     }
 
-    pub fn integer(&mut self) -> ParseResult<Int> {
+    pub fn int(&mut self) -> ParseResult<Int> {
         let token = self.bump().unwrap();
 
         match token.kind {

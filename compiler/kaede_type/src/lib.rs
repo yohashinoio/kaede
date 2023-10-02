@@ -158,6 +158,21 @@ impl TyKind {
         }
     }
 
+    pub fn is_int_or_bool(&self) -> bool {
+        match &self {
+            Self::Fundamental(fty) => fty.is_int_or_bool(),
+            Self::UserDefined(_) => todo!(),
+            Self::Reference(ty) => ty.refee_ty.kind.is_int_or_bool(),
+
+            Self::Array(_)
+            | Self::Tuple(_)
+            | Self::Str
+            | Self::Unit
+            | Self::Never
+            | Self::Inferred => false,
+        }
+    }
+
     pub fn is_inferred(&self) -> bool {
         matches!(self, Self::Inferred)
     }
@@ -199,14 +214,21 @@ impl FundamentalType {
         }
     }
 
-    fn is_signed(&self) -> bool {
+    pub fn is_signed(&self) -> bool {
         use FundamentalTypeKind::*;
 
         match self.kind {
-            I32 => true,
-            I8 => true,
+            I32 | I8 => true,
             U64 => false,
             Bool => false,
+        }
+    }
+
+    pub fn is_int_or_bool(&self) -> bool {
+        use FundamentalTypeKind::*;
+
+        match self.kind {
+            I32 | I8 | U64 | Bool => true,
         }
     }
 }
