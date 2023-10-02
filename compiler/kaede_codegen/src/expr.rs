@@ -209,7 +209,10 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
     }
 
     /// A::B to ("A", "B")
-    fn disassemble_enum_pattern<'pat>(&self, pattern: &'pat Expr) -> (&'pat Ident, &'pat Ident) {
+    fn dismantle_enum_variant_pattern<'pat>(
+        &self,
+        pattern: &'pat Expr,
+    ) -> (&'pat Ident, &'pat Ident) {
         let (enum_name, variant_name) = match &pattern.kind {
             ExprKind::Binary(b) => match b.kind {
                 BinaryKind::ScopeResolution => (&b.lhs, &b.rhs),
@@ -242,56 +245,6 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             TyKind::Fundamental(fty) => self.build_match_on_fundamental_value(node, &value, fty),
             _ => todo!("Unsupported enum target"),
         }
-    }
-
-    fn match_arms_on_int_to_if(
-        &mut self,
-        target: &Value<'ctx>,
-        mut arms: Iter<MatchArm>,
-        span: Span,
-    ) -> CodegenResult<Option<ValuedIf<'ctx>>> {
-        let current_arm = match arms.next() {
-            Some(c) => c,
-            None => return Ok(None),
-        };
-
-        let cond = {
-            let arm_value = self.build(&current_arm.pattern)?;
-
-            if !arm_value.get_type().kind.is_int_or_bool() {
-                return Err(CodegenError::MismatchedTypes {
-                    types: (
-                        target.get_type().kind.to_string(),
-                        arm_value.get_type().kind.to_string(),
-                    ),
-                    span: current_arm.pattern.span,
-                });
-            }
-
-            self.build_int_equal(
-                target.get_value().into_int_value(),
-                arm_value.get_value().into_int_value(),
-            )
-        };
-
-        let then = Block {
-            body: vec![Stmt {
-                kind: StmtKind::Expr(current_arm.code.clone()),
-                span: current_arm.code.span,
-            }],
-            span: current_arm.code.span,
-        };
-
-        let else_ = self
-            .match_arms_on_int_to_if(target, arms, span)?
-            .map(|if_| Box::new(ValuedElse::If(if_)));
-
-        Ok(Some(ValuedIf {
-            cond,
-            then: then.into(),
-            else_,
-            span,
-        }))
     }
 
     fn check_exhaustiveness_for_match_on_int(
@@ -361,13 +314,64 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             self.check_exhaustiveness_for_match_on_int(fty, &node.arms, node.span)?;
 
             let valued_if = self
-                .match_arms_on_int_to_if(target, node.arms.iter(), node.span)?
+                .conv_match_arms_on_int_to_if(target, node.arms.iter(), node.span)?
                 .unwrap();
 
             return self.build_if(&valued_if, true);
         }
 
         todo!()
+    }
+
+    /// The return value is `Option` because of the recursion termination condition, so there is no problem if the caller `unwrap`s it
+    fn conv_match_arms_on_int_to_if(
+        &mut self,
+        target: &Value<'ctx>,
+        mut arms: Iter<MatchArm>,
+        span: Span,
+    ) -> CodegenResult<Option<ValuedIf<'ctx>>> {
+        let current_arm = match arms.next() {
+            Some(c) => c,
+            None => return Ok(None),
+        };
+
+        let cond = {
+            let arm_value = self.build(&current_arm.pattern)?;
+
+            if !arm_value.get_type().kind.is_int_or_bool() {
+                return Err(CodegenError::MismatchedTypes {
+                    types: (
+                        target.get_type().kind.to_string(),
+                        arm_value.get_type().kind.to_string(),
+                    ),
+                    span: current_arm.pattern.span,
+                });
+            }
+
+            self.build_int_equal(
+                target.get_value().into_int_value(),
+                arm_value.get_value().into_int_value(),
+            )
+        };
+
+        let then = Block {
+            body: vec![Stmt {
+                kind: StmtKind::Expr(current_arm.code.clone()),
+                span: current_arm.code.span,
+            }],
+            span: current_arm.code.span,
+        };
+
+        let else_ = self
+            .conv_match_arms_on_int_to_if(target, arms, span)?
+            .map(|if_| Box::new(ValuedElse::If(if_)));
+
+        Ok(Some(ValuedIf {
+            cond,
+            then: then.into(),
+            else_,
+            span,
+        }))
     }
 
     fn check_exhaustiveness_for_match_on_enum(
@@ -385,7 +389,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         let mut pattern_variant_names = BTreeSet::new();
 
         for arm in arms.iter() {
-            let (enum_name, variant_name) = self.disassemble_enum_pattern(&arm.pattern);
+            let (enum_name, variant_name) = self.dismantle_enum_variant_pattern(&arm.pattern);
 
             if enum_info.name != enum_name.as_str() {
                 todo!("Error");
@@ -450,9 +454,24 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         self.build_match_on_enum(&enum_info, target, node.arms.iter(), node.span)
     }
 
-    /// Convert match arms to `ValuedIf` when target is an enum value
+    fn build_match_on_enum(
+        &mut self,
+        enum_info: &EnumInfo,
+        target: &Value<'ctx>,
+        arms: Iter<MatchArm>,
+        span: Span,
+    ) -> CodegenResult<Value<'ctx>> {
+        let target_offset = self.load_enum_variant_offset_from_value(target);
+
+        let valued_if = self
+            .conv_match_arms_on_enum_to_if(enum_info, target_offset, arms, span)?
+            .unwrap();
+
+        self.build_if(&valued_if, true)
+    }
+
     /// The return value is `Option` because of the recursion termination condition, so there is no problem if the caller `unwrap`s it
-    fn match_arms_on_enum_to_if(
+    fn conv_match_arms_on_enum_to_if(
         &mut self,
         enum_info: &EnumInfo,
         target_offset: Value<'ctx>,
@@ -466,7 +485,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
 
         let cond = {
             let pattern_offset =
-                self.get_enum_variant_offset_from_pattern(enum_info, &current_arm.pattern)?;
+                self.derive_offset_from_enum_variant_pattern(enum_info, &current_arm.pattern)?;
             self.build_int_equal(
                 target_offset.get_value().into_int_value(),
                 self.cucx
@@ -485,7 +504,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         };
 
         let else_ = self
-            .match_arms_on_enum_to_if(enum_info, target_offset, arms, span)?
+            .conv_match_arms_on_enum_to_if(enum_info, target_offset, arms, span)?
             .map(|if_| Box::new(ValuedElse::If(if_)));
 
         Ok(Some(ValuedIf {
@@ -496,24 +515,6 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         }))
     }
 
-    /// Process 'match' that the target is an enum
-    fn build_match_on_enum(
-        &mut self,
-        enum_info: &EnumInfo,
-        target: &Value<'ctx>,
-        arms: Iter<MatchArm>,
-        span: Span,
-    ) -> CodegenResult<Value<'ctx>> {
-        let target_offset = self.load_enum_variant_offset_from_value(target);
-
-        let valued_if = self
-            .match_arms_on_enum_to_if(enum_info, target_offset, arms, span)?
-            .unwrap();
-
-        self.build_if(&valued_if, true)
-    }
-
-    /// Equivalent to getting the first element of a struct
     fn load_enum_variant_offset_from_value(&self, value: &Value<'ctx>) -> Value<'ctx> {
         let gep = unsafe {
             self.cucx.builder.build_in_bounds_gep(
@@ -530,6 +531,20 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
                 .build_load(self.cucx.context().i32_type(), gep, ""),
             make_fundamental_type(FundamentalTypeKind::I32, Mutability::Not).into(),
         )
+    }
+
+    fn derive_offset_from_enum_variant_pattern(
+        &self,
+        enum_info: &EnumInfo,
+        pattern: &Expr,
+    ) -> CodegenResult<u32> {
+        let (enum_name, variant_name) = self.dismantle_enum_variant_pattern(pattern);
+
+        if enum_info.name != enum_name.as_str() {
+            todo!("Error");
+        }
+
+        self.get_enum_variant_offset(enum_info, (variant_name.as_str(), variant_name.span))
     }
 
     fn get_enum_variant_offset(
@@ -549,21 +564,6 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         };
 
         Ok(variant.offset)
-    }
-
-    /// Pattern (like A::B) to offset
-    fn get_enum_variant_offset_from_pattern(
-        &self,
-        enum_info: &EnumInfo,
-        pattern: &Expr,
-    ) -> CodegenResult<u32> {
-        let (enum_name, variant_name) = self.disassemble_enum_pattern(pattern);
-
-        if enum_info.name != enum_name.as_str() {
-            todo!("Error");
-        }
-
-        self.get_enum_variant_offset(enum_info, (variant_name.as_str(), variant_name.span))
     }
 
     fn break_(&self, node: &Break) -> CodegenResult<Value<'ctx>> {

@@ -1623,7 +1623,7 @@ fn create_tagged_enum() -> anyhow::Result<()> {
 }
 
 #[test]
-fn match_stmt_on_simple_enum() -> anyhow::Result<()> {
+fn match_stmt_on_enum() -> anyhow::Result<()> {
     let program = r#"enum E {
         A,
         B,
@@ -1657,7 +1657,7 @@ fn match_stmt_on_simple_enum() -> anyhow::Result<()> {
 }
 
 #[test]
-fn match_on_simple_enum() -> anyhow::Result<()> {
+fn match_on_enum() -> anyhow::Result<()> {
     let program = r#"enum E {
         A,
         B,
@@ -1669,6 +1669,27 @@ fn match_on_simple_enum() -> anyhow::Result<()> {
         return match e {
             E::A => 58,
             E::B => return 123,
+        }
+    }"#;
+
+    assert_eq!(exec(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn match_on_enum_with_wildcard() -> anyhow::Result<()> {
+    let program = r#"enum E {
+        A,
+        B,
+    }
+
+    fn main() -> i32 {
+        let e = E::A
+
+        return match e {
+            E::B => return 123,
+            _ => 58,
         }
     }"#;
 
@@ -1704,7 +1725,7 @@ fn match_on_tagged_enum() -> anyhow::Result<()> {
 }
 
 #[test]
-fn match_on_enum_discard_value() -> anyhow::Result<()> {
+fn match_on_tagged_enum_to_discard_value() -> anyhow::Result<()> {
     let program = r#"struct Fruits {
         apple: i32,
         ichigo: i32,
@@ -1730,7 +1751,7 @@ fn match_on_enum_discard_value() -> anyhow::Result<()> {
 }
 
 #[test]
-fn match_on_enum_wildcard() -> anyhow::Result<()> {
+fn match_on_tagged_enum_with_wildcard() -> anyhow::Result<()> {
     let program = r#"struct Fruits {
         apple: i32,
         ichigo: i32,
@@ -1776,7 +1797,7 @@ fn match_on_int_without_wildcard() -> anyhow::Result<()> {
 }
 
 #[test]
-fn match_on_int() -> anyhow::Result<()> {
+fn match_on_int_with_wildcard() -> anyhow::Result<()> {
     let program = r#"fn main() -> i32 {
         let n = 58
 
@@ -1846,16 +1867,13 @@ fn match_on_bool() -> anyhow::Result<()> {
 }
 
 #[test]
-fn match_with_block() -> anyhow::Result<()> {
+fn match_on_bool_with_wildcard() -> anyhow::Result<()> {
     let program = r#"fn main() -> i32 {
-        let n = 58
+        let flag = true
 
-        return match n {
-            58 => {
-                let mut a = 29
-                a
-            }
-            _ => 123,
+        return match flag {
+            false => 123,
+            _ => 58,
         }
     }"#;
 
@@ -1912,7 +1930,7 @@ fn unreachable_pattern() {
 }
 
 #[test]
-fn simple_enum_as_argument() -> anyhow::Result<()> {
+fn enum_as_argument() -> anyhow::Result<()> {
     let program = r#"enum E {
         A,
         B,
@@ -1967,7 +1985,7 @@ fn tagged_enum_as_argument() -> anyhow::Result<()> {
 }
 
 #[test]
-fn simple_generics() -> anyhow::Result<()> {
+fn single_generic_parameter() -> anyhow::Result<()> {
     let program = r#"fn add_10<T>(n: T) -> T {
         return n + 10
     }
@@ -1983,12 +2001,16 @@ fn simple_generics() -> anyhow::Result<()> {
 
 #[test]
 fn multiple_generic_parameters() -> anyhow::Result<()> {
-    let program = r#"fn add<T, U, R>(n1: T, n2: U) -> R {
-        return n1 + n2
+    let program = r#"fn add_or_mul<T1, T2, SwitchT>(n1: T1, n2: T2, switcher: SwitchT) -> T {
+        return if switcher {
+            n1 + n2
+        } else {
+            n1 * n2
+        }
     }
 
     fn main() -> i32 {
-        return add<i32, i32, i32>(48, 10)
+        return add_or_mul<i32, i32, bool>(48, 10, true)
     }"#;
 
     assert_eq!(exec(program)?, 58);
@@ -1997,7 +2019,7 @@ fn multiple_generic_parameters() -> anyhow::Result<()> {
 }
 
 #[test]
-fn struct_as_generic_argument() -> anyhow::Result<()> {
+fn generic_of_struct() -> anyhow::Result<()> {
     let program = r#"struct Sample {
         n: i32,
     }
@@ -2017,7 +2039,7 @@ fn struct_as_generic_argument() -> anyhow::Result<()> {
 }
 
 #[test]
-fn tuple_as_generic_argument() -> anyhow::Result<()> {
+fn generic_of_tuple() -> anyhow::Result<()> {
     let program = r#"fn get_third<T>(t: T) -> i32 {
         return t.2
     }
@@ -2033,7 +2055,7 @@ fn tuple_as_generic_argument() -> anyhow::Result<()> {
 }
 
 #[test]
-fn array_as_generic_argument() -> anyhow::Result<()> {
+fn generic_of_array() -> anyhow::Result<()> {
     let program = r#"fn get_third<T>(a: T) -> i32 {
         return a[2]
     }
@@ -2066,6 +2088,25 @@ fn block() -> anyhow::Result<()> {
         }
 
         return n
+    }"#;
+
+    assert_eq!(exec(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn match_with_block() -> anyhow::Result<()> {
+    let program = r#"fn main() -> i32 {
+        let n = 58
+
+        return match n {
+            58 => {
+                let mut a = 29
+                a
+            }
+            _ => 123,
+        }
     }"#;
 
     assert_eq!(exec(program)?, 58);
