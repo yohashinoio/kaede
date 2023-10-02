@@ -1985,7 +1985,7 @@ fn tagged_enum_as_argument() -> anyhow::Result<()> {
 }
 
 #[test]
-fn single_generic_parameter() -> anyhow::Result<()> {
+fn generic_with_single_parameter() -> anyhow::Result<()> {
     let program = r#"fn add_10<T>(n: T) -> T {
         return n + 10
     }
@@ -2000,7 +2000,7 @@ fn single_generic_parameter() -> anyhow::Result<()> {
 }
 
 #[test]
-fn multiple_generic_parameters() -> anyhow::Result<()> {
+fn generic_with_multiple_parameters() -> anyhow::Result<()> {
     let program = r#"fn add_or_mul<T1, T2, SwitchT>(n1: T1, n2: T2, switcher: SwitchT) -> T {
         return if switcher {
             n1 + n2
