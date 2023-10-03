@@ -38,6 +38,18 @@ struct ValuedIf<'ctx> {
     span: Span,
 }
 
+impl<'ctx> ValuedIf<'ctx> {
+    fn add_else_at_last(&mut self, node: ValuedElse<'ctx>) {
+        if let Some(else_) = self.else_.as_mut() {
+            if let ValuedElse::If(if_) = else_.as_mut() {
+                return if_.add_else_at_last(node);
+            }
+        }
+
+        self.else_ = Some(Box::new(node));
+    }
+}
+
 enum ValuedElse<'ctx> {
     If(ValuedIf<'ctx>),
     Block(Rc<Block>),
@@ -253,7 +265,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         arms: &MatchArms,
         span: Span,
     ) -> CodegenResult<()> {
-        if arms.has_wildcard() {
+        if arms.wildcard.is_some() {
             Ok(())
         } else {
             assert!(target_type.is_int_or_bool());
@@ -304,6 +316,20 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         }
     }
 
+    fn add_wildcard(&self, if_: &mut ValuedIf<'ctx>, wildcard: &MatchArm) {
+        assert!(wildcard.is_wildcard());
+
+        let wildcard = Block {
+            body: vec![Stmt {
+                kind: StmtKind::Expr(wildcard.code.clone()),
+                span: wildcard.code.span,
+            }],
+            span: wildcard.code.span,
+        };
+
+        if_.add_else_at_last(ValuedElse::Block(Rc::new(wildcard)));
+    }
+
     fn build_match_on_fundamental_value(
         &mut self,
         node: &Match,
@@ -313,9 +339,13 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         if fty.is_int_or_bool() {
             self.check_exhaustiveness_for_match_on_int(fty, &node.arms, node.span)?;
 
-            let valued_if = self
+            let mut valued_if = self
                 .conv_match_arms_on_int_to_if(target, node.arms.iter(), node.span)?
                 .unwrap();
+
+            if let Some(wc) = &node.arms.wildcard {
+                self.add_wildcard(&mut valued_if, wc);
+            }
 
             return self.build_if(&valued_if, true);
         }
@@ -380,7 +410,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         arms: &MatchArms,
         span: Span,
     ) -> CodegenResult<()> {
-        if arms.has_wildcard() {
+        if arms.wildcard.is_some() {
             return Ok(());
         }
 
@@ -451,21 +481,25 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
 
         self.check_exhaustiveness_for_match_on_enum(&enum_info, &node.arms, node.span)?;
 
-        self.build_match_on_enum(&enum_info, target, node.arms.iter(), node.span)
+        self.build_match_on_enum(&enum_info, target, &node.arms, node.span)
     }
 
     fn build_match_on_enum(
         &mut self,
         enum_info: &EnumInfo,
         target: &Value<'ctx>,
-        arms: Iter<MatchArm>,
+        arms: &MatchArms,
         span: Span,
     ) -> CodegenResult<Value<'ctx>> {
         let target_offset = self.load_enum_variant_offset_from_value(target);
 
-        let valued_if = self
-            .conv_match_arms_on_enum_to_if(enum_info, target_offset, arms, span)?
+        let mut valued_if = self
+            .conv_match_arms_on_enum_to_if(enum_info, &target_offset, arms.iter(), span)?
             .unwrap();
+
+        if let Some(wc) = &arms.wildcard {
+            self.add_wildcard(&mut valued_if, wc);
+        }
 
         self.build_if(&valued_if, true)
     }
@@ -474,7 +508,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
     fn conv_match_arms_on_enum_to_if(
         &mut self,
         enum_info: &EnumInfo,
-        target_offset: Value<'ctx>,
+        target_offset: &Value<'ctx>,
         mut arms: Iter<MatchArm>,
         span: Span,
     ) -> CodegenResult<Option<ValuedIf<'ctx>>> {
@@ -486,6 +520,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         let cond = {
             let pattern_offset =
                 self.derive_offset_from_enum_variant_pattern(enum_info, &current_arm.pattern)?;
+
             self.build_int_equal(
                 target_offset.get_value().into_int_value(),
                 self.cucx

@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, rc::Rc};
+use std::{collections::VecDeque, rc::Rc, slice::Iter};
 
 use inkwell::{context::Context, values::IntValue};
 use kaede_span::Span;
@@ -189,21 +189,31 @@ pub struct Expr {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct MatchArm {
-    pub pattern: Expr,
+    pub pattern: Box<Expr>,
     pub code: Rc<Expr>,
+}
+
+impl MatchArm {
+    pub fn is_wildcard(&self) -> bool {
+        match &self.pattern.kind {
+            ExprKind::Ident(ident) => ident.as_str() == "_",
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct MatchArms {
     pub arms: Vec<MatchArm>,
+    pub wildcard: Option<MatchArm>,
 }
 
 impl MatchArms {
-    pub fn new(arms: Vec<MatchArm>) -> Self {
-        Self { arms }
+    pub fn new(arms: Vec<MatchArm>, wildcard: Option<MatchArm>) -> Self {
+        Self { arms, wildcard }
     }
 
-    pub fn iter(&self) -> std::slice::Iter<MatchArm> {
+    pub fn iter(&self) -> Iter<MatchArm> {
         self.arms.iter()
     }
 
@@ -217,22 +227,6 @@ impl MatchArms {
 
     pub fn is_empty(&self) -> bool {
         self.len() == 0
-    }
-
-    pub fn has_wildcard(&self) -> bool {
-        for arm in &self.arms {
-            match &arm.pattern.kind {
-                ExprKind::Ident(ident) => {
-                    if ident.as_str() == "_" {
-                        return true;
-                    }
-                }
-
-                _ => continue,
-            }
-        }
-
-        false
     }
 }
 

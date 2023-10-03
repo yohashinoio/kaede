@@ -370,6 +370,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         self.consume(&TokenKind::OpenBrace)?;
 
         let mut arms = Vec::new();
+        let mut wildcard = None;
 
         loop {
             if self.check(&TokenKind::CloseBrace) {
@@ -383,10 +384,17 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
             let code = self.expr()?;
 
-            arms.push(MatchArm {
-                pattern,
+            let arm = MatchArm {
+                pattern: Box::new(pattern),
                 code: Rc::new(code),
-            });
+            };
+
+            if arm.is_wildcard() {
+                assert!(wildcard.is_none());
+                wildcard = Some(arm);
+            } else {
+                arms.push(arm);
+            }
 
             if !self.consume_b(&TokenKind::Comma) {
                 break;
@@ -401,7 +409,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             span,
             kind: ExprKind::Match(Match {
                 target: value.into(),
-                arms: MatchArms::new(arms),
+                arms: MatchArms::new(arms, wildcard),
                 span,
             }),
         })
