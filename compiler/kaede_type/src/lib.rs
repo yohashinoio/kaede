@@ -82,6 +82,20 @@ pub enum FundamentalTypeKind {
     Bool,
 }
 
+impl std::fmt::Display for FundamentalTypeKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use FundamentalTypeKind::*;
+
+        match self {
+            I32 => write!(f, "i32"),
+            I8 => write!(f, "i8"),
+            U64 => write!(f, "u32"),
+
+            Bool => write!(f, "bool"),
+        }
+    }
+}
+
 pub fn make_fundamental_type(kind: FundamentalTypeKind, mutability: Mutability) -> Ty {
     Ty {
         kind: TyKind::Fundamental(FundamentalType { kind }).into(),
@@ -113,7 +127,7 @@ pub enum TyKind {
 impl std::fmt::Display for TyKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Fundamental(fty) => write!(f, "{}", fty),
+            Self::Fundamental(fty) => write!(f, "{}", fty.kind),
 
             Self::Str => write!(f, "str"),
 
@@ -183,25 +197,7 @@ pub struct FundamentalType {
     pub kind: FundamentalTypeKind,
 }
 
-impl std::fmt::Display for FundamentalType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use FundamentalTypeKind::*;
-
-        match self.kind {
-            I32 => write!(f, "i32"),
-            I8 => write!(f, "i8"),
-            U64 => write!(f, "u32"),
-
-            Bool => write!(f, "bool"),
-        }
-    }
-}
-
 impl FundamentalType {
-    pub fn kind(&self) -> FundamentalTypeKind {
-        self.kind
-    }
-
     pub fn as_llvm_type<'ctx>(&self, context: &'ctx Context) -> BasicTypeEnum<'ctx> {
         use FundamentalTypeKind::*;
 

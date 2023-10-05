@@ -260,60 +260,66 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
     }
 
     fn check_exhaustiveness_for_match_on_int(
-        &self,
+        &mut self,
         target_type: &FundamentalType,
         arms: &MatchArmList,
         span: Span,
     ) -> CodegenResult<()> {
         if arms.wildcard.is_some() {
-            Ok(())
-        } else {
-            assert!(target_type.is_int_or_bool());
+            return Ok(());
+        }
 
-            if target_type.kind == FundamentalTypeKind::Bool {
-                if arms.len() == 2 {
-                    let mut has_true = false;
-                    let mut has_false = false;
+        assert!(target_type.is_int_or_bool());
 
-                    for arm in arms.non_wildcard_iter() {
-                        match arm.pattern.kind {
-                            ExprKind::True => has_true = true,
-                            ExprKind::False => has_false = true,
-                            _ => break,
-                        }
-                    }
+        if target_type.kind == FundamentalTypeKind::Bool {
+            let mut has_true = false;
+            let mut has_false = false;
 
-                    if has_true && has_false {
-                        return Ok(());
-                    }
-
-                    if has_true {
-                        return Err(CodegenError::NonExhaustivePatterns {
-                            non_exhaustive_patterns: "`false`".to_owned(),
-                            span,
-                        });
-                    }
-
-                    if has_false {
-                        return Err(CodegenError::NonExhaustivePatterns {
-                            non_exhaustive_patterns: "`true`".to_owned(),
-                            span,
-                        });
+            for arm in arms.non_wildcard_iter() {
+                match arm.pattern.kind {
+                    ExprKind::True => has_true = true,
+                    ExprKind::False => has_false = true,
+                    _ => {
+                        return Err(CodegenError::MismatchedTypes {
+                            types: (
+                                target_type.kind.to_string(),
+                                self.build(&arm.pattern)?.get_type().kind.to_string(),
+                            ),
+                            span: arm.pattern.span,
+                        })
                     }
                 }
+            }
 
+            if has_true && has_false {
+                return Ok(());
+            }
+
+            if has_true {
                 return Err(CodegenError::NonExhaustivePatterns {
-                    non_exhaustive_patterns: "`true` and `false`".to_owned(),
+                    non_exhaustive_patterns: "`false`".to_owned(),
                     span,
                 });
             }
 
-            // Non-bool integer
-            Err(CodegenError::NonExhaustivePatterns {
-                non_exhaustive_patterns: "`_`".to_owned(),
+            if has_false {
+                return Err(CodegenError::NonExhaustivePatterns {
+                    non_exhaustive_patterns: "`true`".to_owned(),
+                    span,
+                });
+            }
+
+            return Err(CodegenError::NonExhaustivePatterns {
+                non_exhaustive_patterns: "`true` and `false`".to_owned(),
                 span,
-            })
+            });
         }
+
+        // Non-bool integer
+        Err(CodegenError::NonExhaustivePatterns {
+            non_exhaustive_patterns: "`_`".to_owned(),
+            span,
+        })
     }
 
     fn add_wildcard(&self, if_: &mut ValuedIf<'ctx>, wildcard: &MatchArm) {

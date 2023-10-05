@@ -210,7 +210,6 @@ pub struct MatchArmList {
 
 impl MatchArmList {
     pub fn new(arms: Vec<MatchArm>, wildcard: Option<MatchArm>) -> Self {
-        assert!(wildcard.as_ref().is_some_and(|x| x.is_wildcard()));
         Self { arms, wildcard }
     }
 
