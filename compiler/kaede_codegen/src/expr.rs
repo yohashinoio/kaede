@@ -20,7 +20,7 @@ use inkwell::{
 use kaede_ast::{
     expr::{
         ArrayLiteral, Binary, BinaryKind, Break, Else, Expr, ExprKind, FnCall, Ident, If, Indexing,
-        LogicalNot, Loop, Match, MatchArm, MatchArms, Return, StructLiteral, TupleLiteral,
+        LogicalNot, Loop, Match, MatchArm, MatchArmList, Return, StructLiteral, TupleLiteral,
     },
     stmt::{Block, Stmt, StmtKind},
 };
@@ -262,7 +262,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
     fn check_exhaustiveness_for_match_on_int(
         &self,
         target_type: &FundamentalType,
-        arms: &MatchArms,
+        arms: &MatchArmList,
         span: Span,
     ) -> CodegenResult<()> {
         if arms.wildcard.is_some() {
@@ -275,7 +275,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
                     let mut has_true = false;
                     let mut has_false = false;
 
-                    for arm in arms.iter() {
+                    for arm in arms.non_wildcard_iter() {
                         match arm.pattern.kind {
                             ExprKind::True => has_true = true,
                             ExprKind::False => has_false = true,
@@ -340,7 +340,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             self.check_exhaustiveness_for_match_on_int(fty, &node.arms, node.span)?;
 
             let mut valued_if = self
-                .conv_match_arms_on_int_to_if(target, node.arms.iter(), node.span)?
+                .conv_match_arms_on_int_to_if(target, node.arms.non_wildcard_iter(), node.span)?
                 .unwrap();
 
             if let Some(wc) = &node.arms.wildcard {
@@ -407,7 +407,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
     fn check_exhaustiveness_for_match_on_enum(
         &self,
         enum_info: &EnumInfo,
-        arms: &MatchArms,
+        arms: &MatchArmList,
         span: Span,
     ) -> CodegenResult<()> {
         if arms.wildcard.is_some() {
@@ -418,7 +418,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
 
         let mut pattern_variant_names = BTreeSet::new();
 
-        for arm in arms.iter() {
+        for arm in arms.non_wildcard_iter() {
             let (enum_name, variant_name) = self.dismantle_enum_variant_pattern(&arm.pattern);
 
             if enum_info.name != enum_name.as_str() {
@@ -488,13 +488,18 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         &mut self,
         enum_info: &EnumInfo,
         target: &Value<'ctx>,
-        arms: &MatchArms,
+        arms: &MatchArmList,
         span: Span,
     ) -> CodegenResult<Value<'ctx>> {
         let target_offset = self.load_enum_variant_offset_from_value(target);
 
         let mut valued_if = self
-            .conv_match_arms_on_enum_to_if(enum_info, &target_offset, arms.iter(), span)?
+            .conv_match_arms_on_enum_to_if(
+                enum_info,
+                &target_offset,
+                arms.non_wildcard_iter(),
+                span,
+            )?
             .unwrap();
 
         if let Some(wc) = &arms.wildcard {

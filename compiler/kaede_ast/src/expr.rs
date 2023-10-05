@@ -203,17 +203,18 @@ impl MatchArm {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct MatchArms {
-    pub arms: Vec<MatchArm>,
+pub struct MatchArmList {
+    arms: Vec<MatchArm>,
     pub wildcard: Option<MatchArm>,
 }
 
-impl MatchArms {
+impl MatchArmList {
     pub fn new(arms: Vec<MatchArm>, wildcard: Option<MatchArm>) -> Self {
+        assert!(wildcard.as_ref().is_some_and(|x| x.is_wildcard()));
         Self { arms, wildcard }
     }
 
-    pub fn iter(&self) -> Iter<MatchArm> {
+    pub fn non_wildcard_iter(&self) -> Iter<MatchArm> {
         self.arms.iter()
     }
 
@@ -233,7 +234,7 @@ impl MatchArms {
 #[derive(Debug, PartialEq, Eq)]
 pub struct Match {
     pub target: Box<Expr>,
-    pub arms: MatchArms,
+    pub arms: MatchArmList,
     pub span: Span,
 }
 

@@ -2,7 +2,7 @@ use std::{collections::VecDeque, rc::Rc};
 
 use kaede_ast::expr::{
     Args, ArrayLiteral, Binary, BinaryKind, Break, Else, Expr, ExprKind, FnCall, Ident, If,
-    Indexing, Int, IntKind, LogicalNot, Loop, Match, MatchArm, MatchArms, Return, StructLiteral,
+    Indexing, Int, IntKind, LogicalNot, Loop, Match, MatchArm, MatchArmList, Return, StructLiteral,
     TupleLiteral,
 };
 use kaede_lex::token::{Token, TokenKind};
@@ -409,7 +409,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             span,
             kind: ExprKind::Match(Match {
                 target: value.into(),
-                arms: MatchArms::new(arms, wildcard),
+                arms: MatchArmList::new(arms, wildcard),
                 span,
             }),
         })
