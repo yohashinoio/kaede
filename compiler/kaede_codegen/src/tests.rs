@@ -2083,9 +2083,9 @@ fn block() -> anyhow::Result<()> {
             }
 
             a + b
-        }
+        } * 2
 
-        return n
+        return n / 2
     }"#;
 
     assert_eq!(exec(program)?, 58);
@@ -2101,8 +2101,9 @@ fn match_with_block() -> anyhow::Result<()> {
         return match n {
             58 => {
                 let mut a = 29
+                a = a * 2
                 a
-            }
+            },
             _ => 123,
         }
     }"#;
