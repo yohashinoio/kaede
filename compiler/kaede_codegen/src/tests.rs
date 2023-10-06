@@ -1777,7 +1777,7 @@ fn match_on_tagged_enum_with_wildcard() -> anyhow::Result<()> {
 }
 
 #[test]
-fn match_on_int_without_wildcard() -> anyhow::Result<()> {
+fn match_on_int_without_wildcard() {
     let program = r#"fn main() -> i32 {
         let n = 25
 
@@ -1792,8 +1792,6 @@ fn match_on_int_without_wildcard() -> anyhow::Result<()> {
         exec(program),
         Err(CodegenError::NonExhaustivePatterns { .. })
     ));
-
-    Ok(())
 }
 
 #[test]
@@ -2112,4 +2110,26 @@ fn match_with_block() -> anyhow::Result<()> {
     assert_eq!(exec(program)?, 58);
 
     Ok(())
+}
+
+#[test]
+fn match_unpack_unit_variant() {
+    let program = r#"enum E {
+        A,
+        B,
+    }
+
+    fn main() -> i32 {
+        let e = E::A
+
+        return match e {
+            E::A(n) => 123,
+            E::B => 124,
+        }
+    }"#;
+
+    assert!(matches!(
+        exec(program),
+        Err(CodegenError::UnitVariantCannotUnpack { .. })
+    ));
 }

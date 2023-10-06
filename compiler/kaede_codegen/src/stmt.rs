@@ -59,6 +59,61 @@ pub fn change_mutability_dup(ty: Rc<Ty>, mutability: Mutability) -> Rc<Ty> {
     var_ty.into()
 }
 
+pub fn build_normal_let(
+    cucx: &mut CompileUnitContext,
+    name: &Ident,
+    mutability: Mutability,
+    init: Option<Value<'_>>,
+    specified_ty: Rc<Ty>,
+    span: Span,
+) -> CodegenResult<()> {
+    if let Some(init) = init {
+        if matches!(init.get_type().kind.as_ref(), TyKind::Reference(_))
+            && mutability.is_mut()
+            && init.get_type().mutability.is_not()
+        {
+            return Err(CodegenError::CannotAssignImmutableToMutable { span });
+        }
+
+        let var_ty = change_mutability_dup(init.get_type(), mutability);
+
+        let alloca = if specified_ty.kind.is_inferred() {
+            // No type information was available, so infer from an initializer
+            let alloca = cucx.create_entry_block_alloca(name.as_str(), &var_ty);
+
+            cucx.tcx.add_symbol(name.name.clone(), (alloca, var_ty));
+
+            alloca
+        } else {
+            // Type information is available
+
+            // Check if an initializer type and type match
+            if !is_same_type(&specified_ty, &init.get_type()) {
+                return Err(CodegenError::MismatchedTypes {
+                    types: (
+                        specified_ty.kind.to_string(),
+                        init.get_type().kind.to_string(),
+                    ),
+                    span,
+                });
+            }
+
+            let alloca = cucx.create_entry_block_alloca(name.as_str(), &var_ty);
+
+            cucx.tcx.add_symbol(name.name.clone(), (alloca, var_ty));
+
+            alloca
+        };
+
+        // Initialization
+        cucx.builder.build_store(alloca, init.get_value());
+
+        return Ok(());
+    }
+
+    todo!()
+}
+
 struct StmtBuilder<'a, 'ctx, 'm, 'c> {
     cucx: &'a mut CompileUnitContext<'ctx, 'm, 'c>,
 }
@@ -139,55 +194,7 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
         specified_ty: Rc<Ty>,
         span: Span,
     ) -> CodegenResult<()> {
-        if let Some(init) = init {
-            if matches!(init.get_type().kind.as_ref(), TyKind::Reference(_))
-                && mutability.is_mut()
-                && init.get_type().mutability.is_not()
-            {
-                return Err(CodegenError::CannotAssignImmutableToMutable { span });
-            }
-
-            let var_ty = change_mutability_dup(init.get_type(), mutability);
-
-            let alloca = if specified_ty.kind.is_inferred() {
-                // No type information was available, so infer from an initializer
-                let alloca = self.cucx.create_entry_block_alloca(name.as_str(), &var_ty);
-
-                self.cucx
-                    .tcx
-                    .add_symbol(name.name.clone(), (alloca, var_ty));
-
-                alloca
-            } else {
-                // Type information is available
-
-                // Check if an initializer type and type match
-                if !is_same_type(&specified_ty, &init.get_type()) {
-                    return Err(CodegenError::MismatchedTypes {
-                        types: (
-                            specified_ty.kind.to_string(),
-                            init.get_type().kind.to_string(),
-                        ),
-                        span,
-                    });
-                }
-
-                let alloca = self.cucx.create_entry_block_alloca(name.as_str(), &var_ty);
-
-                self.cucx
-                    .tcx
-                    .add_symbol(name.name.clone(), (alloca, var_ty));
-
-                alloca
-            };
-
-            // Initialization
-            self.cucx.builder.build_store(alloca, init.get_value());
-
-            return Ok(());
-        }
-
-        todo!()
+        build_normal_let(self.cucx, name, mutability, init, specified_ty, span)
     }
 
     fn normal_let(&mut self, node: &NormalLet) -> CodegenResult<()> {
@@ -255,7 +262,7 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
                 todo!("Error")
             }
 
-            self.unpack_one_tuple_field(&tuple, index as u64, name, mutability, node.span)?;
+            self.unpack_one_tuple_field(&tuple, index as u32, name, mutability, node.span)?;
         }
 
         Ok(())
@@ -264,7 +271,7 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
     fn unpack_one_tuple_field(
         &mut self,
         tuple: &Value<'ctx>,
-        index: u64,
+        index: u32,
         unpacked_name: &Ident,
         unpacked_mutability: Mutability,
         span: Span,
@@ -294,11 +301,7 @@ impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
             unpacked_name,
             unpacked_mutability,
             Some(unpacked_value),
-            Ty {
-                kind: TyKind::Inferred.into(),
-                mutability: unpacked_mutability,
-            }
-            .into(),
+            Ty::new_inferred(unpacked_mutability).into(),
             span,
         )?;
 

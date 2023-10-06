@@ -66,14 +66,24 @@ pub struct StructInfo<'ctx> {
 }
 
 pub struct EnumVariantInfo {
+    pub name: String,
     pub vis: Visibility,
     pub offset: u32,
+    pub ty: Option<Rc<Ty>>,
 }
 
 pub struct EnumInfo<'ctx> {
     pub name: String,
     pub variants: HashMap<String, EnumVariantInfo>,
     pub ty: BasicTypeEnum<'ctx>,
+}
+
+impl<'ctx> EnumInfo<'ctx> {
+    pub fn get_variant_info_from_offset(&self, offset: u32) -> Option<&'_ EnumVariantInfo> {
+        self.variants
+            .values()
+            .find(|&variant| variant.offset == offset)
+    }
 }
 
 pub type StructTable<'ctx> = HashMap<String, Rc<StructInfo<'ctx>>>;

@@ -6,7 +6,7 @@ use kaede_ast::{
 };
 use kaede_lex::token::{Token, TokenKind};
 use kaede_span::{Location, Span};
-use kaede_type::{Ty, TyKind};
+use kaede_type::Ty;
 
 use crate::{
     error::{ParseError, ParseResult},
@@ -114,11 +114,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                     name,
                     mutability,
                     init: Some(init.into()),
-                    ty: Ty {
-                        kind: TyKind::Inferred.into(),
-                        mutability,
-                    }
-                    .into(),
+                    ty: Ty::new_inferred(mutability).into(),
                     span,
                 }),
                 span,

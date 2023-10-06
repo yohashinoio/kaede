@@ -45,6 +45,15 @@ pub struct Ty {
     pub mutability: Mutability,
 }
 
+impl Ty {
+    pub fn new_inferred(mutability: Mutability) -> Self {
+        Self {
+            kind: TyKind::Inferred.into(),
+            mutability,
+        }
+    }
+}
+
 /// Represents whether a value can be changed
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Copy)]
 pub enum Mutability {

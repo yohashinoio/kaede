@@ -7,20 +7,21 @@ use std::{
 use crate::{
     error::{CodegenError, CodegenResult},
     mangle::mangle_name,
-    stmt::{build_block, build_statement},
-    tcx::{EnumInfo, ReturnType, SymbolTable},
+    stmt::{build_block, build_normal_let, build_statement},
+    tcx::{EnumInfo, EnumVariantInfo, ReturnType, SymbolTable},
     value::{has_signed, Value},
     CompileUnitContext,
 };
 
 use inkwell::{
     values::{BasicValue, BasicValueEnum, IntValue, PointerValue},
-    IntPredicate,
+    AddressSpace, IntPredicate,
 };
 use kaede_ast::{
     expr::{
-        ArrayLiteral, Binary, BinaryKind, Break, Else, Expr, ExprKind, FnCall, Ident, If, Indexing,
-        LogicalNot, Loop, Match, MatchArm, MatchArmList, Return, StructLiteral, TupleLiteral,
+        Args, ArrayLiteral, Binary, BinaryKind, Break, Else, Expr, ExprKind, FnCall, Ident, If,
+        Indexing, LogicalNot, Loop, Match, MatchArm, MatchArmList, Return, StructLiteral,
+        TupleLiteral,
     },
     stmt::{Block, Stmt, StmtKind},
 };
@@ -30,12 +31,26 @@ use kaede_type::{
     Mutability, RefrenceType, Ty, TyKind, UserDefinedType,
 };
 
+struct EnumUnpack<'ctx> {
+    /// A::B(x)
+    ///      ^
+    name: Ident,
+    /// match x
+    ///       ^
+    enum_value: Value<'ctx>,
+    variant_ty: Rc<Ty>,
+    span: Span,
+}
+
 /// `If` where `Expr` is changed to `Value`
 struct ValuedIf<'ctx> {
     cond: Value<'ctx>,
     then: Rc<Block>,
     else_: Option<Box<ValuedElse<'ctx>>>,
     span: Span,
+
+    /// Used to initialize variant parameters of match
+    enum_unpack: Option<EnumUnpack<'ctx>>,
 }
 
 impl<'ctx> ValuedIf<'ctx> {
@@ -106,7 +121,7 @@ pub fn build_expression<'ctx>(
 pub fn build_tuple_indexing<'ctx>(
     cucx: &CompileUnitContext<'ctx, '_, '_>,
     tuple: PointerValue<'ctx>,
-    index: u64,
+    index: u32,
     tuple_ty: &Rc<Ty>,
     span: Span,
 ) -> CodegenResult<Value<'ctx>> {
@@ -116,7 +131,7 @@ pub fn build_tuple_indexing<'ctx>(
             tuple,
             &[
                 cucx.context().i32_type().const_zero(),
-                cucx.context().i32_type().const_int(index, false),
+                cucx.context().i32_type().const_int(index as u64, false),
             ],
             "",
         )
@@ -126,7 +141,12 @@ pub fn build_tuple_indexing<'ctx>(
         TyKind::Tuple(types) => match types.get(index as usize) {
             Some(ty) => ty,
 
-            None => return Err(CodegenError::IndexOutOfRange { index, span }),
+            None => {
+                return Err(CodegenError::IndexOutOfRange {
+                    index: index as u64,
+                    span,
+                })
+            }
         },
         kind => unreachable!("{:?}", kind),
     };
@@ -220,12 +240,13 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         })
     }
 
-    /// A::B to ("A", "B")
+    /// A::B to ("A", "B", None)
+    /// A::B(a, b, c) to ("A", "B", Some(["a", "b", "c"]))
     fn dismantle_enum_variant_pattern<'pat>(
         &self,
         pattern: &'pat Expr,
-    ) -> (&'pat Ident, &'pat Ident) {
-        let (enum_name, variant_name) = match &pattern.kind {
+    ) -> (&'pat Ident, &'pat Ident, Option<&'pat Args>) {
+        let (enum_name, variant_name_and_param) = match &pattern.kind {
             ExprKind::Binary(b) => match b.kind {
                 BinaryKind::ScopeResolution => (&b.lhs, &b.rhs),
                 _ => unreachable!(),
@@ -239,12 +260,13 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             _ => unreachable!(),
         };
 
-        let variant_name = match &variant_name.kind {
-            ExprKind::Ident(s) => s,
+        let (variant_name, param) = match &variant_name_and_param.kind {
+            ExprKind::Ident(ident) => (ident, None),
+            ExprKind::FnCall(fncall) => (&fncall.name, Some(&fncall.args)),
             _ => unreachable!(),
         };
 
-        (enum_name, variant_name)
+        (enum_name, variant_name, param)
     }
 
     fn match_(&mut self, node: &Match) -> CodegenResult<Value<'ctx>> {
@@ -404,6 +426,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
 
         Ok(Some(ValuedIf {
             cond,
+            enum_unpack: None,
             then: then.into(),
             else_,
             span,
@@ -425,7 +448,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         let mut pattern_variant_names = BTreeSet::new();
 
         for arm in arms.non_wildcard_iter() {
-            let (enum_name, variant_name) = self.dismantle_enum_variant_pattern(&arm.pattern);
+            let (enum_name, variant_name, _) = self.dismantle_enum_variant_pattern(&arm.pattern);
 
             if enum_info.name != enum_name.as_str() {
                 todo!("Error");
@@ -492,7 +515,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
 
     fn build_match_on_enum(
         &mut self,
-        enum_info: &EnumInfo,
+        enum_info: &Rc<EnumInfo>,
         target: &Value<'ctx>,
         arms: &MatchArmList,
         span: Span,
@@ -502,6 +525,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         let mut valued_if = self
             .conv_match_arms_on_enum_to_if(
                 enum_info,
+                target,
                 &target_offset,
                 arms.non_wildcard_iter(),
                 span,
@@ -518,7 +542,8 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
     /// The return value is `Option` because of the recursion termination condition, so there is no problem if the caller `unwrap`s it
     fn conv_match_arms_on_enum_to_if(
         &mut self,
-        enum_info: &EnumInfo,
+        enum_info: &Rc<EnumInfo>,
+        target: &Value<'ctx>,
         target_offset: &Value<'ctx>,
         mut arms: Iter<MatchArm>,
         span: Span,
@@ -528,16 +553,25 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             None => return Ok(None),
         };
 
-        let cond = {
-            let pattern_offset =
-                self.derive_offset_from_enum_variant_pattern(enum_info, &current_arm.pattern)?;
+        let (cond, param_name, pattern_variant_info) = {
+            let (pattern_variant_info, params) =
+                self.derive_variant_from_enum_variant_pattern(enum_info, &current_arm.pattern)?;
 
-            self.build_int_equal(
-                target_offset.get_value().into_int_value(),
-                self.cucx
-                    .context()
-                    .i32_type()
-                    .const_int(pattern_offset as u64, false),
+            let param_name = params.map(|x| match &x.0.front().unwrap().kind {
+                ExprKind::Ident(ident) => ident,
+                _ => todo!("Error"),
+            });
+
+            (
+                self.build_int_equal(
+                    target_offset.get_value().into_int_value(),
+                    self.cucx
+                        .context()
+                        .i32_type()
+                        .const_int(pattern_variant_info.offset as u64, false),
+                ),
+                param_name,
+                pattern_variant_info,
             )
         };
 
@@ -550,11 +584,34 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         };
 
         let else_ = self
-            .conv_match_arms_on_enum_to_if(enum_info, target_offset, arms, span)?
+            .conv_match_arms_on_enum_to_if(enum_info, target, target_offset, arms, span)?
             .map(|if_| Box::new(ValuedElse::If(if_)));
+
+        let enum_unpack = if let Some(param_name) = param_name {
+            match &pattern_variant_info.ty {
+                Some(ty) => Some(EnumUnpack {
+                    name: param_name.clone(),
+                    enum_value: target.clone(),
+                    variant_ty: ty.clone(),
+                    span,
+                }),
+                None => {
+                    return Err(CodegenError::UnitVariantCannotUnpack {
+                        unit_variant_name: format!(
+                            "{}::{}",
+                            enum_info.name, pattern_variant_info.name
+                        ),
+                        span: current_arm.pattern.span,
+                    })
+                }
+            }
+        } else {
+            None
+        };
 
         Ok(Some(ValuedIf {
             cond,
+            enum_unpack,
             then: then.into(),
             else_,
             span,
@@ -579,25 +636,31 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         )
     }
 
-    fn derive_offset_from_enum_variant_pattern(
+    fn derive_variant_from_enum_variant_pattern<'pat, 'e>(
         &self,
-        enum_info: &EnumInfo,
-        pattern: &Expr,
-    ) -> CodegenResult<u32> {
-        let (enum_name, variant_name) = self.dismantle_enum_variant_pattern(pattern);
+        enum_info: &'e EnumInfo,
+        pattern: &'pat Expr,
+    ) -> CodegenResult<(&'e EnumVariantInfo, Option<&'pat Args>)> {
+        let (enum_name, variant_name, param) = self.dismantle_enum_variant_pattern(pattern);
 
         if enum_info.name != enum_name.as_str() {
             todo!("Error");
         }
 
-        self.get_enum_variant_offset(enum_info, (variant_name.as_str(), variant_name.span))
+        Ok((
+            self.get_enum_variant_info_from_name(
+                enum_info,
+                (variant_name.as_str(), variant_name.span),
+            )?,
+            param,
+        ))
     }
 
-    fn get_enum_variant_offset(
+    fn get_enum_variant_info_from_name<'e>(
         &self,
-        enum_info: &EnumInfo,
+        enum_info: &'e EnumInfo,
         variant_name: (&str, Span),
-    ) -> CodegenResult<u32> {
+    ) -> CodegenResult<&'e EnumVariantInfo> {
         let variant = match enum_info.variants.get(variant_name.0) {
             Some(item) => item,
             None => {
@@ -609,7 +672,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             }
         };
 
-        Ok(variant.offset)
+        Ok(variant)
     }
 
     fn break_(&self, node: &Break) -> CodegenResult<Value<'ctx>> {
@@ -674,6 +737,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
 
         Ok(ValuedIf {
             cond,
+            enum_unpack: None,
             then: orig.then.clone(),
             else_,
             span: orig.span,
@@ -729,7 +793,15 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
 
         // Build then block
         self.cucx.builder.position_at_end(then_bb);
+
+        // Enum unpack (optional)
+        if let Some(enum_unpack) = &node.enum_unpack {
+            self.build_enum_unpack(enum_unpack)?;
+        }
+
+        // Build then code
         let then_val = build_block_expression(self.cucx, &node.then)?;
+
         // Since there can be no more than one terminator per block
         if self.cucx.no_terminator() {
             self.cucx.builder.build_unconditional_branch(cont_bb);
@@ -740,6 +812,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         // Build else block
         self.cucx.builder.position_at_end(else_bb);
 
+        // Build else code
         let else_val = match &node.else_ {
             Some(else_) => match else_.as_ref() {
                 ValuedElse::If(if_) => self.unsafe_build_if(if_, unreachable_else)?,
@@ -804,6 +877,53 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         ]);
 
         Ok(Value::new(phi.as_basic_value(), ty))
+    }
+
+    fn build_enum_unpack(&mut self, enum_unpack: &EnumUnpack) -> CodegenResult<()> {
+        let variant_ty_llvm = match enum_unpack.variant_ty.kind.as_ref() {
+            TyKind::Reference(refty) => self.cucx.to_llvm_type(&refty.refee_ty),
+            _ => self.cucx.to_llvm_type(&enum_unpack.variant_ty),
+        };
+
+        let bitcast = self.cucx.builder.build_bitcast(
+            enum_unpack.enum_value.get_value(),
+            self.cucx
+                .context()
+                .struct_type(
+                    &[self.cucx.context().i32_type().into(), variant_ty_llvm],
+                    true,
+                )
+                .ptr_type(AddressSpace::default()),
+            "",
+        );
+
+        let gep = unsafe {
+            self.cucx.builder.build_in_bounds_gep(
+                variant_ty_llvm,
+                bitcast.into_pointer_value(),
+                &[
+                    self.cucx.context().i32_type().const_zero(),
+                    self.cucx.context().i32_type().const_int(1_u64, false),
+                ],
+                "",
+            )
+        };
+
+        let variant_value = Value::new(
+            self.cucx.builder.build_load(variant_ty_llvm, gep, ""),
+            enum_unpack.variant_ty.clone(),
+        );
+
+        build_normal_let(
+            self.cucx,
+            &enum_unpack.name,
+            Mutability::Not,
+            Some(variant_value),
+            Rc::new(Ty::new_inferred(Mutability::Not)),
+            enum_unpack.span,
+        )?;
+
+        Ok(())
     }
 
     fn struct_literal(&mut self, node: &StructLiteral) -> CodegenResult<Value<'ctx>> {
@@ -1102,8 +1222,12 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             }
         };
 
-        let variant_offset =
-            self.get_enum_variant_offset(&enum_info, (variant_name.as_str(), variant_name.span))?;
+        let variant_offset = self
+            .get_enum_variant_info_from_name(
+                &enum_info,
+                (variant_name.as_str(), variant_name.span),
+            )?
+            .offset;
 
         let enum_ty = Ty {
             kind: TyKind::UserDefined(UserDefinedType {
@@ -1582,7 +1706,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
 
         let left_value = left.get_value().into_pointer_value();
 
-        build_tuple_indexing(self.cucx, left_value, index, tuple_ty, right.span)
+        build_tuple_indexing(self.cucx, left_value, index as u32, tuple_ty, right.span)
     }
 
     fn call_fn(&mut self, node: &FnCall) -> CodegenResult<Value<'ctx>> {

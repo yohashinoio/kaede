@@ -6,7 +6,7 @@ use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability, Ty};
 
 use crate::stmt::Block;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Ident {
     pub name: String,
     pub span: Span,
@@ -182,12 +182,6 @@ pub struct Return {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Expr {
-    pub kind: ExprKind,
-    pub span: Span,
-}
-
-#[derive(Debug, PartialEq, Eq)]
 pub struct MatchArm {
     pub pattern: Box<Expr>,
     pub code: Rc<Expr>,
@@ -234,6 +228,12 @@ impl MatchArmList {
 pub struct Match {
     pub target: Box<Expr>,
     pub arms: MatchArmList,
+    pub span: Span,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct Expr {
+    pub kind: ExprKind,
     pub span: Span,
 }
 

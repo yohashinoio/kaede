@@ -77,6 +77,12 @@ pub enum CodegenError {
         span: Span,
     },
 
+    #[error("{}:{} cannot unpack values from unit variant `{}`", span.start.line, span.start.column, unit_variant_name)]
+    UnitVariantCannotUnpack {
+        unit_variant_name: String,
+        span: Span,
+    },
+
     #[error("`main` function not found")]
     MainNotFound,
 

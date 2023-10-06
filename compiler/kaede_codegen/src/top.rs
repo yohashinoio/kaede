@@ -88,10 +88,12 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
             .into_iter()
             .map(|e| {
                 (
-                    e.name.name,
+                    e.name.name.to_owned(),
                     EnumVariantInfo {
+                        name: e.name.name,
                         vis: e.vis,
                         offset: e.offset,
+                        ty: e.ty.map(Rc::new),
                     },
                 )
             })
