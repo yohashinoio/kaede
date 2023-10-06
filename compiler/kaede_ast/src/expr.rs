@@ -256,4 +256,5 @@ pub enum ExprKind {
     Loop(Loop),
     Break(Break),
     Match(Match),
+    Block(Block),
 }

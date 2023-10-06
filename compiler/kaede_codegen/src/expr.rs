@@ -201,6 +201,8 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
     /// Generate expression code
     fn build(&mut self, node: &Expr) -> CodegenResult<Value<'ctx>> {
         Ok(match &node.kind {
+            ExprKind::Block(block) => build_block_expression(self.cucx, block)?,
+
             ExprKind::Int(int) => Value::new(
                 int.as_llvm_int(self.cucx.context()).into(),
                 Rc::new(int.get_type()),

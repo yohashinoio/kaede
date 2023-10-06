@@ -333,6 +333,15 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             return Ok(lit);
         }
 
+        // Block
+        if self.check(&TokenKind::OpenBrace) {
+            let block = self.block()?;
+            return Ok(Expr {
+                span: block.span,
+                kind: ExprKind::Block(block),
+            });
+        }
+
         // Integer
         if matches!(self.first().kind, TokenKind::Int(_)) {
             let int = self.int()?;
