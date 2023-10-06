@@ -1967,7 +1967,7 @@ fn tagged_enum_as_argument() -> anyhow::Result<()> {
     fn sum_fruits(e: E) -> i32 {
         return match e {
             E::A => 116,
-            E::B => fruits.apple + fruits.ichigo,
+            E::B(fruits) => fruits.apple + fruits.ichigo,
         }
     }
 
