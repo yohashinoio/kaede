@@ -8,9 +8,9 @@ use crate::{
     error::{CodegenError, CodegenResult},
     mangle::mangle_name,
     stmt::{build_block, build_normal_let, build_statement},
-    tcx::{EnumInfo, EnumVariantInfo, ReturnType, SymbolTable},
+    tcx::{EnumInfo, EnumVariantInfo, ReturnType, VariableTable},
     value::{has_signed, Value},
-    CompileUnitContext,
+    CompileUnitCtx,
 };
 
 use inkwell::{
@@ -26,9 +26,10 @@ use kaede_ast::{
     stmt::{Block, Stmt, StmtKind},
 };
 use kaede_span::Span;
+use kaede_symbol::Symbol;
 use kaede_type::{
     is_same_type, make_fundamental_type, wrap_in_ref, FundamentalType, FundamentalTypeKind,
-    Mutability, RefrenceType, Ty, TyKind, UserDefinedType,
+    Mutability, RefrenceType, Ty, TyKind,
 };
 
 struct EnumUnpack<'ctx> {
@@ -72,14 +73,14 @@ enum ValuedElse<'ctx> {
 
 /// Unit value if the end of the block is not an expression
 pub fn build_block_expression<'ctx>(
-    cucx: &mut CompileUnitContext<'ctx, '_, '_>,
+    cucx: &mut CompileUnitCtx<'ctx, '_, '_>,
     block: &Block,
 ) -> CodegenResult<Value<'ctx>> {
     if block.body.is_empty() {
         return Ok(Value::new_unit());
     }
 
-    cucx.tcx.push_symbol_table(SymbolTable::new());
+    cucx.tcx.push_variable_table(VariableTable::new());
 
     let mut idx: usize = 0;
 
@@ -104,13 +105,13 @@ pub fn build_block_expression<'ctx>(
         }
     };
 
-    cucx.tcx.pop_symbol_table();
+    cucx.tcx.pop_variable_table();
 
     Ok(value)
 }
 
 pub fn build_expression<'ctx>(
-    cucx: &mut CompileUnitContext<'ctx, '_, '_>,
+    cucx: &mut CompileUnitCtx<'ctx, '_, '_>,
     node: &Expr,
 ) -> CodegenResult<Value<'ctx>> {
     let mut builder = ExprBuilder::new(cucx);
@@ -119,7 +120,7 @@ pub fn build_expression<'ctx>(
 }
 
 pub fn build_tuple_indexing<'ctx>(
-    cucx: &CompileUnitContext<'ctx, '_, '_>,
+    cucx: &CompileUnitCtx<'ctx, '_, '_>,
     tuple: PointerValue<'ctx>,
     index: u32,
     tuple_ty: &Rc<Ty>,
@@ -162,7 +163,7 @@ pub fn build_tuple_indexing<'ctx>(
 }
 
 pub fn create_gc_struct<'ctx>(
-    cucx: &mut CompileUnitContext<'ctx, '_, '_>,
+    cucx: &mut CompileUnitCtx<'ctx, '_, '_>,
     struct_ty: &Ty,
     inits: &[BasicValueEnum<'ctx>],
 ) -> PointerValue<'ctx> {
@@ -190,11 +191,11 @@ pub fn create_gc_struct<'ctx>(
 }
 
 struct ExprBuilder<'a, 'ctx, 'm, 'c> {
-    cucx: &'a mut CompileUnitContext<'ctx, 'm, 'c>,
+    cucx: &'a mut CompileUnitCtx<'ctx, 'm, 'c>,
 }
 
 impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
-    fn new(cucx: &'a mut CompileUnitContext<'ctx, 'm, 'c>) -> Self {
+    fn new(cucx: &'a mut CompileUnitCtx<'ctx, 'm, 'c>) -> Self {
         Self { cucx }
     }
 
@@ -452,14 +453,14 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         for arm in arms.non_wildcard_iter() {
             let (enum_name, variant_name, _) = self.dismantle_enum_variant_pattern(&arm.pattern);
 
-            if enum_info.name != enum_name.as_str() {
+            if enum_info.name.symbol() != enum_name.symbol() {
                 todo!("Error");
             }
 
-            if !variants.contains_key(variant_name.as_str()) {
+            if !variants.contains_key(&variant_name.symbol()) {
                 return Err(CodegenError::NoVariant {
-                    variant_name: variant_name.name.to_owned(),
-                    parent_name: enum_name.name.to_owned(),
+                    variant_name: variant_name.symbol(),
+                    parent_name: enum_name.symbol(),
                     span: variant_name.span,
                 });
             }
@@ -482,7 +483,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             return Err(CodegenError::NonExhaustivePatterns {
                 non_exhaustive_patterns: dif
                     .into_iter()
-                    .map(|p| format!("`{}::{}`", enum_info.name, p))
+                    .map(|p| format!("`{}::{}`", enum_info.name.as_str(), p))
                     .collect::<Vec<_>>()
                     .join(" and "),
                 span,
@@ -505,7 +506,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             _ => todo!("Error"),
         };
 
-        let enum_info = match self.cucx.tcx.get_enum_info(&udt.name) {
+        let enum_info = match self.cucx.tcx.get_enum_info(udt.get_symbol()) {
             Some(e) => e,
             None => todo!("Error"),
         };
@@ -592,7 +593,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         let enum_unpack = if let Some(param_name) = param_name {
             match &pattern_variant_info.ty {
                 Some(ty) => Some(EnumUnpack {
-                    name: param_name.clone(),
+                    name: *param_name,
                     enum_value: target.clone(),
                     variant_ty: ty.clone(),
                     span,
@@ -601,8 +602,10 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
                     return Err(CodegenError::UnitVariantCannotUnpack {
                         unit_variant_name: format!(
                             "{}::{}",
-                            enum_info.name, pattern_variant_info.name
-                        ),
+                            enum_info.name.as_str(),
+                            pattern_variant_info.name.as_str()
+                        )
+                        .into(),
                         span: current_arm.pattern.span,
                     })
                 }
@@ -645,14 +648,14 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
     ) -> CodegenResult<(&'e EnumVariantInfo, Option<&'pat Args>)> {
         let (enum_name, variant_name, param) = self.dismantle_enum_variant_pattern(pattern);
 
-        if enum_info.name != enum_name.as_str() {
+        if enum_info.name.symbol() != enum_name.symbol() {
             todo!("Error");
         }
 
         Ok((
             self.get_enum_variant_info_from_name(
                 enum_info,
-                (variant_name.as_str(), variant_name.span),
+                (variant_name.symbol(), variant_name.span),
             )?,
             param,
         ))
@@ -661,14 +664,14 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
     fn get_enum_variant_info_from_name<'e>(
         &self,
         enum_info: &'e EnumInfo,
-        variant_name: (&str, Span),
+        variant_name: (Symbol, Span),
     ) -> CodegenResult<&'e EnumVariantInfo> {
-        let variant = match enum_info.variants.get(variant_name.0) {
+        let variant = match enum_info.variants.get(&variant_name.0) {
             Some(item) => item,
             None => {
                 return Err(CodegenError::NoVariant {
-                    variant_name: variant_name.0.to_owned(),
-                    parent_name: enum_info.name.to_owned(),
+                    variant_name: variant_name.0,
+                    parent_name: enum_info.name.symbol(),
                     span: variant_name.1,
                 })
             }
@@ -929,29 +932,26 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
     }
 
     fn struct_literal(&mut self, node: &StructLiteral) -> CodegenResult<Value<'ctx>> {
-        let struct_info = match self.cucx.tcx.get_struct_info(node.struct_name.as_str()) {
+        let struct_info = match self.cucx.tcx.get_struct_info(node.struct_name.symbol()) {
             Some(x) => x.clone(),
 
             None => {
                 return Err(CodegenError::Undeclared {
+                    name: node.struct_name.symbol(),
                     span: node.struct_name.span,
-                    name: node.struct_name.name.clone(),
                 })
             }
         };
 
         let struct_ty = Ty {
-            kind: TyKind::UserDefined(UserDefinedType {
-                name: node.struct_name.name.clone(),
-            })
-            .into(),
+            kind: TyKind::UserDefined(node.struct_name.symbol().into()).into(),
             mutability: Mutability::Not,
         };
 
         let mut values = Vec::new();
 
         for value in node.values.iter() {
-            let field_info = &struct_info.fields[value.0.as_str()];
+            let field_info = &struct_info.fields[&value.0.symbol()];
 
             let value = build_expression(self.cucx, &value.1)?;
 
@@ -1159,7 +1159,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
     }
 
     fn ident_expr(&self, ident: &Ident) -> CodegenResult<Value<'ctx>> {
-        let (ptr, ty) = self.cucx.tcx.lookup_var(ident)?;
+        let (ptr, ty) = self.cucx.tcx.lookup_variable(ident)?;
 
         Ok(Value::new(
             self.cucx
@@ -1214,11 +1214,11 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         variant_name: &Ident,
         value: Option<&Expr>,
     ) -> CodegenResult<Value<'ctx>> {
-        let enum_info = match self.cucx.tcx.get_enum_info(enum_name.as_str()) {
+        let enum_info = match self.cucx.tcx.get_enum_info(enum_name.symbol()) {
             Some(info) => info,
             None => {
                 return Err(CodegenError::Undeclared {
-                    name: enum_name.name.to_owned(),
+                    name: enum_name.symbol(),
                     span: enum_name.span,
                 })
             }
@@ -1227,15 +1227,12 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         let variant_offset = self
             .get_enum_variant_info_from_name(
                 &enum_info,
-                (variant_name.as_str(), variant_name.span),
+                (variant_name.symbol(), variant_name.span),
             )?
             .offset;
 
         let enum_ty = Ty {
-            kind: TyKind::UserDefined(UserDefinedType {
-                name: enum_name.name.to_owned(),
-            })
-            .into(),
+            kind: TyKind::UserDefined(enum_name.symbol().into()).into(),
             mutability: Mutability::Not,
         };
 
@@ -1531,7 +1528,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         assert!(matches!(node.kind, BinaryKind::Access));
 
         if let ExprKind::Ident(modname) = &node.lhs.kind {
-            if self.cucx.imported_modules.contains(modname.as_str()) {
+            if self.cucx.imported_modules.contains(&modname.symbol()) {
                 // --- Module item access ---
                 self.cucx.module.set_name(modname.as_str());
 
@@ -1604,7 +1601,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         struct_ty: &Rc<Ty>,
     ) -> CodegenResult<Value<'ctx>> {
         let struct_name = if let TyKind::UserDefined(ty) = struct_ty.kind.as_ref() {
-            &ty.name
+            ty.get_symbol()
         } else {
             unreachable!()
         };
@@ -1625,18 +1622,18 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
     fn struct_field_access(
         &self,
         struct_value: &Value<'ctx>,
-        struct_name: &str,
+        struct_name: Symbol,
         struct_ty: &Rc<Ty>,
         field_name: &Ident,
     ) -> CodegenResult<Value<'ctx>> {
         let struct_info = self.cucx.tcx.get_struct_info(struct_name).unwrap();
 
-        let field_info = match struct_info.fields.get(field_name.as_str()) {
+        let field_info = match struct_info.fields.get(&field_name.symbol()) {
             Some(field) => field,
             None => {
                 return Err(CodegenError::NoMember {
-                    member_name: field_name.name.to_owned(),
-                    parent_name: struct_name.to_owned(),
+                    member_name: field_name.symbol(),
+                    parent_name: struct_name,
                     span: field_name.span,
                 });
             }
@@ -1671,7 +1668,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
     fn struct_method_access(
         &mut self,
         struct_value: &Value<'ctx>,
-        struct_name: &str,
+        struct_name: Symbol,
         call_node: &FnCall,
     ) -> CodegenResult<Value<'ctx>> {
         // For 'get_age' method of 'Person' structure
@@ -1692,7 +1689,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         // Push self to front
         args.push_front((struct_value.clone(), call_node.args.1));
 
-        self.build_call_fn(&actual_method_name, args, call_node.span)
+        self.build_call_fn(actual_method_name.into(), args, call_node.span)
     }
 
     fn tuple_indexing(
@@ -1722,12 +1719,12 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
             args
         };
 
-        self.build_call_fn(node.name.as_str(), args, node.span)
+        self.build_call_fn(node.name.symbol(), args, node.span)
     }
 
     fn build_call_fn(
         &mut self,
-        name: &str,
+        name: Symbol,
         args: VecDeque<(Value<'ctx>, Span)>,
         span: Span,
     ) -> CodegenResult<Value<'ctx>> {
@@ -1736,12 +1733,7 @@ impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
         let func = match func {
             Some(func) => func,
 
-            None => {
-                return Err(CodegenError::Undeclared {
-                    name: name.to_string(),
-                    span,
-                })
-            }
+            None => return Err(CodegenError::Undeclared { name, span }),
         };
 
         let param_types = self.cucx.tcx.get_fn_params(func).unwrap();

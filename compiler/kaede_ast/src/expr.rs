@@ -2,46 +2,56 @@ use std::{collections::VecDeque, rc::Rc, slice::Iter};
 
 use inkwell::{context::Context, values::IntValue};
 use kaede_span::Span;
+use kaede_symbol::Symbol;
 use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability, Ty};
 
 use crate::stmt::Block;
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+// Do not derive PartialEq or Eq!
+// Unintended behavior is likely to be caused by comparisons involving span!
+#[derive(Debug, Clone, Copy)]
 pub struct Ident {
-    pub name: String,
+    name: Symbol,
     pub span: Span,
 }
 
 impl Ident {
+    pub fn from_symbol_and_span(name: Symbol, span: Span) -> Self {
+        Self { name, span }
+    }
+
     pub fn as_str(&self) -> &str {
-        &self.name
+        self.name.as_str()
+    }
+
+    pub fn symbol(self) -> Symbol {
+        self.name
     }
 }
 
-// Struct literal
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct StructLiteral {
     pub struct_name: Ident,
     pub values: Vec<(Ident, Expr)>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct Args(pub VecDeque<Expr>, pub Span);
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct FnCall {
     pub name: Ident,
     pub args: Args,
     pub span: Span,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct Int {
     pub kind: IntKind,
     pub span: Span,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub enum IntKind {
     I32(i32),
     U64(u64),
@@ -111,7 +121,7 @@ pub enum BinaryKind {
     ScopeResolution,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct Binary {
     pub lhs: Rc<Expr>,
     pub kind: BinaryKind,
@@ -124,50 +134,50 @@ impl Binary {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct LogicalNot {
     pub operand: Box<Expr>,
     pub span: Span,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct ArrayLiteral {
     pub elements: Vec<Expr>,
     pub span: Span,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct TupleLiteral {
     pub elements: VecDeque<Expr>,
     pub span: Span,
 }
 
 /// Sometimes called `Array subscripting`
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct Indexing {
     pub operand: Box<Expr>,
     pub index: Box<Expr>,
     pub span: Span,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct Loop {
     pub body: Block,
     pub span: Span,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct Break {
     pub span: Span,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub enum Else {
     If(If),
     Block(Rc<Block>),
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct If {
     pub cond: Box<Expr>,
     pub then: Rc<Block>,
@@ -175,13 +185,13 @@ pub struct If {
     pub span: Span,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct Return {
     pub val: Option<Box<Expr>>,
     pub span: Span,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct MatchArm {
     pub pattern: Box<Expr>,
     pub code: Rc<Expr>,
@@ -196,7 +206,7 @@ impl MatchArm {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct MatchArmList {
     arms: Vec<MatchArm>,
     pub wildcard: Option<MatchArm>,
@@ -224,20 +234,20 @@ impl MatchArmList {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct Match {
     pub target: Box<Expr>,
     pub arms: MatchArmList,
     pub span: Span,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct Expr {
     pub kind: ExprKind,
     pub span: Span,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub enum ExprKind {
     Int(Int),
     StringLiteral(String),

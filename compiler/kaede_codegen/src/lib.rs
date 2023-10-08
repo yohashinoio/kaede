@@ -13,8 +13,9 @@ use inkwell::{
     AddressSpace, OptimizationLevel,
 };
 use kaede_ast::{top::TopLevel, CompileUnit};
+use kaede_symbol::Symbol;
 use kaede_type::{FundamentalType, FundamentalTypeKind, Mutability, RefrenceType, Ty, TyKind};
-use tcx::{ReturnType, TypeContext};
+use tcx::{ReturnType, TypeCtx};
 use top::build_top_level;
 
 pub mod error;
@@ -43,13 +44,13 @@ fn get_loaded_pointer<'ctx>(load_instr: &InstructionValue<'ctx>) -> Option<Point
 }
 
 pub fn codegen<'ctx>(
-    ctx: &CodegenContext<'ctx>,
+    ctx: &CodegenCtx<'ctx>,
     module: &Module<'ctx>,
     file_path: PathBuf,
     cu: CompileUnit,
     opt_level: OptimizationLevel,
 ) -> CodegenResult<()> {
-    let mut cucx = CompileUnitContext::new(ctx, module, file_path)?;
+    let mut cucx = CompileUnitCtx::new(ctx, module, file_path)?;
 
     cucx.gc_init();
 
@@ -59,14 +60,14 @@ pub fn codegen<'ctx>(
 }
 
 /// Do **not** create this struct multiple times!
-pub struct CodegenContext<'ctx> {
+pub struct CodegenCtx<'ctx> {
     _target_machine: TargetMachine,
     target_data: TargetData,
 
     pub context: &'ctx Context,
 }
 
-impl<'ctx> CodegenContext<'ctx> {
+impl<'ctx> CodegenCtx<'ctx> {
     fn create_target_machine() -> CodegenResult<TargetMachine> {
         let triple = TargetMachine::get_default_triple();
 
@@ -107,18 +108,18 @@ impl<'ctx> CodegenContext<'ctx> {
     }
 }
 
-pub struct CompileUnitContext<'ctx, 'm, 'c> {
-    pub cgcx: &'c CodegenContext<'ctx>,
+pub struct CompileUnitCtx<'ctx, 'm, 'c> {
+    pub cgcx: &'c CodegenCtx<'ctx>,
 
     pub module: &'m Module<'ctx>,
     pub builder: Builder<'ctx>,
 
-    pub tcx: TypeContext<'ctx>,
+    pub tcx: TypeCtx<'ctx>,
 
     pub file_path: PathBuf,
 
     pub module_name: String,
-    pub imported_modules: HashSet<String>,
+    pub imported_modules: HashSet<Symbol>,
 
     /// Block to jump to when a `break` is executed
     ///
@@ -130,9 +131,9 @@ pub struct CompileUnitContext<'ctx, 'm, 'c> {
     pub is_ifmatch_stmt: bool,
 }
 
-impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
+impl<'ctx, 'm, 'c> CompileUnitCtx<'ctx, 'm, 'c> {
     pub fn new(
-        ctx: &'c CodegenContext<'ctx>,
+        ctx: &'c CodegenCtx<'ctx>,
         module: &'m Module<'ctx>,
         file_path: PathBuf,
     ) -> CodegenResult<Self> {
@@ -290,11 +291,11 @@ impl<'ctx, 'm, 'c> CompileUnitContext<'ctx, 'm, 'c> {
             }
 
             TyKind::UserDefined(udt) => {
-                if let Some(si) = self.tcx.get_struct_info(&udt.name) {
+                if let Some(si) = self.tcx.get_struct_info(udt.get_symbol()) {
                     return si.ty.into();
                 }
 
-                if let Some(ei) = self.tcx.get_enum_info(&udt.name) {
+                if let Some(ei) = self.tcx.get_enum_info(udt.get_symbol()) {
                     return ei.ty;
                 }
 

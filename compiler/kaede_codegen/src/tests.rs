@@ -32,7 +32,7 @@ fn exec(program: &str) -> CodegenResult<i32> {
     let context = Context::create();
     let module = context.create_module("test");
 
-    let cgcx = CodegenContext::new(&context)?;
+    let cgcx = CodegenCtx::new(&context)?;
 
     codegen(
         &cgcx,

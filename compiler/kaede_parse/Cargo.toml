@@ -13,3 +13,4 @@ kaede_lex = { path = "../kaede_lex" }
 kaede_ast = { path = "../kaede_ast" }
 kaede_span = { path = "../kaede_span" }
 kaede_type = { path = "../kaede_type" }
+kaede_symbol = { path = "../kaede_symbol" }

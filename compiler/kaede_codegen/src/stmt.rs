@@ -14,23 +14,23 @@ use crate::{
     error::{CodegenError, CodegenResult},
     expr::build_expression,
     get_loaded_pointer,
-    tcx::SymbolTable,
-    CompileUnitContext,
+    tcx::VariableTable,
+    CompileUnitCtx,
 };
 
-pub fn build_block(cucx: &mut CompileUnitContext, block: &Block) -> CodegenResult<()> {
-    cucx.tcx.push_symbol_table(SymbolTable::new());
+pub fn build_block(cucx: &mut CompileUnitCtx, block: &Block) -> CodegenResult<()> {
+    cucx.tcx.push_variable_table(VariableTable::new());
 
     for stmt in &block.body {
         build_statement(cucx, stmt)?;
     }
 
-    cucx.tcx.pop_symbol_table();
+    cucx.tcx.pop_variable_table();
 
     Ok(())
 }
 
-pub fn build_statement(cucx: &mut CompileUnitContext, node: &Stmt) -> CodegenResult<()> {
+pub fn build_statement(cucx: &mut CompileUnitCtx, node: &Stmt) -> CodegenResult<()> {
     let mut builder = StmtBuilder::new(cucx);
 
     builder.build(node)?;
@@ -60,7 +60,7 @@ pub fn change_mutability_dup(ty: Rc<Ty>, mutability: Mutability) -> Rc<Ty> {
 }
 
 pub fn build_normal_let(
-    cucx: &mut CompileUnitContext,
+    cucx: &mut CompileUnitCtx,
     name: &Ident,
     mutability: Mutability,
     init: Option<Value<'_>>,
@@ -81,7 +81,7 @@ pub fn build_normal_let(
             // No type information was available, so infer from an initializer
             let alloca = cucx.create_entry_block_alloca(name.as_str(), &var_ty);
 
-            cucx.tcx.add_symbol(name.name.clone(), (alloca, var_ty));
+            cucx.tcx.add_variable(name.symbol(), (alloca, var_ty));
 
             alloca
         } else {
@@ -100,7 +100,7 @@ pub fn build_normal_let(
 
             let alloca = cucx.create_entry_block_alloca(name.as_str(), &var_ty);
 
-            cucx.tcx.add_symbol(name.name.clone(), (alloca, var_ty));
+            cucx.tcx.add_variable(name.symbol(), (alloca, var_ty));
 
             alloca
         };
@@ -115,11 +115,11 @@ pub fn build_normal_let(
 }
 
 struct StmtBuilder<'a, 'ctx, 'm, 'c> {
-    cucx: &'a mut CompileUnitContext<'ctx, 'm, 'c>,
+    cucx: &'a mut CompileUnitCtx<'ctx, 'm, 'c>,
 }
 
 impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
-    fn new(cucx: &'a mut CompileUnitContext<'ctx, 'm, 'c>) -> Self {
+    fn new(cucx: &'a mut CompileUnitCtx<'ctx, 'm, 'c>) -> Self {
         Self { cucx }
     }
 

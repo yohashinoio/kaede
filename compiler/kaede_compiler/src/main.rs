@@ -9,7 +9,7 @@ use std::{
 use anyhow::{anyhow, Context as _};
 use clap::Parser;
 use inkwell::{context::Context, module::Module, OptimizationLevel};
-use kaede_codegen::{codegen, error::CodegenError, CodegenContext};
+use kaede_codegen::{codegen, error::CodegenError, CodegenCtx};
 use kaede_lex::lex;
 use kaede_parse::parse;
 use tempfile::{NamedTempFile, TempPath};
@@ -123,7 +123,7 @@ fn compile(
         let module = context.create_module(module_name);
         module.set_source_file_name(file_path.to_str().unwrap());
 
-        let cgcx = CodegenContext::new(&context)?;
+        let cgcx = CodegenCtx::new(&context)?;
         codegen(&cgcx, &module, file_path, ast, opt_level)?;
 
         compiled_modules.push(module);

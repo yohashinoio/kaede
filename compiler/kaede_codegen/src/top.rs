@@ -9,17 +9,18 @@ use kaede_ast::{
 };
 use kaede_lex::lex;
 use kaede_parse::parse;
-use kaede_type::{Mutability, RefrenceType, Ty, TyKind, UserDefinedType};
+use kaede_symbol::Symbol;
+use kaede_type::{Mutability, RefrenceType, Ty, TyKind};
 
 use crate::{
     error::{CodegenError, CodegenResult},
     mangle::{mangle_external_name, mangle_method, mangle_name},
     stmt::{build_block, change_mutability_dup},
-    tcx::{EnumInfo, EnumVariantInfo, ReturnType, StructFieldInfo, StructInfo, SymbolTable},
-    CompileUnitContext,
+    tcx::{EnumInfo, EnumVariantInfo, ReturnType, StructFieldInfo, StructInfo, VariableTable},
+    CompileUnitCtx,
 };
 
-pub fn build_top_level(ctx: &mut CompileUnitContext, node: TopLevel) -> CodegenResult<()> {
+pub fn build_top_level(ctx: &mut CompileUnitCtx, node: TopLevel) -> CodegenResult<()> {
     let mut builder = TopLevelBuilder::new(ctx);
 
     builder.build(node)?;
@@ -30,13 +31,10 @@ pub fn build_top_level(ctx: &mut CompileUnitContext, node: TopLevel) -> CodegenR
 pub fn push_self_to_front(v: &mut Params, struct_name: String, mutability: Mutability) {
     let span = v.1;
 
-    let self_ident = Ident {
-        name: "self".to_string(),
-        span,
-    };
+    let self_ident = Ident::from_symbol_and_span("self".to_string().into(), span);
 
     let struct_ty = Ty {
-        kind: TyKind::UserDefined(UserDefinedType { name: struct_name }).into(),
+        kind: TyKind::UserDefined(Symbol::from(struct_name).into()).into(),
         mutability,
     }
     .into();
@@ -55,11 +53,11 @@ pub fn push_self_to_front(v: &mut Params, struct_name: String, mutability: Mutab
 }
 
 struct TopLevelBuilder<'a, 'ctx, 'm, 'c> {
-    cucx: &'a mut CompileUnitContext<'ctx, 'm, 'c>,
+    cucx: &'a mut CompileUnitCtx<'ctx, 'm, 'c>,
 }
 
 impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
-    fn new(cucx: &'a mut CompileUnitContext<'ctx, 'm, 'c>) -> Self {
+    fn new(cucx: &'a mut CompileUnitCtx<'ctx, 'm, 'c>) -> Self {
         Self { cucx }
     }
 
@@ -88,9 +86,9 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
             .into_iter()
             .map(|e| {
                 (
-                    e.name.name.to_owned(),
+                    e.name.symbol(),
                     EnumVariantInfo {
-                        name: e.name.name,
+                        name: e.name,
                         vis: e.vis,
                         offset: e.offset,
                         ty: e.ty.map(Rc::new),
@@ -119,9 +117,9 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
                 );
 
                 self.cucx.tcx.add_enum(
-                    node.name.as_str().to_owned(),
+                    node.name.symbol(),
                     EnumInfo {
-                        name: node.name.as_str().to_owned(),
+                        name: node.name,
                         ty: ty.into(),
                         variants: items,
                     },
@@ -134,9 +132,9 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
                 ty.set_body(&[self.cucx.context().i32_type().into()], true);
 
                 self.cucx.tcx.add_enum(
-                    node.name.as_str().to_owned(),
+                    node.name.symbol(),
                     EnumInfo {
-                        name: node.name.as_str().to_owned(),
+                        name: node.name,
                         ty: ty.into(),
                         variants: items,
                     },
@@ -166,7 +164,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
     fn impl_(&mut self, node: Impl) -> CodegenResult<()> {
         for item in node.items {
             match item.kind {
-                TopLevelKind::Fn(fn_) => self.method(node.name.as_str(), fn_)?,
+                TopLevelKind::Fn(fn_) => self.method(node.name.symbol(), fn_)?,
 
                 _ => todo!("Error"),
             }
@@ -178,8 +176,8 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
     /// Static method can also be handled by this function
     ///
     /// If kind is `Normal`, it becomes a static method (said in C++ style)
-    fn method(&mut self, impl_for: &str, mut node: Fn) -> CodegenResult<()> {
-        let mangled_name = mangle_method(self.cucx, impl_for, node.name.as_str());
+    fn method(&mut self, impl_for: Symbol, mut node: Fn) -> CodegenResult<()> {
+        let mangled_name = mangle_method(self.cucx, impl_for, node.name.symbol());
 
         match node.kind {
             FnKind::Method => {
@@ -212,7 +210,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
         if !path.exists() {
             return Err(CodegenError::FileNotFoundForModule {
                 span: module_path.span,
-                mod_name: module_path.name,
+                mod_name: module_path.symbol(),
             });
         }
 
@@ -228,7 +226,10 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
             match top_level.kind {
                 TopLevelKind::Fn(func) => {
                     self.decl_fn(
-                        &mangle_external_name(import_module_name, func.name.as_str()),
+                        &mangle_external_name(
+                            import_module_name.to_owned().into(),
+                            func.name.symbol(),
+                        ),
                         func.params,
                         func.return_ty.into(),
                         Linkage::External,
@@ -245,7 +246,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
             }
         }
 
-        self.cucx.imported_modules.insert(module_path.name);
+        self.cucx.imported_modules.insert(module_path.symbol());
 
         Ok(())
     }
@@ -257,7 +258,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
         if node.name.as_str() == "main" {
             self.build_fn("kdmain", node)
         } else {
-            let mangled_name = mangle_name(self.cucx, node.name.as_str());
+            let mangled_name = mangle_name(self.cucx, node.name.symbol());
             self.build_fn(&mangled_name, node)
         }
     }
@@ -298,14 +299,14 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
         self.cucx.builder.position_at_end(basic_block);
 
         // Allocate parameters
-        let param_table = self.fn_params_to_symbol_table(param_info, fn_value);
+        let param_table = self.fn_params_to_variable_table(param_info, fn_value);
 
         // Push parameter table
-        self.cucx.tcx.push_symbol_table(param_table);
+        self.cucx.tcx.push_variable_table(param_table);
 
         build_block(self.cucx, &node.body)?;
 
-        self.cucx.tcx.pop_symbol_table();
+        self.cucx.tcx.pop_variable_table();
 
         if fn_value.get_type().get_return_type().is_none() && self.cucx.no_terminator() {
             // If return type is void and there is no termination, insert return
@@ -315,12 +316,12 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
         Ok(())
     }
 
-    fn fn_params_to_symbol_table(
+    fn fn_params_to_variable_table(
         &self,
         param_info: Vec<(Ident, Rc<Ty>)>,
         fn_value: FunctionValue<'ctx>,
-    ) -> SymbolTable<'ctx> {
-        let mut params = SymbolTable::new();
+    ) -> VariableTable<'ctx> {
+        let mut params = VariableTable::new();
 
         assert_eq!(fn_value.count_params(), param_info.len() as u32);
 
@@ -334,14 +335,14 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
                 .builder
                 .build_store(alloca, fn_value.get_nth_param(idx as u32).unwrap());
 
-            params.add(name.name, (alloca, param_ty));
+            params.add(name.symbol(), (alloca, param_ty));
         }
 
         params
     }
 
     fn struct_(&mut self, node: Struct) {
-        let mangled_name = mangle_name(self.cucx, node.name.as_str());
+        let mangled_name = mangle_name(self.cucx, node.name.symbol());
 
         let field_tys: Vec<_> = node
             .fields
@@ -358,7 +359,7 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
             .into_iter()
             .map(|f| {
                 (
-                    f.name.name,
+                    f.name.symbol(),
                     StructFieldInfo {
                         ty: f.ty.into(),
                         vis: f.vis,
@@ -370,6 +371,6 @@ impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
 
         self.cucx
             .tcx
-            .add_struct(node.name.name, StructInfo { ty, fields });
+            .add_struct(node.name.symbol(), StructInfo { ty, fields });
     }
 }

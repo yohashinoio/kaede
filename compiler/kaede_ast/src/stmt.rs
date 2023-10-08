@@ -5,13 +5,13 @@ use kaede_type::{Mutability, Ty};
 
 use crate::expr::{Expr, Ident};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub enum AssignKind {
     /// '='
     Simple,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct Assign {
     pub lhs: Expr,
     pub kind: AssignKind,
@@ -19,19 +19,19 @@ pub struct Assign {
     pub span: Span,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct Let {
     pub kind: LetKind,
     pub span: Span,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub enum LetKind {
     NormalLet(NormalLet),
     TupleUnpack(TupleUnpack),
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct NormalLet {
     pub name: Ident,
     pub mutability: Mutability,
@@ -40,7 +40,7 @@ pub struct NormalLet {
     pub span: Span,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct TupleUnpack {
     /// None if ignore field
     pub names: Vec<Option<(Ident, Mutability)>>,
@@ -49,13 +49,13 @@ pub struct TupleUnpack {
     pub span: Span,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct Stmt {
     pub kind: StmtKind,
     pub span: Span,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub enum StmtKind {
     Expr(Rc<Expr>),
     Let(Let),
@@ -65,7 +65,7 @@ pub enum StmtKind {
 
 /// Statement list
 /// May be handled as expression
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct Block {
     pub body: Vec<Stmt>,
     pub span: Span,

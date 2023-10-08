@@ -1,13 +1,14 @@
 use kaede_span::Span;
+use kaede_symbol::Symbol;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum CodegenError {
     #[error("{}:{} `{}` was not declared in this scope", span.start.line, span.start.column, .name)]
-    Undeclared { name: String, span: Span },
+    Undeclared { name: Symbol, span: Span },
 
     #[error("{}:{} variable `{}` declared void", span.start.line, span.start.column, .name)]
-    VoidVariable { name: String, span: Span },
+    VoidVariable { name: Symbol, span: Span },
 
     #[error("{}:{} `break` outside of a loop", span.start.line, span.start.column)]
     BreakOutsideOfLoop { span: Span },
@@ -24,14 +25,8 @@ pub enum CodegenError {
     #[error("{}:{} has no fields", span.start.line, span.start.column)]
     HasNoFields { span: Span },
 
-    #[error("failed to lookup target `{}`: {}", triple, what)]
-    FailedToLookupTarget { triple: String, what: String },
-
-    #[error("failed to create target machine")]
-    FailedToCreateTargetMachine,
-
     #[error("{}:{} file not found for module `{}`", span.start.line, span.start.column, mod_name)]
-    FileNotFoundForModule { span: Span, mod_name: String },
+    FileNotFoundForModule { span: Span, mod_name: Symbol },
 
     #[error("{}:{} tuples require access by index", span.start.line, span.start.column)]
     TupleRequireAccessByIndex { span: Span },
@@ -53,15 +48,15 @@ pub enum CodegenError {
 
     #[error("{}:{} no member named `{}` in `{}`", span.start.line, span.start.column, member_name, parent_name)]
     NoMember {
-        member_name: String,
-        parent_name: String,
+        member_name: Symbol,
+        parent_name: Symbol,
         span: Span,
     },
 
     #[error("{}:{} no variant named `{}` in `{}`", span.start.line, span.start.column, variant_name, parent_name)]
     NoVariant {
-        variant_name: String,
-        parent_name: String,
+        variant_name: Symbol,
+        parent_name: Symbol,
         span: Span,
     },
 
@@ -79,7 +74,7 @@ pub enum CodegenError {
 
     #[error("{}:{} cannot unpack values from unit variant `{}`", span.start.line, span.start.column, unit_variant_name)]
     UnitVariantCannotUnpack {
-        unit_variant_name: String,
+        unit_variant_name: Symbol,
         span: Span,
     },
 
@@ -89,6 +84,12 @@ pub enum CodegenError {
     /// Error issued by LLVM
     #[error("{}", .what)]
     LLVMError { what: String },
+
+    #[error("failed to lookup target `{}`: {}", triple, what)]
+    FailedToLookupTarget { triple: String, what: String },
+
+    #[error("failed to create target machine")]
+    FailedToCreateTargetMachine,
 }
 
 pub type CodegenResult<T> = Result<T, CodegenError>;

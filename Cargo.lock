@@ -323,6 +323,7 @@ version = "0.1.0"
 dependencies = [
  "inkwell",
  "kaede_span",
+ "kaede_symbol",
  "kaede_type",
 ]
 
@@ -336,6 +337,7 @@ dependencies = [
  "kaede_lex",
  "kaede_parse",
  "kaede_span",
+ "kaede_symbol",
  "kaede_type",
  "thiserror",
 ]
@@ -373,6 +375,7 @@ dependencies = [
  "kaede_ast",
  "kaede_lex",
  "kaede_span",
+ "kaede_symbol",
  "kaede_type",
  "thiserror",
 ]
@@ -382,10 +385,18 @@ name = "kaede_span"
 version = "0.1.0"
 
 [[package]]
+name = "kaede_symbol"
+version = "0.1.0"
+dependencies = [
+ "once_cell",
+]
+
+[[package]]
 name = "kaede_type"
 version = "0.1.0"
 dependencies = [
  "inkwell",
+ "kaede_symbol",
 ]
 
 [[package]]
@@ -467,9 +478,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.17.1"
+version = "1.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7e5500299e16ebb147ae15a00a942af264cf3688f47923b8fc2cd5858f23ad3"
+checksum = "dd8b5dd2ae5ed71462c540258bedcb51965123ad7e7ccf4b9a8cafaa4a63576d"
 
 [[package]]
 name = "os_str_bytes"

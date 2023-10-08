@@ -1,7 +1,6 @@
 use kaede_lex::token::{Token, TokenKind};
 use kaede_type::{
     make_fundamental_type, FundamentalTypeKind, Mutability, RefrenceType, Ty, TyKind,
-    UserDefinedType,
 };
 
 use crate::{
@@ -33,7 +32,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             return self.tuple_ty();
         }
 
-        let ty_name = match self.ident() {
+        let type_ident = match self.ident() {
             Ok(t) => t,
             Err(_) => {
                 return Err(ParseError::ExpectedError {
@@ -44,7 +43,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             }
         };
 
-        Ok(match ty_name.as_str() {
+        Ok(match type_ident.as_str() {
             "i32" => make_fundamental_type(I32, Mutability::Not),
             "bool" => make_fundamental_type(Bool, Mutability::Not),
             "str" => Ty {
@@ -54,7 +53,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
             // User defined type
             _ => wrap_in_reference(Ty {
-                kind: TyKind::UserDefined(UserDefinedType { name: ty_name.name }).into(),
+                kind: TyKind::UserDefined(type_ident.symbol().into()).into(),
                 mutability: Mutability::Not,
             }),
         })

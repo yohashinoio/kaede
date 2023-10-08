@@ -5,29 +5,31 @@ use inkwell::{
     values::{FunctionValue, PointerValue},
 };
 use kaede_ast::{expr::Ident, top::Visibility};
+use kaede_symbol::Symbol;
 use kaede_type::Ty;
 
 use crate::error::{CodegenError, CodegenResult};
 
-type Symbol<'ctx> = (PointerValue<'ctx>, Rc<Ty> /* Variable type */);
+type Variable<'ctx> = (PointerValue<'ctx>, Rc<Ty> /* Variable type */);
 
-pub struct SymbolTable<'ctx>(HashMap<String, Symbol<'ctx>>);
+#[derive(Debug)]
+pub struct VariableTable<'ctx>(HashMap<Symbol, Variable<'ctx>>);
 
-impl<'ctx> SymbolTable<'ctx> {
+impl<'ctx> VariableTable<'ctx> {
     pub fn new() -> Self {
         Self(HashMap::new())
     }
 
-    pub fn lookup(&self, ident: &Ident) -> Option<&Symbol<'ctx>> {
-        self.0.get(ident.as_str())
+    pub fn lookup(&self, symbol: Symbol) -> Option<&Variable<'ctx>> {
+        self.0.get(&symbol)
     }
 
-    pub fn add(&mut self, name: String, symbol: Symbol<'ctx>) {
-        self.0.insert(name, symbol);
+    pub fn add(&mut self, symbol: Symbol, var: Variable<'ctx>) {
+        self.0.insert(symbol, var);
     }
 }
 
-impl<'ctx> Default for SymbolTable<'ctx> {
+impl<'ctx> Default for VariableTable<'ctx> {
     fn default() -> Self {
         Self::new()
     }
@@ -62,19 +64,19 @@ pub struct StructFieldInfo {
 
 pub struct StructInfo<'ctx> {
     pub ty: StructType<'ctx>,
-    pub fields: HashMap<String, StructFieldInfo>,
+    pub fields: HashMap<Symbol, StructFieldInfo>,
 }
 
 pub struct EnumVariantInfo {
-    pub name: String,
+    pub name: Ident,
     pub vis: Visibility,
     pub offset: u32,
     pub ty: Option<Rc<Ty>>,
 }
 
 pub struct EnumInfo<'ctx> {
-    pub name: String,
-    pub variants: HashMap<String, EnumVariantInfo>,
+    pub name: Ident,
+    pub variants: HashMap<Symbol, EnumVariantInfo>,
     pub ty: BasicTypeEnum<'ctx>,
 }
 
@@ -86,47 +88,46 @@ impl<'ctx> EnumInfo<'ctx> {
     }
 }
 
-pub type StructTable<'ctx> = HashMap<String, Rc<StructInfo<'ctx>>>;
+pub type StructTable<'ctx> = HashMap<Symbol, Rc<StructInfo<'ctx>>>;
 
-pub type EnumTable<'ctx> = HashMap<String, Rc<EnumInfo<'ctx>>>;
+pub type EnumTable<'ctx> = HashMap<Symbol, Rc<EnumInfo<'ctx>>>;
 
 #[derive(Default)]
-pub struct TypeContext<'ctx> {
+pub struct TypeCtx<'ctx> {
     return_ty_table: ReturnTypeTable<'ctx>,
     fn_params_table: ParamTable<'ctx>,
     struct_table: StructTable<'ctx>,
     enum_table: EnumTable<'ctx>,
-    symbol_table_stack: Vec<SymbolTable<'ctx>>,
+    variable_table_stack: Vec<VariableTable<'ctx>>,
 }
 
-impl<'ctx> TypeContext<'ctx> {
-    /// Lookup variables
-    pub fn lookup_var(&self, ident: &Ident) -> CodegenResult<&Symbol<'ctx>> {
-        for symbol_table in &self.symbol_table_stack {
-            if let Some(symbol) = symbol_table.lookup(ident) {
-                return Ok(symbol);
+impl<'ctx> TypeCtx<'ctx> {
+    pub fn lookup_variable(&self, ident: &Ident) -> CodegenResult<&Variable<'ctx>> {
+        for variable_table in &self.variable_table_stack {
+            if let Some(var) = variable_table.lookup(ident.symbol()) {
+                return Ok(var);
             }
         }
 
         Err(CodegenError::Undeclared {
-            name: ident.name.clone(),
+            name: ident.symbol(),
             span: ident.span,
         })
     }
 
-    pub fn add_symbol(&mut self, name: String, symbol: Symbol<'ctx>) {
-        self.symbol_table_stack
+    pub fn add_variable(&mut self, symbol: Symbol, var: Variable<'ctx>) {
+        self.variable_table_stack
             .last_mut()
             .unwrap()
-            .add(name, symbol);
+            .add(symbol, var);
     }
 
-    pub fn push_symbol_table(&mut self, table: SymbolTable<'ctx>) {
-        self.symbol_table_stack.push(table);
+    pub fn push_variable_table(&mut self, table: VariableTable<'ctx>) {
+        self.variable_table_stack.push(table);
     }
 
-    pub fn pop_symbol_table(&mut self) {
-        self.symbol_table_stack.pop().unwrap();
+    pub fn pop_variable_table(&mut self) {
+        self.variable_table_stack.pop().unwrap();
     }
 
     pub fn add_fn_params(&mut self, fn_value: FunctionValue<'ctx>, params: FnParams) {
@@ -145,19 +146,19 @@ impl<'ctx> TypeContext<'ctx> {
         self.return_ty_table.get(&fn_value).cloned()
     }
 
-    pub fn add_struct(&mut self, name: String, info: StructInfo<'ctx>) {
+    pub fn add_struct(&mut self, name: Symbol, info: StructInfo<'ctx>) {
         self.struct_table.insert(name, info.into());
     }
 
-    pub fn get_struct_info(&self, name: &str) -> Option<Rc<StructInfo<'ctx>>> {
-        self.struct_table.get(name).cloned()
+    pub fn get_struct_info(&self, name: Symbol) -> Option<Rc<StructInfo<'ctx>>> {
+        self.struct_table.get(&name).cloned()
     }
 
-    pub fn add_enum(&mut self, name: String, info: EnumInfo<'ctx>) {
+    pub fn add_enum(&mut self, name: Symbol, info: EnumInfo<'ctx>) {
         self.enum_table.insert(name, info.into());
     }
 
-    pub fn get_enum_info(&self, name: &str) -> Option<Rc<EnumInfo<'ctx>>> {
-        self.enum_table.get(name).cloned()
+    pub fn get_enum_info(&self, name: Symbol) -> Option<Rc<EnumInfo<'ctx>>> {
+        self.enum_table.get(&name).cloned()
     }
 }

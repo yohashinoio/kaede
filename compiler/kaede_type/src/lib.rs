@@ -4,6 +4,7 @@ use inkwell::{
     context::Context,
     types::{BasicType, BasicTypeEnum},
 };
+use kaede_symbol::Symbol;
 
 pub fn create_inferred_tuple(element_len: usize) -> TyKind {
     TyKind::Tuple({
@@ -140,7 +141,7 @@ impl std::fmt::Display for TyKind {
 
             Self::Str => write!(f, "str"),
 
-            Self::UserDefined(udt) => write!(f, "{}", udt.name),
+            Self::UserDefined(udt) => write!(f, "{}", udt.get_symbol().as_str()),
 
             Self::Reference(refee) => write!(f, "&{}", refee.refee_ty.kind),
 
@@ -241,7 +242,19 @@ impl FundamentalType {
 /// User defined types
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct UserDefinedType {
-    pub name: String,
+    name: Symbol,
+}
+
+impl From<Symbol> for UserDefinedType {
+    fn from(name: Symbol) -> Self {
+        Self { name }
+    }
+}
+
+impl UserDefinedType {
+    pub fn get_symbol(&self) -> Symbol {
+        self.name
+    }
 }
 
 #[derive(Debug, Eq, Clone)]

@@ -615,10 +615,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     pub fn ident(&mut self) -> ParseResult<Ident> {
         if matches!(self.first().kind, TokenKind::Ident(_)) {
             if let TokenKind::Ident(ident) = self.bump().unwrap().kind {
-                return Ok(Ident {
-                    name: ident,
-                    span: self.first().span,
-                });
+                return Ok(Ident::from_symbol_and_span(ident.into(), self.first().span));
             }
         }
 
