@@ -1,33 +1,28 @@
-use std::{collections::HashMap, fmt::Display, hash::Hash};
+use std::{fmt::Display, hash::Hash};
 
 use once_cell::sync::Lazy;
+use slab::Slab;
 
-static mut SYMBOLS: Lazy<HashMap<u64, String>> = Lazy::new(Default::default);
+static mut SYMBOLS: Lazy<Slab<String>> = Lazy::new(Default::default);
 
 // Do not derive PartialEq, Hash, etc!
 // We need to compare symbols(string) as well as id
 #[derive(Debug, Clone, Copy)]
 pub struct Symbol {
-    id: u64,
+    id: usize,
 }
 
 impl Symbol {
     pub fn as_str(&self) -> &str {
-        unsafe { SYMBOLS[&self.id].as_str() }
+        unsafe { SYMBOLS[self.id].as_str() }
     }
 }
 
 impl From<String> for Symbol {
     fn from(value: String) -> Self {
-        let id = unsafe {
-            let id = SYMBOLS.len() as u64;
-            if SYMBOLS.insert(id, value).is_some() {
-                unreachable!();
-            }
-            id
-        };
-
-        Self { id }
+        Self {
+            id: unsafe { SYMBOLS.insert(value) },
+        }
     }
 }
 
@@ -42,7 +37,7 @@ impl Eq for Symbol {}
 impl Hash for Symbol {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         // It is important not to include id in hash!
-        unsafe { SYMBOLS[&self.id].hash(state) };
+        unsafe { SYMBOLS[self.id].hash(state) };
     }
 }
 
