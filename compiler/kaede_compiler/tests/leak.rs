@@ -11,13 +11,13 @@ fn leak_check_with_valgrind() -> anyhow::Result<()> {
             n: i32,
         }
 
-        fn f() -> ([i32; 3], (i32, i32, Num)) {
+        fn f(): ([i32; 3], (i32, i32, Num)) {
             let a = [1, 2, 3]
             let t = (48, 10, Num { n: 58 })
             return (a, t)
         }
 
-        fn main() -> i32 {
+        fn main(): i32 {
             let mut c = 0
 
             loop {

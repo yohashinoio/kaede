@@ -86,7 +86,6 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         Ok(Import { module_path, span })
     }
 
-    /// Include methods
     fn func(&mut self, kind: FnKind) -> ParseResult<Fn> {
         let start = match kind {
             FnKind::Normal => self.consume(&TokenKind::Fn).unwrap().start,
@@ -105,7 +104,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         let params = Params(params, Span::new(params_start, params_finish));
 
-        let return_ty = if self.consume_b(&TokenKind::Arrow) {
+        let return_ty = if self.consume_b(&TokenKind::Colon) {
             Some(self.ty()?)
         } else {
             None
