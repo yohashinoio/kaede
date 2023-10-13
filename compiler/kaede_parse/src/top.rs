@@ -1,8 +1,8 @@
 use std::collections::VecDeque;
 
 use kaede_ast::top::{
-    Enum, EnumVariant, Fn, FnKind, Impl, Import, Param, Params, Struct, StructField, TopLevel,
-    TopLevelKind, Visibility,
+    Enum, EnumVariant, Fn, FnKind, GenericParams, Impl, Import, Param, Params, Struct, StructField,
+    TopLevel, TopLevelKind, Visibility,
 };
 use kaede_lex::token::{Token, TokenKind};
 use kaede_span::Span;
@@ -10,6 +10,27 @@ use kaede_span::Span;
 use crate::{error::ParseResult, Parser};
 
 impl<T: Iterator<Item = Token>> Parser<T> {
+    pub fn generic_params(&mut self) -> ParseResult<GenericParams> {
+        let start = self.consume(&TokenKind::Lt)?.start;
+
+        let mut names = Vec::new();
+
+        loop {
+            names.push(self.ident()?);
+
+            if !self.consume_b(&TokenKind::Comma) {
+                break;
+            }
+        }
+
+        let finish = self.consume(&TokenKind::Gt)?.finish;
+
+        Ok(GenericParams {
+            names,
+            span: Span::new(start, finish),
+        })
+    }
+
     pub fn top_level(&mut self) -> ParseResult<TopLevel> {
         let vis = self.consume_b(&TokenKind::Pub).into();
 
@@ -215,6 +236,12 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         let name = self.ident()?;
 
+        let generic_params = if self.check(&TokenKind::Lt) {
+            Some(self.generic_params()?)
+        } else {
+            None
+        };
+
         self.consume(&TokenKind::OpenBrace)?;
 
         let fields = self.struct_fields()?;
@@ -223,7 +250,12 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
         let span = Span::new(start, finish);
 
-        Ok(Struct { name, fields, span })
+        Ok(Struct {
+            name,
+            generic_params,
+            fields,
+            span,
+        })
     }
 
     fn struct_fields(&mut self) -> ParseResult<Vec<StructField>> {

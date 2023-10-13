@@ -33,6 +33,12 @@ impl From<bool> for Visibility {
 }
 
 #[derive(Debug)]
+pub struct GenericParams {
+    pub names: Vec<Ident>,
+    pub span: Span,
+}
+
+#[derive(Debug)]
 pub struct StructField {
     pub name: Ident,
     pub ty: Ty,
@@ -43,6 +49,7 @@ pub struct StructField {
 #[derive(Debug)]
 pub struct Struct {
     pub name: Ident,
+    pub generic_params: Option<GenericParams>,
     pub fields: Vec<StructField>,
     pub span: Span,
 }
