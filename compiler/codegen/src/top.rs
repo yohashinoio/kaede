@@ -7,8 +7,7 @@ use kaede_ast::{
         Enum, EnumVariant, Fn, FnKind, Impl, Import, Param, Params, Struct, TopLevel, TopLevelKind,
     },
 };
-use kaede_lex::lex;
-use kaede_parse::parse;
+use kaede_parse::Parser;
 use kaede_symbol::Symbol;
 use kaede_type::{Mutability, RefrenceType, Ty, TyKind};
 
@@ -215,7 +214,9 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         }
 
         // TODO: Optimize
-        let psd_module = parse(lex(&fs::read_to_string(&path).unwrap())).unwrap();
+        let psd_module = Parser::new(&fs::read_to_string(&path).unwrap())
+            .run()
+            .unwrap();
 
         for top_level in psd_module.top_levels {
             // Do not import if private

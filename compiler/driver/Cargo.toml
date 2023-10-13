@@ -12,7 +12,6 @@ clap = { version = "4.1.4", features = ["derive"] }
 
 kaede_ast = { path = "../ast" }
 kaede_codegen = { path = "../codegen" }
-kaede_lex = { path = "../lex" }
 kaede_parse = { path = "../parse" }
 tempfile = "3.5.0"
 

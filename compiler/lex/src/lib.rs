@@ -1,87 +1,46 @@
 use cursor::Cursor;
-use kaede_span::Span;
+use semi::insert_semi;
 use token::{Token, TokenKind};
 
 mod cursor;
+mod semi;
 pub mod token;
 
 #[cfg(test)]
 mod tests;
 
-pub fn lex(input: &str) -> impl Iterator<Item = Token> + '_ {
-    insert_semi(lex_internal(input)).into_iter()
+pub struct Lexer<'a> {
+    source: &'a str,
 }
 
-fn lex_internal(input: &str) -> impl Iterator<Item = Token> + '_ {
-    let mut cursor = Cursor::new(input);
-
-    let mut result = Vec::new();
-
-    loop {
-        let token = cursor.advance_token();
-
-        match token.kind {
-            TokenKind::Eoi => {
-                result.push(token);
-                break;
-            }
-
-            _ => result.push(token),
-        }
+impl<'a> Lexer<'a> {
+    pub fn new(source: &'a str) -> Self {
+        Self { source }
     }
 
-    result.into_iter()
-}
-
-/// Rules similar to Go language
-/// Newline token will be removed
-fn insert_semi(tokens: impl Iterator<Item = Token>) -> Vec<Token> {
-    let mut result = Vec::<Token>::new();
-
-    for tok in tokens {
-        match tok.kind {
-            TokenKind::NewLine | TokenKind::Eoi => {
-                if let Some(last) = result.last() {
-                    if is_semi_insertable_after(&last.kind) {
-                        let start = last.span.finish;
-                        let mut finish = start;
-                        finish.increase_column();
-
-                        result.push(Token {
-                            kind: TokenKind::Semi,
-                            span: Span::new(start, finish),
-                        });
-                    }
-                }
-
-                // Eoi not discarded
-                if tok.kind == TokenKind::Eoi {
-                    result.push(tok);
-                }
-            }
-
-            _ => result.push(tok),
-        }
+    pub fn run(&self) -> Vec<Token> {
+        insert_semi(self.run_without_insert_semi().into_iter())
     }
 
-    result
-}
+    fn run_without_insert_semi(&self) -> Vec<Token> {
+        let mut cursor = Cursor::new(self.source);
+        let mut res = Vec::new();
 
-fn is_semi_insertable_after(token: &TokenKind) -> bool {
-    use TokenKind::*;
+        loop {
+            let token = cursor.advance_token();
 
-    matches!(
-        token,
-        Int(_)
-            | Ident(_)
-            | StringLiteral(_)
-            | CloseParen
-            | CloseBrace
-            | CloseBracket
-            | Return
-            | True
-            | False
-    )
+            match token.kind {
+                TokenKind::Eoi => {
+                    res.push(token);
+                    break;
+                }
+
+                _ => res.push(token),
+            }
+        }
+
+        res
+    }
 }
 
 fn is_whitespace(c: char) -> bool {
@@ -118,7 +77,7 @@ fn is_id_continue(c: char) -> bool {
 }
 
 impl Cursor<'_> {
-    /// Insert span.
+    /// Insert span
     fn create_token(&self, t: TokenKind) -> Token {
         Token {
             kind: t,

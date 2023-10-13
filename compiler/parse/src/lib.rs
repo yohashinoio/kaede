@@ -4,34 +4,38 @@ mod stmt;
 mod top;
 mod ty;
 
-pub fn parse(tokens: impl Iterator<Item = Token>) -> ParseResult<CompileUnit> {
-    let mut parser = Parser::new(tokens.peekable());
-
-    parser.run()
-}
-
 use std::iter::Peekable;
 
 use error::{ParseError, ParseResult};
 use kaede_ast::{expr::Expr, CompileUnit};
-use kaede_lex::token::{Token, TokenKind};
+use kaede_lex::{
+    token::{Token, TokenKind},
+    Lexer,
+};
 use kaede_span::Span;
 
-pub struct Parser<T: Iterator<Item = Token>> {
-    tokens: Peekable<T>,
+pub struct Parser {
+    tokens: Peekable<Box<dyn Iterator<Item = Token>>>,
 
     end_token: Option<Token>,
 
-    pub in_cond_expr: bool,
+    in_cond_expr: bool,
 }
 
-impl<T: Iterator<Item = Token>> Parser<T> {
-    pub fn new(tokens: Peekable<T>) -> Self {
+impl Parser {
+    pub fn new(source: &str) -> Self {
+        let tokens: Box<dyn Iterator<Item = Token>> =
+            Box::new(Lexer::new(source).run().into_iter());
+
         Self {
-            tokens,
+            tokens: tokens.peekable(),
             end_token: None,
             in_cond_expr: false,
         }
+    }
+
+    pub fn run(&mut self) -> ParseResult<CompileUnit> {
+        self.compile_unit(|self_| !self_.is_eof())
     }
 
     /// The argument specifies the condition under which the parsing is terminated
@@ -40,7 +44,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     ///
     /// Example:
     /// |self_| self_.xxx()
-    pub fn compile_unit(
+    fn compile_unit(
         &mut self,
         mut end_predicate: impl FnMut(&mut Self) -> bool,
     ) -> ParseResult<CompileUnit> {
@@ -57,17 +61,13 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         Ok(compile_unit)
     }
 
-    pub fn run(&mut self) -> ParseResult<CompileUnit> {
-        self.compile_unit(|self_| !self_.is_eof())
-    }
-
     /// Needed to **avoid confusion** between struct literals and block statements
     ///
     /// if x {}
     ///
     /// In such code as above,
     /// `then block` of `if statement` is not parsed as an initializer of a struct literals
-    pub fn cond_expr(&mut self) -> ParseResult<Expr> {
+    fn cond_expr(&mut self) -> ParseResult<Expr> {
         self.in_cond_expr = true;
         let cond = self.expr();
         self.in_cond_expr = false;
@@ -78,14 +78,14 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         self.end_token.is_some() || self.first().kind == TokenKind::Eoi
     }
 
-    pub fn first(&mut self) -> &Token {
+    fn first(&mut self) -> &Token {
         self.tokens
             .peek()
             .unwrap_or_else(|| self.end_token.as_ref().unwrap())
     }
 
     /// Advance to next token
-    pub fn bump(&mut self) -> Option<Token> {
+    fn bump(&mut self) -> Option<Token> {
         self.tokens.next().map(|t| match t.kind {
             TokenKind::Eoi => {
                 self.end_token = Some(t.clone());
@@ -97,11 +97,11 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     }
 
     /// Check without consuming tokens
-    pub fn check(&mut self, tok: &TokenKind) -> bool {
+    fn check(&mut self, tok: &TokenKind) -> bool {
         &self.first().kind == tok
     }
 
-    pub fn consume(&mut self, tok: &TokenKind) -> ParseResult<Span> {
+    fn consume(&mut self, tok: &TokenKind) -> ParseResult<Span> {
         let span = self.first().span;
 
         if &self.first().kind == tok {
@@ -117,7 +117,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     }
 
     /// Return boolean
-    pub fn consume_b(&mut self, tok: &TokenKind) -> bool {
+    fn consume_b(&mut self, tok: &TokenKind) -> bool {
         if &self.first().kind == tok {
             self.bump().unwrap();
             return true;
@@ -128,7 +128,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
     /// Consume a semicolon
     /// ')' or '}', then success (Following Golang's rules)
-    pub fn consume_semi(&mut self) -> ParseResult<Span> {
+    fn consume_semi(&mut self) -> ParseResult<Span> {
         if let Ok(span) = self.consume(&TokenKind::Semi) {
             return Ok(span);
         }
@@ -144,22 +144,9 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         })
     }
 
-    /// Consume a semicolon
-    /// ')' or '}', then success (Following Golang's rules)
-    /// Return boolean
-    pub fn consume_semi_b(&mut self) -> bool {
-        if self.consume_b(&TokenKind::Semi)
-            || (self.check(&TokenKind::CloseParen) || self.check(&TokenKind::CloseBrace))
-        {
-            return true;
-        }
-
-        false
-    }
-
     /// Check a semicolon (Not consumed)
     /// ')' or '}', then success (Following Golang's rules)
-    pub fn check_semi(&mut self) -> bool {
+    fn check_semi(&mut self) -> bool {
         if self.check(&TokenKind::Semi)
             || (self.check(&TokenKind::CloseParen) || self.check(&TokenKind::CloseBrace))
         {

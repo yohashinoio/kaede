@@ -6,9 +6,7 @@
 use inkwell::{
     context::Context, module::Module, support::load_library_permanently, OptimizationLevel,
 };
-
-use kaede_lex::lex;
-use kaede_parse::parse;
+use kaede_parse::Parser;
 
 use super::*;
 
@@ -35,7 +33,7 @@ fn exec(program: &str) -> CodegenResult<i32> {
     let module = codegen_compile_unit(
         &cgcx,
         PathBuf::from("test"),
-        parse(lex(program)).unwrap(),
+        Parser::new(program).run().unwrap(),
         OptimizationLevel::None,
     )?;
 

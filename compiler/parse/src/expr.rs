@@ -5,7 +5,7 @@ use kaede_ast::expr::{
     Indexing, Int, IntKind, LogicalNot, Loop, Match, MatchArm, MatchArmList, Return, StructLiteral,
     TupleLiteral,
 };
-use kaede_lex::token::{Token, TokenKind};
+use kaede_lex::token::TokenKind;
 use kaede_span::{Location, Span};
 
 use crate::{
@@ -13,7 +13,7 @@ use crate::{
     Parser,
 };
 
-impl<T: Iterator<Item = Token>> Parser<T> {
+impl Parser {
     pub fn expr(&mut self) -> ParseResult<Expr> {
         self.logical_or()
     }

@@ -1,4 +1,4 @@
-use kaede_lex::token::{Token, TokenKind};
+use kaede_lex::token::TokenKind;
 use kaede_type::{
     make_fundamental_type, FundamentalTypeKind, Mutability, RefrenceType, Ty, TyKind,
 };
@@ -18,7 +18,7 @@ fn wrap_in_reference(refee_ty: Ty) -> Ty {
     }
 }
 
-impl<T: Iterator<Item = Token>> Parser<T> {
+impl Parser {
     pub fn ty(&mut self) -> ParseResult<Ty> {
         use FundamentalTypeKind::*;
 

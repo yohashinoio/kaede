@@ -4,7 +4,7 @@ use kaede_ast::{
     expr::Expr,
     stmt::{Assign, AssignKind, Block, Let, LetKind, NormalLet, Stmt, StmtKind, TupleUnpack},
 };
-use kaede_lex::token::{Token, TokenKind};
+use kaede_lex::token::TokenKind;
 use kaede_span::{Location, Span};
 use kaede_type::Ty;
 
@@ -13,7 +13,7 @@ use crate::{
     Parser,
 };
 
-impl<T: Iterator<Item = Token>> Parser<T> {
+impl Parser {
     /// Consume a semicolon immediately following each statement
     pub fn block(&mut self) -> ParseResult<Block> {
         let mut body = Vec::new();
@@ -41,7 +41,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     }
 
     /// Semicolons are **not** consumed
-    pub fn stmt(&mut self) -> ParseResult<Stmt> {
+    fn stmt(&mut self) -> ParseResult<Stmt> {
         if self.check(&TokenKind::Let) {
             let l = self.let_()?;
             Ok(Stmt {

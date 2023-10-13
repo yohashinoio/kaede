@@ -1,15 +1,18 @@
 use kaede_span::{Location, Span};
 
-use crate::TokenKind::*;
+use crate::{
+    token::{Token, TokenKind},
+    Lexer,
+};
 
-use super::*;
+use TokenKind::*;
 
 fn without_span(it: impl Iterator<Item = Token>) -> Vec<TokenKind> {
     it.map(|t| t.kind).collect()
 }
 
 fn lex_test(program: &str, expect: Vec<TokenKind>) {
-    assert_eq!(without_span(lex(program)), expect);
+    assert_eq!(without_span(Lexer::new(program).run().into_iter()), expect);
 }
 
 #[test]
@@ -64,7 +67,7 @@ fn punct() {
 
 #[test]
 fn span() {
-    let mut r = lex("\n48 + 10;");
+    let mut r = Lexer::new("\n48 + 10;").run().into_iter();
 
     r.next();
 
@@ -92,7 +95,7 @@ fn auto_insert_semi() {
 
 #[test]
 fn auto_inserted_semi_span() {
-    let mut r = lex("return");
+    let mut r = Lexer::new("return").run().into_iter();
 
     r.next();
 

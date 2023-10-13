@@ -7,14 +7,12 @@ use std::{
 };
 
 use anyhow::{anyhow, Context as _};
-use clap::Parser;
 use inkwell::{context::Context, module::Module, OptimizationLevel};
 use kaede_codegen::{codegen_compile_unit, error::CodegenError, CodegenCtx};
-use kaede_lex::lex;
-use kaede_parse::parse;
+use kaede_parse::Parser;
 use tempfile::{NamedTempFile, TempPath};
 
-#[derive(Parser, Debug)]
+#[derive(clap::Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
     #[arg(long)]
@@ -113,7 +111,7 @@ fn compile(
     let mut compiled_modules = Vec::new();
 
     for unit_info in unit_infos {
-        let ast = parse(lex(&unit_info.program))?;
+        let ast = Parser::new(&unit_info.program).run()?;
 
         let module = codegen_compile_unit(&cgcx, unit_info.file_path, ast, opt_level)?;
 
@@ -150,6 +148,8 @@ fn compile(
 }
 
 fn main() -> anyhow::Result<()> {
+    use clap::Parser;
+
     let args = Args::parse();
 
     let file_paths = args.files;

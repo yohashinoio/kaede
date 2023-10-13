@@ -4,33 +4,12 @@ use kaede_ast::top::{
     Enum, EnumVariant, Fn, FnKind, GenericParams, Impl, Import, Param, Params, Struct, StructField,
     TopLevel, TopLevelKind, Visibility,
 };
-use kaede_lex::token::{Token, TokenKind};
+use kaede_lex::token::TokenKind;
 use kaede_span::Span;
 
 use crate::{error::ParseResult, Parser};
 
-impl<T: Iterator<Item = Token>> Parser<T> {
-    pub fn generic_params(&mut self) -> ParseResult<GenericParams> {
-        let start = self.consume(&TokenKind::Lt)?.start;
-
-        let mut names = Vec::new();
-
-        loop {
-            names.push(self.ident()?);
-
-            if !self.consume_b(&TokenKind::Comma) {
-                break;
-            }
-        }
-
-        let finish = self.consume(&TokenKind::Gt)?.finish;
-
-        Ok(GenericParams {
-            names,
-            span: Span::new(start, finish),
-        })
-    }
-
+impl Parser {
     pub fn top_level(&mut self) -> ParseResult<TopLevel> {
         let vis = self.consume_b(&TokenKind::Pub).into();
 
@@ -73,6 +52,27 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         self.consume_semi()?;
 
         Ok(TopLevel { kind, vis, span })
+    }
+
+    fn generic_params(&mut self) -> ParseResult<GenericParams> {
+        let start = self.consume(&TokenKind::Lt)?.start;
+
+        let mut names = Vec::new();
+
+        loop {
+            names.push(self.ident()?);
+
+            if !self.consume_b(&TokenKind::Comma) {
+                break;
+            }
+        }
+
+        let finish = self.consume(&TokenKind::Gt)?.finish;
+
+        Ok(GenericParams {
+            names,
+            span: Span::new(start, finish),
+        })
     }
 
     fn impl_(&mut self) -> ParseResult<Impl> {
