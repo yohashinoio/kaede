@@ -73,7 +73,7 @@ enum ValuedElse<'ctx> {
 
 /// Unit value if the end of the block is not an expression
 pub fn build_block_expression<'ctx>(
-    cucx: &mut CompileUnitCtx<'ctx, '_, '_>,
+    cucx: &mut CompileUnitCtx<'ctx>,
     block: &Block,
 ) -> CodegenResult<Value<'ctx>> {
     if block.body.is_empty() {
@@ -111,7 +111,7 @@ pub fn build_block_expression<'ctx>(
 }
 
 pub fn build_expression<'ctx>(
-    cucx: &mut CompileUnitCtx<'ctx, '_, '_>,
+    cucx: &mut CompileUnitCtx<'ctx>,
     node: &Expr,
 ) -> CodegenResult<Value<'ctx>> {
     let mut builder = ExprBuilder::new(cucx);
@@ -120,7 +120,7 @@ pub fn build_expression<'ctx>(
 }
 
 pub fn build_tuple_indexing<'ctx>(
-    cucx: &CompileUnitCtx<'ctx, '_, '_>,
+    cucx: &CompileUnitCtx<'ctx>,
     tuple: PointerValue<'ctx>,
     index: u32,
     tuple_ty: &Rc<Ty>,
@@ -163,7 +163,7 @@ pub fn build_tuple_indexing<'ctx>(
 }
 
 pub fn create_gc_struct<'ctx>(
-    cucx: &mut CompileUnitCtx<'ctx, '_, '_>,
+    cucx: &mut CompileUnitCtx<'ctx>,
     struct_ty: &Ty,
     inits: &[BasicValueEnum<'ctx>],
 ) -> PointerValue<'ctx> {
@@ -190,12 +190,12 @@ pub fn create_gc_struct<'ctx>(
     mallocd
 }
 
-struct ExprBuilder<'a, 'ctx, 'm, 'c> {
-    cucx: &'a mut CompileUnitCtx<'ctx, 'm, 'c>,
+struct ExprBuilder<'a, 'ctx> {
+    cucx: &'a mut CompileUnitCtx<'ctx>,
 }
 
-impl<'a, 'ctx, 'm, 'c> ExprBuilder<'a, 'ctx, 'm, 'c> {
-    fn new(cucx: &'a mut CompileUnitCtx<'ctx, 'm, 'c>) -> Self {
+impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
+    fn new(cucx: &'a mut CompileUnitCtx<'ctx>) -> Self {
         Self { cucx }
     }
 

@@ -43,20 +43,15 @@ fn get_loaded_pointer<'ctx>(load_instr: &InstructionValue<'ctx>) -> Option<Point
     None
 }
 
-pub fn codegen<'ctx>(
-    ctx: &CodegenCtx<'ctx>,
-    module: &Module<'ctx>,
+pub fn codegen_compile_unit<'ctx>(
+    cgcx: &'ctx CodegenCtx<'ctx>,
     file_path: PathBuf,
     cu: CompileUnit,
     opt_level: OptimizationLevel,
-) -> CodegenResult<()> {
-    let mut cucx = CompileUnitCtx::new(ctx, module, file_path)?;
+) -> CodegenResult<Module<'ctx>> {
+    let cucx = CompileUnitCtx::new(cgcx, file_path)?;
 
-    cucx.gc_init();
-
-    cucx.codegen(cu.top_levels, opt_level)?;
-
-    Ok(())
+    cucx.codegen(cu.top_levels, opt_level)
 }
 
 /// Do **not** create this struct multiple times!
@@ -64,7 +59,7 @@ pub struct CodegenCtx<'ctx> {
     _target_machine: TargetMachine,
     target_data: TargetData,
 
-    pub context: &'ctx Context,
+    context: &'ctx Context,
 }
 
 impl<'ctx> CodegenCtx<'ctx> {
@@ -108,42 +103,45 @@ impl<'ctx> CodegenCtx<'ctx> {
     }
 }
 
-pub struct CompileUnitCtx<'ctx, 'm, 'c> {
-    pub cgcx: &'c CodegenCtx<'ctx>,
+pub struct CompileUnitCtx<'ctx> {
+    cgcx: &'ctx CodegenCtx<'ctx>,
+    tcx: TypeCtx<'ctx>,
 
-    pub module: &'m Module<'ctx>,
-    pub builder: Builder<'ctx>,
+    module: Module<'ctx>,
+    builder: Builder<'ctx>,
 
-    pub tcx: TypeCtx<'ctx>,
+    file_path: PathBuf,
 
-    pub file_path: PathBuf,
-
-    pub module_name: String,
-    pub imported_modules: HashSet<Symbol>,
+    module_name: String,
+    imported_modules: HashSet<Symbol>,
 
     /// Block to jump to when a `break` is executed
     ///
     /// Empty if **not** in a loop
     ///
     /// Each time a loop is nested, a basicblock is pushed
-    pub loop_break_bb_stk: Vec<BasicBlock<'ctx>>,
+    loop_break_bb_stk: Vec<BasicBlock<'ctx>>,
 
-    pub is_ifmatch_stmt: bool,
+    is_ifmatch_stmt: bool,
 }
 
-impl<'ctx, 'm, 'c> CompileUnitCtx<'ctx, 'm, 'c> {
-    pub fn new(
-        ctx: &'c CodegenCtx<'ctx>,
-        module: &'m Module<'ctx>,
-        file_path: PathBuf,
-    ) -> CodegenResult<Self> {
-        let module_name = module.get_name().to_str().unwrap().to_string();
+impl<'ctx> CompileUnitCtx<'ctx> {
+    pub fn new(cgcx: &'ctx CodegenCtx<'ctx>, file_path: PathBuf) -> CodegenResult<Self> {
+        let module_name = file_path
+            .file_stem()
+            .unwrap()
+            .to_owned()
+            .into_string()
+            .unwrap();
+
+        let module = cgcx.context.create_module(&module_name);
+        module.set_source_file_name(file_path.to_str().unwrap());
 
         Ok(Self {
-            builder: ctx.context.create_builder(),
-            cgcx: ctx,
-            module,
+            cgcx,
             tcx: Default::default(),
+            module,
+            builder: cgcx.context.create_builder(),
             file_path,
             module_name,
             imported_modules: HashSet::new(),
@@ -327,7 +325,7 @@ impl<'ctx, 'm, 'c> CompileUnitCtx<'ctx, 'm, 'c> {
         let pm = PassManager::create(());
         pm_builder.populate_module_pass_manager(&pm);
 
-        pm.run_on(self.module);
+        pm.run_on(&self.module);
     }
 
     fn verify_module(&self) -> CodegenResult<()> {
@@ -363,12 +361,14 @@ impl<'ctx, 'm, 'c> CompileUnitCtx<'ctx, 'm, 'c> {
     }
 
     fn codegen(
-        &mut self,
+        mut self,
         top_levels: Vec<TopLevel>,
         opt_level: OptimizationLevel,
-    ) -> CodegenResult<()> {
+    ) -> CodegenResult<Module<'ctx>> {
+        self.gc_init();
+
         for top in top_levels {
-            build_top_level(self, top)?;
+            build_top_level(&mut self, top)?;
         }
 
         self.build_main_fn();
@@ -377,6 +377,6 @@ impl<'ctx, 'm, 'c> CompileUnitCtx<'ctx, 'm, 'c> {
 
         self.opt_module(opt_level);
 
-        Ok(())
+        Ok(self.module)
     }
 }

@@ -9,7 +9,7 @@ use std::{
 use anyhow::{anyhow, Context as _};
 use clap::Parser;
 use inkwell::{context::Context, module::Module, OptimizationLevel};
-use kaede_codegen::{codegen, error::CodegenError, CodegenCtx};
+use kaede_codegen::{codegen_compile_unit, error::CodegenError, CodegenCtx};
 use kaede_lex::lex;
 use kaede_parse::parse;
 use tempfile::{NamedTempFile, TempPath};
@@ -110,21 +110,14 @@ fn compile(
     output_file_path: &Path,
 ) -> anyhow::Result<()> {
     let context = Context::create();
+    let cgcx = CodegenCtx::new(&context)?;
 
     let mut compiled_modules = Vec::new();
 
     for unit_info in unit_infos {
-        let file_path = unit_info.file_path;
-
         let ast = parse(lex(&unit_info.program))?;
 
-        let module_name = file_path.file_stem().unwrap().to_str().unwrap();
-
-        let module = context.create_module(module_name);
-        module.set_source_file_name(file_path.to_str().unwrap());
-
-        let cgcx = CodegenCtx::new(&context)?;
-        codegen(&cgcx, &module, file_path, ast, opt_level)?;
+        let module = codegen_compile_unit(&cgcx, unit_info.file_path, ast, opt_level)?;
 
         compiled_modules.push(module);
     }

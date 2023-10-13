@@ -52,12 +52,12 @@ pub fn push_self_to_front(v: &mut Params, struct_name: String, mutability: Mutab
     });
 }
 
-struct TopLevelBuilder<'a, 'ctx, 'm, 'c> {
-    cucx: &'a mut CompileUnitCtx<'ctx, 'm, 'c>,
+struct TopLevelBuilder<'a, 'ctx> {
+    cucx: &'a mut CompileUnitCtx<'ctx>,
 }
 
-impl<'a, 'ctx, 'm, 'c> TopLevelBuilder<'a, 'ctx, 'm, 'c> {
-    fn new(cucx: &'a mut CompileUnitCtx<'ctx, 'm, 'c>) -> Self {
+impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
+    fn new(cucx: &'a mut CompileUnitCtx<'ctx>) -> Self {
         Self { cucx }
     }
 

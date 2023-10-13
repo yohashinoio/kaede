@@ -80,14 +80,6 @@ pub struct EnumInfo<'ctx> {
     pub ty: BasicTypeEnum<'ctx>,
 }
 
-impl<'ctx> EnumInfo<'ctx> {
-    pub fn get_variant_info_from_offset(&self, offset: u32) -> Option<&'_ EnumVariantInfo> {
-        self.variants
-            .values()
-            .find(|&variant| variant.offset == offset)
-    }
-}
-
 pub type StructTable<'ctx> = HashMap<Symbol, Rc<StructInfo<'ctx>>>;
 
 pub type EnumTable<'ctx> = HashMap<Symbol, Rc<EnumInfo<'ctx>>>;

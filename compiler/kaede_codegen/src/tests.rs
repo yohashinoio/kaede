@@ -30,13 +30,10 @@ fn jit_compile(module: &Module) -> i32 {
 /// Return exit status
 fn exec(program: &str) -> CodegenResult<i32> {
     let context = Context::create();
-    let module = context.create_module("test");
-
     let cgcx = CodegenCtx::new(&context)?;
 
-    codegen(
+    let module = codegen_compile_unit(
         &cgcx,
-        &module,
         PathBuf::from("test"),
         parse(lex(program)).unwrap(),
         OptimizationLevel::None,

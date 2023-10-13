@@ -114,12 +114,12 @@ pub fn build_normal_let(
     todo!()
 }
 
-struct StmtBuilder<'a, 'ctx, 'm, 'c> {
-    cucx: &'a mut CompileUnitCtx<'ctx, 'm, 'c>,
+struct StmtBuilder<'a, 'ctx> {
+    cucx: &'a mut CompileUnitCtx<'ctx>,
 }
 
-impl<'a, 'ctx, 'm, 'c> StmtBuilder<'a, 'ctx, 'm, 'c> {
-    fn new(cucx: &'a mut CompileUnitCtx<'ctx, 'm, 'c>) -> Self {
+impl<'a, 'ctx> StmtBuilder<'a, 'ctx> {
+    fn new(cucx: &'a mut CompileUnitCtx<'ctx>) -> Self {
         Self { cucx }
     }
 
