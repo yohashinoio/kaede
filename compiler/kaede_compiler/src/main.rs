@@ -62,7 +62,6 @@ fn emit_bitcode_to_tempfile(module: &Module) -> anyhow::Result<TempPath> {
     Ok(temppath)
 }
 
-/// Use `llc`
 fn emit_object_file_to_tempfile(ir_path: &Path) -> anyhow::Result<TempPath> {
     let tempfile = NamedTempFile::new()?;
 
@@ -85,7 +84,6 @@ fn emit_object_file_to_tempfile(ir_path: &Path) -> anyhow::Result<TempPath> {
     Ok(temppath)
 }
 
-// Use `cc`
 fn emit_exe_file(obj_path: &Path, output_file_path: &Path) -> anyhow::Result<()> {
     let status = Command::new("cc")
         .args([
