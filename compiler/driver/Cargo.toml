@@ -1,5 +1,5 @@
 [package]
-name = "kaede_compiler"
+name = "kaede_compiler_driver"
 version = "0.1.0"
 edition = "2021"
 
@@ -10,10 +10,10 @@ inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", feat
 anyhow = "1.0.68"
 clap = { version = "4.1.4", features = ["derive"] }
 
-kaede_ast = { path = "../kaede_ast" }
-kaede_codegen = { path = "../kaede_codegen" }
-kaede_lex = { path = "../kaede_lex" }
-kaede_parse = { path = "../kaede_parse" }
+kaede_ast = { path = "../ast" }
+kaede_codegen = { path = "../codegen" }
+kaede_lex = { path = "../lex" }
+kaede_parse = { path = "../parse" }
 tempfile = "3.5.0"
 
 [dev-dependencies]

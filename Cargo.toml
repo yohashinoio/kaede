@@ -1,5 +1,12 @@
 [workspace]
 members = [
-  "compiler/kaede_*",
+  "compiler/ast",
+  "compiler/codegen",
+  "compiler/driver",
+  "compiler/lex",
+  "compiler/parse",
+  "compiler/span",
+  "compiler/symbol",
+  "compiler/type",
 ]
 resolver = "2"

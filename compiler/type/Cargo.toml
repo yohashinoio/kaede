@@ -1,5 +1,5 @@
 [package]
-name = "kaede_ast"
+name = "kaede_type"
 version = "0.1.0"
 edition = "2021"
 
@@ -8,6 +8,4 @@ edition = "2021"
 [dependencies]
 inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm15-0"] }
 
-kaede_type = { path = "../kaede_type" }
-kaede_span = { path = "../kaede_span" }
-kaede_symbol = { path = "../kaede_symbol" }
+kaede_symbol = { path = "../symbol" }
