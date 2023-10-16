@@ -2153,3 +2153,25 @@ fn c_ffi_with_ptr_and_vararg() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn method_for_i32() -> anyhow::Result<()> {
+    let program = r#"impl i32 {
+        fn twice(self): i32 {
+            return self * 2
+        }
+
+        fn twice_then_add(self, n: i32): i32 {
+            return self.twice() + n
+        }
+    }
+
+    fn main(): i32 {
+        let n = 14.twice_then_add(1)
+        return n.twice()
+    }"#;
+
+    assert_eq!(exec(program)?, 58);
+
+    Ok(())
+}
