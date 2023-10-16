@@ -2126,3 +2126,30 @@ fn match_unpack_unit_variant() {
         Err(CodegenError::UnitVariantCannotUnpack { .. })
     ));
 }
+
+#[test]
+fn c_ffi() -> anyhow::Result<()> {
+    let program = r#"extern abs(n: i32): i32
+
+    fn main(): i32 {
+        return abs(-48) + abs(10)
+    }"#;
+
+    assert_eq!(exec(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn c_ffi_with_ptr_and_vararg() -> anyhow::Result<()> {
+    let program = r#"extern printf(format: *i8, ...): i32
+
+    fn main(): i32 {
+        let n = printf("%s%d\n".as_ptr(), "hello, ".as_ptr(), 58)
+        return 48 + n
+    }"#;
+
+    assert_eq!(exec(program)?, 58);
+
+    Ok(())
+}
