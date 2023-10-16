@@ -149,6 +149,8 @@ impl Cursor<'_> {
                     "impl" => self.create_token(TokenKind::Impl),
                     "enum" => self.create_token(TokenKind::Enum),
                     "match" => self.create_token(TokenKind::Match),
+                    "extern" => self.create_token(TokenKind::Extern),
+                    "as" => self.create_token(TokenKind::As),
 
                     // Identifier
                     _ => self.create_token(TokenKind::Ident(ident)),

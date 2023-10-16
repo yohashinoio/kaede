@@ -103,6 +103,10 @@ pub enum TokenKind {
     Enum,
     /// "match"
     Match,
+    /// "extern"
+    Extern,
+    /// "as"
+    As,
 
     /// "true"
     True,
@@ -169,6 +173,8 @@ impl std::fmt::Display for TokenKind {
             Impl => write!(f, "'impl'"),
             Enum => write!(f, "'enum'"),
             Match => write!(f, "'match'"),
+            Extern => write!(f, "'extern'"),
+            As => write!(f, "'as'"),
 
             True => write!(f, "'true'"),
             False => write!(f, "'false'"),
