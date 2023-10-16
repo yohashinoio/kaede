@@ -8,7 +8,7 @@ use crate::{
     error::{CodegenError, CodegenResult},
     mangle::mangle_name,
     stmt::{build_block, build_normal_let, build_statement},
-    tcx::{EnumInfo, EnumVariantInfo, ReturnType, VariableTable},
+    tcx::{EnumInfo, EnumVariantInfo, ReturnType, UDTKind, VariableTable},
     value::{has_signed, Value},
     CompileUnitCtx,
 };
@@ -29,7 +29,7 @@ use kaede_span::Span;
 use kaede_symbol::Symbol;
 use kaede_type::{
     is_same_type, make_fundamental_type, wrap_in_ref, FundamentalType, FundamentalTypeKind,
-    Mutability, RefrenceType, Ty, TyKind,
+    Mutability, RefrenceType, Ty, TyKind, UserDefinedType,
 };
 
 struct EnumUnpack<'ctx> {
@@ -128,7 +128,7 @@ pub fn build_tuple_indexing<'ctx>(
 ) -> CodegenResult<Value<'ctx>> {
     let gep = unsafe {
         cucx.builder.build_in_bounds_gep(
-            cucx.to_llvm_type(tuple_ty),
+            cucx.to_llvm_type(tuple_ty)?,
             tuple,
             &[
                 cucx.context().i32_type().const_zero(),
@@ -153,7 +153,8 @@ pub fn build_tuple_indexing<'ctx>(
     };
 
     Ok(Value::new(
-        cucx.builder.build_load(cucx.to_llvm_type(elem_ty), gep, ""),
+        cucx.builder
+            .build_load(cucx.to_llvm_type(elem_ty)?, gep, ""),
         Ty {
             kind: elem_ty.kind.clone(),
             mutability: tuple_ty.mutability,
@@ -166,10 +167,10 @@ pub fn create_gc_struct<'ctx>(
     cucx: &mut CompileUnitCtx<'ctx>,
     struct_ty: &Ty,
     inits: &[BasicValueEnum<'ctx>],
-) -> PointerValue<'ctx> {
-    let mallocd = cucx.gc_malloc(struct_ty);
+) -> CodegenResult<PointerValue<'ctx>> {
+    let mallocd = cucx.gc_malloc(struct_ty)?;
 
-    let struct_llvm_ty = cucx.to_llvm_type(struct_ty);
+    let struct_llvm_ty = cucx.to_llvm_type(struct_ty)?;
 
     for (index, init) in inits.iter().enumerate() {
         let gep = unsafe {
@@ -187,7 +188,7 @@ pub fn create_gc_struct<'ctx>(
         cucx.builder.build_store(gep, *init);
     }
 
-    mallocd
+    Ok(mallocd)
 }
 
 struct ExprBuilder<'a, 'ctx> {
@@ -503,22 +504,37 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
         let udt = match refee_ty.kind.as_ref() {
             TyKind::UserDefined(udt) => udt,
-            _ => todo!("Error"),
+            _ => unimplemented!(),
         };
 
-        let enum_info = match self.cucx.tcx.get_enum_info(udt.get_symbol()) {
-            Some(e) => e,
-            None => todo!("Error"),
+        let udt_kind = match self.cucx.tcx.get_udt(udt.symbol()) {
+            Some(udt) => udt,
+            None => {
+                return Err(CodegenError::Undeclared {
+                    name: udt.symbol(),
+                    span: udt.span(),
+                })
+            }
         };
 
-        self.check_exhaustiveness_for_match_on_enum(&enum_info, &node.arms, node.span)?;
+        let enum_info = match udt_kind.as_ref() {
+            UDTKind::Enum(enum_info) => enum_info,
+            _ => {
+                return Err(CodegenError::Undeclared {
+                    name: udt.symbol(),
+                    span: udt.span(),
+                })
+            }
+        };
 
-        self.build_match_on_enum(&enum_info, target, &node.arms, node.span)
+        self.check_exhaustiveness_for_match_on_enum(enum_info, &node.arms, node.span)?;
+
+        self.build_match_on_enum(enum_info, target, &node.arms, node.span)
     }
 
     fn build_match_on_enum(
         &mut self,
-        enum_info: &Rc<EnumInfo>,
+        enum_info: &EnumInfo<'ctx>,
         target: &Value<'ctx>,
         arms: &MatchArmList,
         span: Span,
@@ -545,7 +561,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
     /// The return value is `Option` because of the recursion termination condition, so there is no problem if the caller `unwrap`s it
     fn conv_match_arms_on_enum_to_if(
         &mut self,
-        enum_info: &Rc<EnumInfo>,
+        enum_info: &EnumInfo<'ctx>,
         target: &Value<'ctx>,
         target_offset: &Value<'ctx>,
         mut arms: Iter<MatchArm>,
@@ -874,7 +890,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         let phi = self
             .cucx
             .builder
-            .build_phi(self.cucx.to_llvm_type(&ty), "iftmp");
+            .build_phi(self.cucx.to_llvm_type(&ty)?, "iftmp");
 
         phi.add_incoming(&[
             (&then_val.get_value(), then_bb),
@@ -888,7 +904,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         let variant_ty_llvm = match enum_unpack.variant_ty.kind.as_ref() {
             TyKind::Reference(refty) => self.cucx.to_llvm_type(&refty.refee_ty),
             _ => self.cucx.to_llvm_type(&enum_unpack.variant_ty),
-        };
+        }?;
 
         let bitcast = self.cucx.builder.build_bitcast(
             enum_unpack.enum_value.get_value(),
@@ -932,8 +948,8 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
     }
 
     fn struct_literal(&mut self, node: &StructLiteral) -> CodegenResult<Value<'ctx>> {
-        let struct_info = match self.cucx.tcx.get_struct_info(node.struct_name.symbol()) {
-            Some(x) => x.clone(),
+        let udt_kind = match self.cucx.tcx.get_udt(node.struct_name.symbol()) {
+            Some(udt) => udt.clone(),
 
             None => {
                 return Err(CodegenError::Undeclared {
@@ -943,8 +959,22 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             }
         };
 
+        let struct_info = match udt_kind.as_ref() {
+            UDTKind::Struct(struct_ty) => struct_ty,
+            _ => {
+                return Err(CodegenError::Undeclared {
+                    name: node.struct_name.symbol(),
+                    span: node.struct_name.span,
+                })
+            }
+        };
+
         let struct_ty = Ty {
-            kind: TyKind::UserDefined(node.struct_name.symbol().into()).into(),
+            kind: TyKind::UserDefined(UserDefinedType::new(
+                node.struct_name.symbol(),
+                node.struct_name.span,
+            ))
+            .into(),
             mutability: Mutability::Not,
         };
 
@@ -966,7 +996,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         let inits: Vec<_> = values.iter().map(|e| e.1).collect();
 
         Ok(Value::new(
-            create_gc_struct(self.cucx, &struct_ty, &inits).into(),
+            create_gc_struct(self.cucx, &struct_ty, &inits)?.into(),
             wrap_in_ref(struct_ty.into(), Mutability::Mut).into(),
         ))
     }
@@ -994,7 +1024,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                     .map(|v| v.get_value())
                     .collect::<Vec<_>>()
                     .as_slice(),
-            )
+            )?
             .into(),
             wrap_in_ref(tuple_ty.into(), Mutability::Mut).into(),
         ))
@@ -1015,9 +1045,9 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             mutability: Mutability::Not,
         });
 
-        let array_ty_llvm = self.cucx.to_llvm_type(&array_ty);
+        let array_ty_llvm = self.cucx.to_llvm_type(&array_ty)?;
 
-        let mallocd = self.cucx.gc_malloc(&array_ty);
+        let mallocd = self.cucx.gc_malloc(&array_ty)?;
 
         for (idx, elem) in elems.iter().enumerate() {
             let gep = unsafe {
@@ -1064,7 +1094,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             _ => unreachable!(),
         };
 
-        let array_llvm_ty = self.cucx.to_llvm_type(&array_ty).into_array_type();
+        let array_llvm_ty = self.cucx.to_llvm_type(&array_ty)?.into_array_type();
 
         let ptr_to_array = array_ref.get_value().into_pointer_value();
 
@@ -1098,7 +1128,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
     fn logical_not(&mut self, node: &LogicalNot) -> CodegenResult<Value<'ctx>> {
         let operand = build_expression(self.cucx, &node.operand)?;
 
-        let zero = self.cucx.to_llvm_type(&operand.get_type()).const_zero();
+        let zero = self.cucx.to_llvm_type(&operand.get_type())?.const_zero();
 
         // Compared to zero, it would be equivalent to 'logical not'
         Ok(Value::new(
@@ -1164,7 +1194,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         Ok(Value::new(
             self.cucx
                 .builder
-                .build_load(self.cucx.to_llvm_type(ty), *ptr, ""),
+                .build_load(self.cucx.to_llvm_type(ty)?, *ptr, ""),
             ty.clone(),
         ))
     }
@@ -1214,8 +1244,8 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         variant_name: &Ident,
         value: Option<&Expr>,
     ) -> CodegenResult<Value<'ctx>> {
-        let enum_info = match self.cucx.tcx.get_enum_info(enum_name.symbol()) {
-            Some(info) => info,
+        let udt_kind = match self.cucx.tcx.get_udt(enum_name.symbol()) {
+            Some(udt) => udt,
             None => {
                 return Err(CodegenError::Undeclared {
                     name: enum_name.symbol(),
@@ -1224,15 +1254,23 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             }
         };
 
+        let enum_info = match udt_kind.as_ref() {
+            UDTKind::Enum(enum_info) => enum_info,
+            _ => {
+                return Err(CodegenError::Undeclared {
+                    name: enum_name.symbol(),
+                    span: enum_name.span,
+                })
+            }
+        };
+
         let variant_offset = self
-            .get_enum_variant_info_from_name(
-                &enum_info,
-                (variant_name.symbol(), variant_name.span),
-            )?
+            .get_enum_variant_info_from_name(enum_info, (variant_name.symbol(), variant_name.span))?
             .offset;
 
         let enum_ty = Ty {
-            kind: TyKind::UserDefined(enum_name.symbol().into()).into(),
+            kind: TyKind::UserDefined(UserDefinedType::new(enum_name.symbol(), enum_name.span))
+                .into(),
             mutability: Mutability::Not,
         };
 
@@ -1249,7 +1287,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         };
 
         Ok(Value::new(
-            create_gc_struct(self.cucx, &enum_ty, &inits).into(),
+            create_gc_struct(self.cucx, &enum_ty, &inits)?.into(),
             wrap_in_ref(enum_ty.into(), Mutability::Mut).into(),
         ))
     }
@@ -1601,7 +1639,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         struct_ty: &Rc<Ty>,
     ) -> CodegenResult<Value<'ctx>> {
         let struct_name = if let TyKind::UserDefined(ty) = struct_ty.kind.as_ref() {
-            ty.get_symbol()
+            ty.symbol()
         } else {
             unreachable!()
         };
@@ -1626,7 +1664,12 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         struct_ty: &Rc<Ty>,
         field_name: &Ident,
     ) -> CodegenResult<Value<'ctx>> {
-        let struct_info = self.cucx.tcx.get_struct_info(struct_name).unwrap();
+        let udt_kind = self.cucx.tcx.get_udt(struct_name).unwrap();
+
+        let struct_info = match udt_kind.as_ref() {
+            UDTKind::Struct(t) => t,
+            _ => unreachable!(),
+        };
 
         let field_info = match struct_info.fields.get(&field_name.symbol()) {
             Some(field) => field,
@@ -1643,7 +1686,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
         let gep = unsafe {
             self.cucx.builder.build_in_bounds_gep(
-                self.cucx.to_llvm_type(struct_ty),
+                self.cucx.to_llvm_type(struct_ty)?,
                 struct_value.get_value().into_pointer_value(),
                 &[
                     self.cucx.context().i32_type().const_zero(),
@@ -1656,7 +1699,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         Ok(Value::new(
             self.cucx
                 .builder
-                .build_load(self.cucx.to_llvm_type(&field_info.ty), gep, ""),
+                .build_load(self.cucx.to_llvm_type(&field_info.ty)?, gep, ""),
             Ty {
                 kind: field_info.ty.kind.clone(),
                 mutability: struct_ty.mutability,

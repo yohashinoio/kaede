@@ -4,6 +4,7 @@ use inkwell::{
     context::Context,
     types::{BasicType, BasicTypeEnum},
 };
+use kaede_span::Span;
 use kaede_symbol::Symbol;
 
 pub fn create_inferred_tuple(element_len: usize) -> TyKind {
@@ -141,7 +142,7 @@ impl std::fmt::Display for TyKind {
 
             Self::Str => write!(f, "str"),
 
-            Self::UserDefined(udt) => write!(f, "{}", udt.get_symbol().as_str()),
+            Self::UserDefined(udt) => write!(f, "{}", udt.symbol().as_str()),
 
             Self::Reference(refee) => write!(f, "&{}", refee.refee_ty.kind),
 
@@ -240,22 +241,32 @@ impl FundamentalType {
 }
 
 /// User defined types
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct UserDefinedType {
-    name: Symbol,
-}
-
-impl From<Symbol> for UserDefinedType {
-    fn from(name: Symbol) -> Self {
-        Self { name }
-    }
+    name: (Symbol, Span),
 }
 
 impl UserDefinedType {
-    pub fn get_symbol(&self) -> Symbol {
-        self.name
+    pub fn new(name: Symbol, span: Span) -> Self {
+        Self { name: (name, span) }
+    }
+
+    pub fn symbol(&self) -> Symbol {
+        self.name.0
+    }
+
+    pub fn span(&self) -> Span {
+        self.name.1
     }
 }
+
+impl PartialEq for UserDefinedType {
+    fn eq(&self, other: &Self) -> bool {
+        self.symbol() == other.symbol()
+    }
+}
+
+impl Eq for UserDefinedType {}
 
 #[derive(Debug, Eq, Clone)]
 pub struct RefrenceType {

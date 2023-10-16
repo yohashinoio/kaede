@@ -388,6 +388,7 @@ name = "kaede_type"
 version = "0.1.0"
 dependencies = [
  "inkwell",
+ "kaede_span",
  "kaede_symbol",
 ]
 

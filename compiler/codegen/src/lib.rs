@@ -18,6 +18,8 @@ use kaede_type::{FundamentalType, FundamentalTypeKind, Mutability, RefrenceType,
 use tcx::{ReturnType, TypeCtx};
 use top::build_top_level;
 
+use crate::tcx::UDTKind;
+
 pub mod error;
 mod expr;
 mod mangle;
@@ -159,7 +161,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
     }
 
     /// Create a new stack allocation instruction in the entry block of the function
-    fn create_entry_block_alloca(&self, name: &str, ty: &Ty) -> PointerValue<'ctx> {
+    fn create_entry_block_alloca(&self, name: &str, ty: &Ty) -> CodegenResult<PointerValue<'ctx>> {
         let builder = self.context().create_builder();
 
         let entry = self.get_current_fn().get_first_basic_block().unwrap();
@@ -169,24 +171,30 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             None => builder.position_at_end(entry),
         }
 
-        builder.build_alloca(self.to_llvm_type(ty), name)
+        Ok(builder.build_alloca(self.to_llvm_type(ty)?, name))
     }
 
     // If return_ty is `None`, treat as void
-    fn create_fn_type(&mut self, params: &[Rc<Ty>], return_ty: &ReturnType) -> FunctionType<'ctx> {
-        let param_types = params
-            .iter()
-            .map(|t| self.to_llvm_type(t).into())
-            .collect::<Vec<_>>();
+    fn create_fn_type(
+        &mut self,
+        params: &[Rc<Ty>],
+        return_ty: &ReturnType,
+    ) -> CodegenResult<FunctionType<'ctx>> {
+        let mut param_types = Vec::new();
+        for param in params {
+            param_types.push(self.to_llvm_type(param)?.into());
+        }
 
-        match return_ty {
-            ReturnType::Type(ty) => self.to_llvm_type(ty).fn_type(param_types.as_slice(), false),
+        Ok(match return_ty {
+            ReturnType::Type(ty) => self
+                .to_llvm_type(ty)?
+                .fn_type(param_types.as_slice(), false),
 
             ReturnType::Void => self
                 .context()
                 .void_type()
                 .fn_type(param_types.as_slice(), false),
-        }
+        })
     }
 
     fn decl_fn(
@@ -195,8 +203,8 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         param_types: Vec<Rc<Ty>>,
         return_ty: ReturnType,
         linkage: Option<Linkage>,
-    ) -> FunctionValue<'ctx> {
-        let fn_type = self.create_fn_type(&param_types, &return_ty);
+    ) -> CodegenResult<FunctionValue<'ctx>> {
+        let fn_type = self.create_fn_type(&param_types, &return_ty)?;
 
         let fn_value = self.module.add_function(name, fn_type, linkage);
 
@@ -206,10 +214,10 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         // Store parameter information in table
         self.tcx.add_fn_params(fn_value, param_types);
 
-        fn_value
+        Ok(fn_value)
     }
 
-    fn gc_init(&mut self) {
+    fn gc_init(&mut self) -> CodegenResult<()> {
         // Declare GC_malloc in boehm-gc
         let return_ty = Ty {
             kind: TyKind::Reference(RefrenceType {
@@ -236,24 +244,25 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         }
         .into()];
 
-        self.decl_fn("GC_malloc", param_types, ReturnType::Type(return_ty), None);
+        self.decl_fn("GC_malloc", param_types, ReturnType::Type(return_ty), None)
+            .map(|_| ())
     }
 
-    fn gc_malloc(&self, ty: &Ty) -> PointerValue<'ctx> {
+    fn gc_malloc(&self, ty: &Ty) -> CodegenResult<PointerValue<'ctx>> {
         let gc_mallocd = self.module.get_function("GC_malloc").unwrap();
 
         let addr = self
             .builder
             .build_call(
                 gc_mallocd,
-                &[self.to_llvm_type(ty).size_of().unwrap().into()],
+                &[self.to_llvm_type(ty)?.size_of().unwrap().into()],
                 "",
             )
             .try_as_basic_value()
             .left()
             .unwrap();
 
-        addr.into_pointer_value()
+        Ok(addr.into_pointer_value())
     }
 
     fn get_current_fn(&self) -> FunctionValue<'ctx> {
@@ -273,10 +282,10 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             .is_none()
     }
 
-    fn to_llvm_type(&self, ty: &Ty) -> BasicTypeEnum<'ctx> {
+    fn to_llvm_type(&self, ty: &Ty) -> CodegenResult<BasicTypeEnum<'ctx>> {
         let context = self.context();
 
-        match ty.kind.as_ref() {
+        Ok(match ty.kind.as_ref() {
             TyKind::Fundamental(t) => t.as_llvm_type(self.context()),
 
             TyKind::Str => {
@@ -289,33 +298,41 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             }
 
             TyKind::UserDefined(udt) => {
-                if let Some(si) = self.tcx.get_struct_info(udt.get_symbol()) {
-                    return si.ty.into();
-                }
+                let udt_kind = match self.tcx.get_udt(udt.symbol()) {
+                    Some(udt) => udt,
+                    None => {
+                        return Err(CodegenError::Undeclared {
+                            name: udt.symbol(),
+                            span: udt.span(),
+                        })
+                    }
+                };
 
-                if let Some(ei) = self.tcx.get_enum_info(udt.get_symbol()) {
-                    return ei.ty;
+                match udt_kind.as_ref() {
+                    UDTKind::Struct(sty) => sty.ty.into(),
+                    UDTKind::Enum(ety) => ety.ty,
                 }
-
-                unreachable!();
             }
 
             TyKind::Reference(rty) => self
-                .to_llvm_type(&rty.refee_ty)
+                .to_llvm_type(&rty.refee_ty)?
                 .ptr_type(AddressSpace::default())
                 .into(),
 
-            TyKind::Array((elem_ty, size)) => self.to_llvm_type(elem_ty).array_type(*size).into(),
+            TyKind::Array((elem_ty, size)) => self.to_llvm_type(elem_ty)?.array_type(*size).into(),
 
             TyKind::Tuple(types) => {
-                let types: Vec<_> = types.iter().map(|t| self.to_llvm_type(t)).collect();
-                context.struct_type(types.as_slice(), true).into()
+                let mut llvm_types = Vec::new();
+                for ty in types {
+                    llvm_types.push(self.to_llvm_type(ty)?);
+                }
+                context.struct_type(llvm_types.as_slice(), true).into()
             }
 
             TyKind::Unit => panic!("Cannot get LLVM type of unit type!"),
             TyKind::Never => panic!("Cannot get LLVM type of never type!"),
             TyKind::Inferred => panic!("Cannot get LLVM type of inferred type!"),
-        }
+        })
     }
 
     fn opt_module(&self, opt_level: OptimizationLevel) {
@@ -365,7 +382,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         top_levels: Vec<TopLevel>,
         opt_level: OptimizationLevel,
     ) -> CodegenResult<Module<'ctx>> {
-        self.gc_init();
+        self.gc_init()?;
 
         for top in top_levels {
             build_top_level(&mut self, top)?;

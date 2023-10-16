@@ -16,7 +16,7 @@ pub struct Ident {
 }
 
 impl Ident {
-    pub fn from_symbol_and_span(name: Symbol, span: Span) -> Self {
+    pub fn new(name: Symbol, span: Span) -> Self {
         Self { name, span }
     }
 
@@ -27,6 +27,12 @@ impl Ident {
     pub fn symbol(self) -> Symbol {
         self.name
     }
+}
+
+#[derive(Debug)]
+pub struct GenericArgs {
+    pub types: Vec<Rc<Ty>>,
+    pub span: Span,
 }
 
 #[derive(Debug)]

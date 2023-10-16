@@ -9,7 +9,7 @@ use kaede_ast::{
 };
 use kaede_parse::Parser;
 use kaede_symbol::Symbol;
-use kaede_type::{Mutability, RefrenceType, Ty, TyKind};
+use kaede_type::{Mutability, RefrenceType, Ty, TyKind, UserDefinedType};
 
 use crate::{
     error::{CodegenError, CodegenResult},
@@ -18,6 +18,10 @@ use crate::{
     tcx::{EnumInfo, EnumVariantInfo, ReturnType, StructFieldInfo, StructInfo, VariableTable},
     CompileUnitCtx,
 };
+
+type FnParams = Vec<(Ident, Rc<Ty>)>;
+
+type FnValueParamsPair<'ctx> = (FunctionValue<'ctx>, FnParams);
 
 pub fn build_top_level(ctx: &mut CompileUnitCtx, node: TopLevel) -> CodegenResult<()> {
     let mut builder = TopLevelBuilder::new(ctx);
@@ -30,10 +34,10 @@ pub fn build_top_level(ctx: &mut CompileUnitCtx, node: TopLevel) -> CodegenResul
 pub fn push_self_to_front(v: &mut Params, struct_name: String, mutability: Mutability) {
     let span = v.1;
 
-    let self_ident = Ident::from_symbol_and_span("self".to_string().into(), span);
+    let self_ident = Ident::new("self".to_string().into(), span);
 
     let struct_ty = Ty {
-        kind: TyKind::UserDefined(Symbol::from(struct_name).into()).into(),
+        kind: TyKind::UserDefined(UserDefinedType::new(Symbol::from(struct_name), span)).into(),
         mutability,
     }
     .into();
@@ -67,7 +71,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
 
             TopLevelKind::Fn(node) => self.func(node)?,
 
-            TopLevelKind::Struct(node) => self.struct_(node),
+            TopLevelKind::Struct(node) => self.struct_(node)?,
 
             TopLevelKind::Impl(node) => self.impl_(node)?,
 
@@ -115,7 +119,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                     true,
                 );
 
-                self.cucx.tcx.add_enum(
+                self.cucx.tcx.add_enum_ty(
                     node.name.symbol(),
                     EnumInfo {
                         name: node.name,
@@ -130,7 +134,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
 
                 ty.set_body(&[self.cucx.context().i32_type().into()], true);
 
-                self.cucx.tcx.add_enum(
+                self.cucx.tcx.add_enum_ty(
                     node.name.symbol(),
                     EnumInfo {
                         name: node.name,
@@ -149,7 +153,9 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
 
         for item in enum_items.iter() {
             if let Some(ty) = &item.ty {
-                let size = self.cucx.get_size_in_bits(&self.cucx.to_llvm_type(ty));
+                let size = self
+                    .cucx
+                    .get_size_in_bits(&self.cucx.to_llvm_type(ty).unwrap());
                 largest = std::cmp::max(size, largest);
             }
         }
@@ -226,7 +232,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
 
             match top_level.kind {
                 TopLevelKind::Fn(func) => {
-                    self.decl_fn(
+                    self.declare_fn(
                         &mangle_external_name(
                             import_module_name.to_owned().into(),
                             func.name.symbol(),
@@ -234,7 +240,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                         func.params,
                         func.return_ty.into(),
                         Linkage::External,
-                    );
+                    )?;
                 }
 
                 TopLevelKind::Struct(_) => todo!(),
@@ -265,13 +271,13 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
     }
 
     // Return function value and parameter information reflecting mutability for the types
-    fn decl_fn(
+    fn declare_fn(
         &mut self,
         mangled_name: &str,
         params: Params,
         return_ty: ReturnType,
         linkage: Linkage,
-    ) -> (FunctionValue<'ctx>, Vec<(Ident, Rc<Ty>)> /* Params */) {
+    ) -> CodegenResult<FnValueParamsPair<'ctx>> {
         let params = params
             .0
             .into_iter()
@@ -283,24 +289,27 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
             params.iter().map(|e| e.1.clone()).collect(),
             return_ty,
             Some(linkage),
-        );
+        )?;
 
-        (fn_value, params)
+        Ok((fn_value, params))
     }
 
     fn build_fn(&mut self, mangled_name: &str, node: Fn) -> CodegenResult<()> {
-        let (fn_value, param_info) = self.decl_fn(
+        let fn_value_and_params = self.declare_fn(
             mangled_name,
             node.params,
             node.return_ty.into(),
             Linkage::External,
-        );
+        )?;
+
+        let fn_value = fn_value_and_params.0;
+        let params = fn_value_and_params.1;
 
         let basic_block = self.cucx.context().append_basic_block(fn_value, "entry");
         self.cucx.builder.position_at_end(basic_block);
 
         // Allocate parameters
-        let param_table = self.fn_params_to_variable_table(param_info, fn_value);
+        let param_table = self.fn_params_to_variable_table(fn_value, params)?;
 
         // Push parameter table
         self.cucx.tcx.push_variable_table(param_table);
@@ -319,37 +328,41 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
 
     fn fn_params_to_variable_table(
         &self,
-        param_info: Vec<(Ident, Rc<Ty>)>,
         fn_value: FunctionValue<'ctx>,
-    ) -> VariableTable<'ctx> {
-        let mut params = VariableTable::new();
+        params: FnParams,
+    ) -> CodegenResult<VariableTable<'ctx>> {
+        let mut var_table = VariableTable::new();
 
-        assert_eq!(fn_value.count_params(), param_info.len() as u32);
+        assert_eq!(fn_value.count_params(), params.len() as u32);
 
-        for (idx, (name, param_ty)) in param_info.into_iter().enumerate() {
+        for (idx, (name, param_ty)) in params.into_iter().enumerate() {
             let alloca = self
                 .cucx
                 .builder
-                .build_alloca(self.cucx.to_llvm_type(&param_ty), name.as_str());
+                .build_alloca(self.cucx.to_llvm_type(&param_ty)?, name.as_str());
 
             self.cucx
                 .builder
                 .build_store(alloca, fn_value.get_nth_param(idx as u32).unwrap());
 
-            params.add(name.symbol(), (alloca, param_ty));
+            var_table.add(name.symbol(), (alloca, param_ty));
         }
 
-        params
+        Ok(var_table)
     }
 
-    fn struct_(&mut self, node: Struct) {
+    fn struct_(&mut self, node: Struct) -> CodegenResult<()> {
+        if node.generic_params.is_some() {
+            // self.cucx.tcx.
+            todo!()
+        }
+
         let mangled_name = mangle_name(self.cucx, node.name.symbol());
 
-        let field_tys: Vec<_> = node
-            .fields
-            .iter()
-            .map(|f| self.cucx.to_llvm_type(&f.ty))
-            .collect();
+        let mut field_tys = Vec::new();
+        for field in node.fields.iter() {
+            field_tys.push(self.cucx.to_llvm_type(&field.ty)?);
+        }
 
         let ty = self.cucx.context().opaque_struct_type(&mangled_name);
 
@@ -372,6 +385,8 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
 
         self.cucx
             .tcx
-            .add_struct(node.name.symbol(), StructInfo { ty, fields });
+            .add_struct_ty(node.name.symbol(), StructInfo { ty, fields });
+
+        Ok(())
     }
 }

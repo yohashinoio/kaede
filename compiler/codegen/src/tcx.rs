@@ -52,9 +52,9 @@ impl From<Option<Ty>> for ReturnType {
 
 pub type ReturnTypeTable<'ctx> = HashMap<FunctionValue<'ctx>, ReturnType>;
 
-pub type FnParams = Vec<Rc<Ty>>;
+pub type FnParamTypes = Vec<Rc<Ty>>;
 
-pub type ParamTable<'ctx> = HashMap<FunctionValue<'ctx>, FnParams>;
+pub type FnParamsTable<'ctx> = HashMap<FunctionValue<'ctx>, FnParamTypes>;
 
 pub struct StructFieldInfo {
     pub ty: Rc<Ty>,
@@ -80,17 +80,20 @@ pub struct EnumInfo<'ctx> {
     pub ty: BasicTypeEnum<'ctx>,
 }
 
-pub type StructTable<'ctx> = HashMap<Symbol, Rc<StructInfo<'ctx>>>;
+pub enum UDTKind<'ctx> {
+    Struct(StructInfo<'ctx>),
+    Enum(EnumInfo<'ctx>),
+}
 
-pub type EnumTable<'ctx> = HashMap<Symbol, Rc<EnumInfo<'ctx>>>;
+/// User defined type table
+pub type UDTTable<'ctx> = HashMap<Symbol, Rc<UDTKind<'ctx>>>;
 
 #[derive(Default)]
 pub struct TypeCtx<'ctx> {
-    return_ty_table: ReturnTypeTable<'ctx>,
-    fn_params_table: ParamTable<'ctx>,
-    struct_table: StructTable<'ctx>,
-    enum_table: EnumTable<'ctx>,
     variable_table_stack: Vec<VariableTable<'ctx>>,
+    return_ty_table: ReturnTypeTable<'ctx>,
+    fn_params_table: FnParamsTable<'ctx>,
+    udt_table: UDTTable<'ctx>,
 }
 
 impl<'ctx> TypeCtx<'ctx> {
@@ -122,11 +125,11 @@ impl<'ctx> TypeCtx<'ctx> {
         self.variable_table_stack.pop().unwrap();
     }
 
-    pub fn add_fn_params(&mut self, fn_value: FunctionValue<'ctx>, params: FnParams) {
+    pub fn add_fn_params(&mut self, fn_value: FunctionValue<'ctx>, params: FnParamTypes) {
         self.fn_params_table.insert(fn_value, params);
     }
 
-    pub fn get_fn_params(&self, fn_value: FunctionValue<'ctx>) -> Option<FnParams> {
+    pub fn get_fn_params(&self, fn_value: FunctionValue<'ctx>) -> Option<FnParamTypes> {
         self.fn_params_table.get(&fn_value).cloned()
     }
 
@@ -138,19 +141,15 @@ impl<'ctx> TypeCtx<'ctx> {
         self.return_ty_table.get(&fn_value).cloned()
     }
 
-    pub fn add_struct(&mut self, name: Symbol, info: StructInfo<'ctx>) {
-        self.struct_table.insert(name, info.into());
+    pub fn add_struct_ty(&mut self, name: Symbol, ty: StructInfo<'ctx>) {
+        self.udt_table.insert(name, UDTKind::Struct(ty).into());
     }
 
-    pub fn get_struct_info(&self, name: Symbol) -> Option<Rc<StructInfo<'ctx>>> {
-        self.struct_table.get(&name).cloned()
+    pub fn add_enum_ty(&mut self, name: Symbol, ty: EnumInfo<'ctx>) {
+        self.udt_table.insert(name, UDTKind::Enum(ty).into());
     }
 
-    pub fn add_enum(&mut self, name: Symbol, info: EnumInfo<'ctx>) {
-        self.enum_table.insert(name, info.into());
-    }
-
-    pub fn get_enum_info(&self, name: Symbol) -> Option<Rc<EnumInfo<'ctx>>> {
-        self.enum_table.get(&name).cloned()
+    pub fn get_udt(&self, name: Symbol) -> Option<Rc<UDTKind<'ctx>>> {
+        self.udt_table.get(&name).cloned()
     }
 }

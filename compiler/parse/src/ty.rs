@@ -1,6 +1,7 @@
 use kaede_lex::token::TokenKind;
 use kaede_type::{
     make_fundamental_type, FundamentalTypeKind, Mutability, RefrenceType, Ty, TyKind,
+    UserDefinedType,
 };
 
 use crate::{
@@ -53,7 +54,11 @@ impl Parser {
 
             // User defined type
             _ => wrap_in_reference(Ty {
-                kind: TyKind::UserDefined(type_ident.symbol().into()).into(),
+                kind: TyKind::UserDefined(UserDefinedType::new(
+                    type_ident.symbol(),
+                    type_ident.span,
+                ))
+                .into(),
                 mutability: Mutability::Not,
             }),
         })
