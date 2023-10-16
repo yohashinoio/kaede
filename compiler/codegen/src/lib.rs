@@ -15,13 +15,14 @@ use inkwell::{
 use kaede_ast::{top::TopLevel, CompileUnit};
 use kaede_symbol::Symbol;
 use kaede_type::{FundamentalType, FundamentalTypeKind, Mutability, RefrenceType, Ty, TyKind};
-use tcx::{ReturnType, TypeCtx};
+use tcx::{FunctionInfo, ReturnType, TypeCtx};
 use top::build_top_level;
 
 use crate::tcx::UDTKind;
 
 pub mod error;
 mod expr;
+mod generic;
 mod mangle;
 mod stmt;
 mod tcx;
@@ -197,22 +198,25 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         })
     }
 
-    fn decl_fn(
+    fn declare_fn(
         &mut self,
         name: &str,
         param_types: Vec<Rc<Ty>>,
-        return_ty: ReturnType,
+        return_type: ReturnType,
         linkage: Option<Linkage>,
     ) -> CodegenResult<FunctionValue<'ctx>> {
-        let fn_type = self.create_fn_type(&param_types, &return_ty)?;
+        let fn_type = self.create_fn_type(&param_types, &return_type)?;
 
         let fn_value = self.module.add_function(name, fn_type, linkage);
 
-        // Store return type information in table
-        self.tcx.add_return_ty(fn_value, return_ty);
-
-        // Store parameter information in table
-        self.tcx.add_fn_params(fn_value, param_types);
+        // Store function information in table
+        self.tcx.add_function_info(
+            fn_value,
+            FunctionInfo {
+                return_type,
+                param_types,
+            },
+        );
 
         Ok(fn_value)
     }
@@ -244,7 +248,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         }
         .into()];
 
-        self.decl_fn("GC_malloc", param_types, ReturnType::Type(return_ty), None)
+        self.declare_fn("GC_malloc", param_types, ReturnType::Type(return_ty), None)
             .map(|_| ())
     }
 

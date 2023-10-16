@@ -284,7 +284,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
             .map(|e| (e.name, change_mutability_dup(e.ty.into(), e.mutability)))
             .collect::<Vec<_>>();
 
-        let fn_value = self.cucx.decl_fn(
+        let fn_value = self.cucx.declare_fn(
             mangled_name,
             params.iter().map(|e| e.1.clone()).collect(),
             return_ty,

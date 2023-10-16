@@ -50,11 +50,12 @@ impl From<Option<Ty>> for ReturnType {
     }
 }
 
-pub type ReturnTypeTable<'ctx> = HashMap<FunctionValue<'ctx>, ReturnType>;
+pub struct FunctionInfo {
+    pub return_type: ReturnType,
+    pub param_types: Vec<Rc<Ty>>,
+}
 
-pub type FnParamTypes = Vec<Rc<Ty>>;
-
-pub type FnParamsTable<'ctx> = HashMap<FunctionValue<'ctx>, FnParamTypes>;
+pub type FunctionTable<'ctx> = HashMap<FunctionValue<'ctx>, Rc<FunctionInfo>>;
 
 pub struct StructFieldInfo {
     pub ty: Rc<Ty>,
@@ -91,8 +92,7 @@ pub type UDTTable<'ctx> = HashMap<Symbol, Rc<UDTKind<'ctx>>>;
 #[derive(Default)]
 pub struct TypeCtx<'ctx> {
     variable_table_stack: Vec<VariableTable<'ctx>>,
-    return_ty_table: ReturnTypeTable<'ctx>,
-    fn_params_table: FnParamsTable<'ctx>,
+    fn_table: FunctionTable<'ctx>,
     udt_table: UDTTable<'ctx>,
 }
 
@@ -125,20 +125,12 @@ impl<'ctx> TypeCtx<'ctx> {
         self.variable_table_stack.pop().unwrap();
     }
 
-    pub fn add_fn_params(&mut self, fn_value: FunctionValue<'ctx>, params: FnParamTypes) {
-        self.fn_params_table.insert(fn_value, params);
+    pub fn add_function_info(&mut self, fn_value: FunctionValue<'ctx>, info: FunctionInfo) {
+        self.fn_table.insert(fn_value, info.into());
     }
 
-    pub fn get_fn_params(&self, fn_value: FunctionValue<'ctx>) -> Option<FnParamTypes> {
-        self.fn_params_table.get(&fn_value).cloned()
-    }
-
-    pub fn add_return_ty(&mut self, fn_value: FunctionValue<'ctx>, return_ty: ReturnType) {
-        self.return_ty_table.insert(fn_value, return_ty);
-    }
-
-    pub fn get_return_ty(&self, fn_value: FunctionValue<'ctx>) -> Option<ReturnType> {
-        self.return_ty_table.get(&fn_value).cloned()
+    pub fn get_function_info(&mut self, fn_value: FunctionValue<'ctx>) -> Option<Rc<FunctionInfo>> {
+        self.fn_table.get(&fn_value).cloned()
     }
 
     pub fn add_struct_ty(&mut self, name: Symbol, ty: StructInfo<'ctx>) {

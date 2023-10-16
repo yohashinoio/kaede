@@ -1779,9 +1779,9 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             None => return Err(CodegenError::Undeclared { name, span }),
         };
 
-        let param_types = self.cucx.tcx.get_fn_params(func).unwrap();
+        let function_info = self.cucx.tcx.get_function_info(func).unwrap();
 
-        self.verify_args(&args, &param_types)?;
+        self.verify_args(&args, &function_info.param_types)?;
 
         let return_value = self
             .cucx
@@ -1799,16 +1799,13 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
         Ok(match return_value {
             // With return value
-            Some(val) => {
-                let return_ty = self.cucx.tcx.get_return_ty(func).unwrap();
-                Value::new(
-                    val,
-                    match return_ty {
-                        ReturnType::Type(ty) => ty,
-                        ReturnType::Void => unreachable!(),
-                    },
-                )
-            }
+            Some(val) => Value::new(
+                val,
+                match &function_info.return_type {
+                    ReturnType::Type(ty) => ty.clone(),
+                    ReturnType::Void => unreachable!(),
+                },
+            ),
 
             // Without return value (void function)
             None => Value::new_void(),
