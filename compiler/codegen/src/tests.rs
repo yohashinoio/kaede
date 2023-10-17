@@ -2175,3 +2175,31 @@ fn method_for_i32() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn cast_integer() -> anyhow::Result<()> {
+    let program = r#"fn f(): i64 {
+        let n = 58
+        return n as i64
+    }
+
+    fn main(): i32 {
+        return f() as i32
+    }"#;
+
+    assert_eq!(exec(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn cast_str_to_pointer() -> anyhow::Result<()> {
+    let program = r#"fn main(): i32 {
+        let s = "hello, world" as *str as *i8
+        return 58
+    }"#;
+
+    assert_eq!(exec(program)?, 58);
+
+    Ok(())
+}
