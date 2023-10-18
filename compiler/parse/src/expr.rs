@@ -614,8 +614,9 @@ impl Parser {
 
     pub fn ident(&mut self) -> ParseResult<Ident> {
         if matches!(self.first().kind, TokenKind::Ident(_)) {
-            if let TokenKind::Ident(ident) = self.bump().unwrap().kind {
-                return Ok(Ident::new(ident.into(), self.first().span));
+            let token = self.bump().unwrap();
+            if let TokenKind::Ident(ident) = token.kind {
+                return Ok(Ident::new(ident.into(), token.span));
             }
         }
 
