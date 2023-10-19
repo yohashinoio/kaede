@@ -132,7 +132,7 @@ impl Parser {
 
         let span = match &init {
             Some(e) => e.span,
-            None => Span::new(start, name.span.finish),
+            None => Span::new(start, name.span().finish),
         };
 
         Ok(Let {

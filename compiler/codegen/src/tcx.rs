@@ -4,8 +4,8 @@ use inkwell::{
     types::{BasicTypeEnum, StructType},
     values::{FunctionValue, PointerValue},
 };
-use kaede_ast::{expr::Ident, top::Visibility};
-use kaede_symbol::Symbol;
+use kaede_ast::top::{Struct, StructField, Visibility};
+use kaede_symbol::{Ident, Symbol};
 use kaede_type::Ty;
 
 use crate::error::{CodegenError, CodegenResult};
@@ -57,17 +57,13 @@ pub struct FunctionInfo {
 
 pub type FunctionTable<'ctx> = HashMap<FunctionValue<'ctx>, Rc<FunctionInfo>>;
 
-pub struct StructFieldInfo {
-    pub ty: Rc<Ty>,
-    pub vis: Visibility,
-    pub offset: u64,
-}
-
+#[derive(Debug)]
 pub struct StructInfo<'ctx> {
     pub ty: StructType<'ctx>,
-    pub fields: HashMap<Symbol, StructFieldInfo>,
+    pub fields: HashMap<Symbol, StructField>,
 }
 
+#[derive(Debug)]
 pub struct EnumVariantInfo {
     pub name: Ident,
     pub vis: Visibility,
@@ -75,25 +71,36 @@ pub struct EnumVariantInfo {
     pub ty: Option<Rc<Ty>>,
 }
 
+#[derive(Debug)]
 pub struct EnumInfo<'ctx> {
+    pub ty: BasicTypeEnum<'ctx>,
     pub name: Ident,
     pub variants: HashMap<Symbol, EnumVariantInfo>,
-    pub ty: BasicTypeEnum<'ctx>,
 }
 
+#[derive(Debug)]
 pub enum UDTKind<'ctx> {
     Struct(StructInfo<'ctx>),
     Enum(EnumInfo<'ctx>),
+    GenericArg(Rc<Ty>),
 }
 
 /// User defined type table
 pub type UDTTable<'ctx> = HashMap<Symbol, Rc<UDTKind<'ctx>>>;
+
+#[derive(Debug)]
+pub enum GenericKind {
+    Struct(Struct),
+}
+
+pub type GenericTable<'ctx> = HashMap<Symbol, Rc<GenericKind>>;
 
 #[derive(Default)]
 pub struct TypeCtx<'ctx> {
     variable_table_stack: Vec<VariableTable<'ctx>>,
     fn_table: FunctionTable<'ctx>,
     udt_table: UDTTable<'ctx>,
+    generic_table: GenericTable<'ctx>,
 }
 
 impl<'ctx> TypeCtx<'ctx> {
@@ -106,7 +113,7 @@ impl<'ctx> TypeCtx<'ctx> {
 
         Err(CodegenError::Undeclared {
             name: ident.symbol(),
-            span: ident.span,
+            span: ident.span(),
         })
     }
 
@@ -126,22 +133,30 @@ impl<'ctx> TypeCtx<'ctx> {
     }
 
     pub fn add_function_info(&mut self, fn_value: FunctionValue<'ctx>, info: FunctionInfo) {
-        self.fn_table.insert(fn_value, info.into());
+        assert!(self.fn_table.insert(fn_value, info.into()).is_none());
     }
 
     pub fn get_function_info(&mut self, fn_value: FunctionValue<'ctx>) -> Option<Rc<FunctionInfo>> {
         self.fn_table.get(&fn_value).cloned()
     }
 
-    pub fn add_struct_ty(&mut self, name: Symbol, ty: StructInfo<'ctx>) {
-        self.udt_table.insert(name, UDTKind::Struct(ty).into());
-    }
-
-    pub fn add_enum_ty(&mut self, name: Symbol, ty: EnumInfo<'ctx>) {
-        self.udt_table.insert(name, UDTKind::Enum(ty).into());
+    pub fn add_udt(&mut self, name: Symbol, kind: UDTKind<'ctx>) {
+        assert!(self.udt_table.insert(name, kind.into()).is_none());
     }
 
     pub fn get_udt(&self, name: Symbol) -> Option<Rc<UDTKind<'ctx>>> {
         self.udt_table.get(&name).cloned()
+    }
+
+    pub fn remove_udt(&mut self, name: Symbol) {
+        self.udt_table.remove(&name);
+    }
+
+    pub fn add_generic(&mut self, name: Symbol, value: GenericKind) {
+        assert!(self.generic_table.insert(name, Rc::new(value)).is_none());
+    }
+
+    pub fn get_generic_info(&self, name: Symbol) -> Option<Rc<GenericKind>> {
+        self.generic_table.get(&name).cloned()
     }
 }

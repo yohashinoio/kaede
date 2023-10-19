@@ -1,6 +1,9 @@
+use std::rc::Rc;
+
 use kaede_lex::token::TokenKind;
+use kaede_span::Span;
 use kaede_type::{
-    make_fundamental_type, FundamentalTypeKind, Mutability, RefrenceType, Ty, TyKind,
+    make_fundamental_type, FundamentalTypeKind, GenericArgs, Mutability, RefrenceType, Ty, TyKind,
     UserDefinedType,
 };
 
@@ -20,6 +23,27 @@ fn wrap_in_reference(refee_ty: Ty) -> Ty {
 }
 
 impl Parser {
+    fn generic_args(&mut self) -> ParseResult<GenericArgs> {
+        let start = self.consume(&TokenKind::Lt)?.start;
+
+        let mut types = Vec::new();
+
+        loop {
+            types.push(Rc::new(self.ty()?));
+
+            if !self.consume_b(&TokenKind::Comma) {
+                break;
+            }
+        }
+
+        let finish = self.consume(&TokenKind::Gt)?.finish;
+
+        Ok(GenericArgs {
+            types,
+            span: Span::new(start, finish),
+        })
+    }
+
     pub fn ty(&mut self) -> ParseResult<Ty> {
         use FundamentalTypeKind::*;
 
@@ -53,14 +77,19 @@ impl Parser {
             },
 
             // User defined type
-            _ => wrap_in_reference(Ty {
-                kind: TyKind::UserDefined(UserDefinedType::new(
-                    type_ident.symbol(),
-                    type_ident.span,
-                ))
-                .into(),
-                mutability: Mutability::Not,
-            }),
+            _ => {
+                let generic_args = if self.check(&TokenKind::Lt) {
+                    Some(self.generic_args()?)
+                } else {
+                    None
+                };
+
+                wrap_in_reference(Ty {
+                    kind: TyKind::UserDefined(UserDefinedType::new(type_ident, generic_args))
+                        .into(),
+                    mutability: Mutability::Not,
+                })
+            }
         })
     }
 

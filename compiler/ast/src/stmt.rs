@@ -1,9 +1,10 @@
 use std::rc::Rc;
 
 use kaede_span::Span;
+use kaede_symbol::Ident;
 use kaede_type::{Mutability, Ty};
 
-use crate::expr::{Expr, Ident};
+use crate::expr::Expr;
 
 #[derive(Debug)]
 pub enum AssignKind {

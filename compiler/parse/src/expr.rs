@@ -1,12 +1,13 @@
 use std::{collections::VecDeque, rc::Rc};
 
 use kaede_ast::expr::{
-    Args, ArrayLiteral, Binary, BinaryKind, Break, Else, Expr, ExprKind, FnCall, Ident, If,
-    Indexing, Int, IntKind, LogicalNot, Loop, Match, MatchArm, MatchArmList, Return, StructLiteral,
-    TupleLiteral,
+    Args, ArrayLiteral, Binary, BinaryKind, Break, Else, Expr, ExprKind, FnCall, If, Indexing, Int,
+    IntKind, LogicalNot, Loop, Match, MatchArm, MatchArmList, Return, StructLiteral, TupleLiteral,
 };
 use kaede_lex::token::TokenKind;
 use kaede_span::{Location, Span};
+use kaede_symbol::Ident;
+use kaede_type::{TyKind, UserDefinedType};
 
 use crate::{
     error::{ParseError, ParseResult},
@@ -271,31 +272,6 @@ impl Parser {
     }
 
     fn primary(&mut self) -> ParseResult<Expr> {
-        if let Ok(ident) = self.ident() {
-            // Function call
-            if self.first().kind == TokenKind::OpenParen {
-                return self.fn_call(ident);
-            }
-
-            // Struct literal
-            if self.first().kind == TokenKind::OpenBrace {
-                // Check if this brace is from a block statement
-                // if x {}
-                // Such codes must not be interpreted as struct literals
-
-                // If parsing an expression for a condition now, skip
-                if !self.in_cond_expr {
-                    return self.struct_literal(ident);
-                }
-            }
-
-            // Identifier
-            return Ok(Expr {
-                span: ident.span,
-                kind: ExprKind::Ident(ident),
-            });
-        }
-
         if self.check(&TokenKind::Break) {
             return self.break_();
         }
@@ -362,6 +338,35 @@ impl Parser {
             // '(' expr ')'
             self.consume(&TokenKind::CloseParen)?;
             return Ok(node);
+        }
+
+        if let Ok(ty) = self.ty() {
+            if let TyKind::Reference(refty) = ty.kind.as_ref() {
+                if let TyKind::UserDefined(udt) = refty.refee_ty.kind.as_ref() {
+                    // Function call
+                    if self.first().kind == TokenKind::OpenParen {
+                        return self.fn_call(udt.name);
+                    }
+
+                    // Struct literal
+                    if self.first().kind == TokenKind::OpenBrace {
+                        // Check if this brace is from a block statement
+                        // if x {}
+                        // Such codes must not be interpreted as struct literals
+
+                        // If parsing an expression for a condition now, skip
+                        if !self.in_cond_expr {
+                            return self.struct_literal(udt.clone());
+                        }
+                    }
+
+                    // Identifier
+                    return Ok(Expr {
+                        span: udt.name.span(),
+                        kind: ExprKind::Ident(udt.name),
+                    });
+                }
+            }
         }
 
         Err(ParseError::ExpectedError {
@@ -503,7 +508,7 @@ impl Parser {
         None
     }
 
-    fn struct_literal(&mut self, struct_name: Ident) -> ParseResult<Expr> {
+    fn struct_literal(&mut self, struct_ty: UserDefinedType) -> ParseResult<Expr> {
         let mut inits = Vec::new();
 
         self.consume(&TokenKind::OpenBrace)?;
@@ -529,9 +534,9 @@ impl Parser {
         let finish = self.consume(&TokenKind::CloseBrace)?.finish;
 
         Ok(Expr {
-            span: Span::new(struct_name.span.start, finish),
+            span: Span::new(struct_ty.name.span().start, finish),
             kind: ExprKind::StructLiteral(StructLiteral {
-                struct_name,
+                struct_ty,
                 values: inits,
             }),
         })
@@ -556,7 +561,7 @@ impl Parser {
     fn fn_call(&mut self, name: Ident) -> ParseResult<Expr> {
         let args = self.fn_call_args()?;
 
-        let start = name.span.start;
+        let start = name.span().start;
         let span = Span::new(start, args.1.finish);
 
         Ok(Expr {

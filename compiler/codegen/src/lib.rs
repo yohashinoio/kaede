@@ -1,6 +1,7 @@
 use std::{collections::HashSet, path::PathBuf, rc::Rc};
 
 use error::{CodegenError, CodegenResult};
+use generic::{clear_generic_args, expand_generic_args};
 use inkwell::{
     basic_block::BasicBlock,
     builder::Builder,
@@ -8,15 +9,21 @@ use inkwell::{
     module::{Linkage, Module},
     passes::{PassManager, PassManagerBuilder},
     targets::{CodeModel, InitializationConfig, RelocMode, Target, TargetData, TargetMachine},
-    types::{AnyType, BasicType, BasicTypeEnum, FunctionType},
+    types::{AnyType, BasicType, BasicTypeEnum, FunctionType, StructType},
     values::{BasicValueEnum, FunctionValue, InstructionValue, PointerValue},
     AddressSpace, OptimizationLevel,
 };
-use kaede_ast::{top::TopLevel, CompileUnit};
+use kaede_ast::{
+    top::{StructField, TopLevel},
+    CompileUnit,
+};
 use kaede_symbol::Symbol;
-use kaede_type::{FundamentalType, FundamentalTypeKind, Mutability, RefrenceType, Ty, TyKind};
-use tcx::{FunctionInfo, ReturnType, TypeCtx};
-use top::build_top_level;
+use kaede_type::{
+    FundamentalType, FundamentalTypeKind, Mutability, RefrenceType, Ty, TyKind, UserDefinedType,
+};
+use mangle::mangle_udt_name;
+use tcx::{FunctionInfo, GenericKind, ReturnType, StructInfo, TypeCtx};
+use top::{build_top_level, create_struct_ty};
 
 use crate::tcx::UDTKind;
 
@@ -162,7 +169,11 @@ impl<'ctx> CompileUnitCtx<'ctx> {
     }
 
     /// Create a new stack allocation instruction in the entry block of the function
-    fn create_entry_block_alloca(&self, name: &str, ty: &Ty) -> CodegenResult<PointerValue<'ctx>> {
+    fn create_entry_block_alloca(
+        &mut self,
+        name: &str,
+        ty: &Ty,
+    ) -> CodegenResult<PointerValue<'ctx>> {
         let builder = self.context().create_builder();
 
         let entry = self.get_current_fn().get_first_basic_block().unwrap();
@@ -252,16 +263,14 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             .map(|_| ())
     }
 
-    fn gc_malloc(&self, ty: &Ty) -> CodegenResult<PointerValue<'ctx>> {
+    fn gc_malloc(&mut self, ty: BasicTypeEnum<'ctx>) -> CodegenResult<PointerValue<'ctx>> {
         let gc_mallocd = self.module.get_function("GC_malloc").unwrap();
+
+        let size = ty.size_of().unwrap().into();
 
         let addr = self
             .builder
-            .build_call(
-                gc_mallocd,
-                &[self.to_llvm_type(ty)?.size_of().unwrap().into()],
-                "",
-            )
+            .build_call(gc_mallocd, &[size], "")
             .try_as_basic_value()
             .left()
             .unwrap();
@@ -286,7 +295,92 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             .is_none()
     }
 
-    fn to_llvm_type(&self, ty: &Ty) -> CodegenResult<BasicTypeEnum<'ctx>> {
+    /// If already created, this function is not created anew
+    fn create_generic_struct_ty(
+        &mut self,
+        udt: &UserDefinedType,
+    ) -> CodegenResult<StructType<'ctx>> {
+        let info = self.tcx.get_generic_info(udt.name.symbol()).unwrap();
+        let generic_args = udt.generic_args.as_ref().unwrap();
+
+        match info.as_ref() {
+            GenericKind::Struct(ast) => {
+                let mangled_struct_name = mangle_udt_name(self, udt);
+
+                // Check if it is cached
+                if let Some(udt_kind) = self.tcx.get_udt(mangled_struct_name) {
+                    match udt_kind.as_ref() {
+                        UDTKind::Struct(info) => return Ok(info.ty),
+                        _ => unreachable!(),
+                    }
+                }
+
+                // Create generic struct type
+                expand_generic_args(self, ast.generic_params.as_ref().unwrap(), generic_args)?;
+                let generic_struct_ty = create_struct_ty(self, mangled_struct_name, &ast.fields)?;
+                // Replace generic argument types with actual types
+                let mut actual_type_fields = Vec::new();
+                for field in ast.fields.iter() {
+                    let refee_ty = match field.ty.kind.as_ref() {
+                        TyKind::Reference(refty) => refty.refee_ty.clone(),
+                        _ => {
+                            actual_type_fields.push(field.clone());
+                            continue;
+                        }
+                    };
+
+                    let field_ty_name = match refee_ty.kind.as_ref() {
+                        TyKind::UserDefined(udt) => udt.name,
+                        _ => {
+                            actual_type_fields.push(field.clone());
+                            continue;
+                        }
+                    };
+
+                    let udt_kind = match self.tcx.get_udt(field_ty_name.symbol()) {
+                        Some(udt_kind) => udt_kind,
+                        None => {
+                            actual_type_fields.push(field.clone());
+                            continue;
+                        }
+                    };
+
+                    match udt_kind.as_ref() {
+                        UDTKind::GenericArg(ty) => {
+                            // Replace with actual type
+                            actual_type_fields.push(StructField {
+                                ty: ty.clone(),
+                                ..field.clone()
+                            });
+                            continue;
+                        }
+                        _ => {
+                            actual_type_fields.push(field.clone());
+                            continue;
+                        }
+                    }
+                }
+                clear_generic_args(self, ast.generic_params.as_ref().unwrap());
+
+                let fields = actual_type_fields
+                    .iter()
+                    .map(|field| (field.name.symbol(), field.clone()))
+                    .collect();
+
+                self.tcx.add_udt(
+                    mangled_struct_name,
+                    UDTKind::Struct(StructInfo {
+                        ty: generic_struct_ty,
+                        fields,
+                    }),
+                );
+
+                Ok(generic_struct_ty)
+            }
+        }
+    }
+
+    fn to_llvm_type(&mut self, ty: &Ty) -> CodegenResult<BasicTypeEnum<'ctx>> {
         let context = self.context();
 
         Ok(match ty.kind.as_ref() {
@@ -302,19 +396,24 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             }
 
             TyKind::UserDefined(udt) => {
-                let udt_kind = match self.tcx.get_udt(udt.symbol()) {
+                if udt.generic_args.is_some() {
+                    return self.create_generic_struct_ty(udt).map(|ty| ty.into());
+                }
+
+                let udt_kind = match self.tcx.get_udt(udt.name.symbol()) {
                     Some(udt) => udt,
                     None => {
                         return Err(CodegenError::Undeclared {
-                            name: udt.symbol(),
-                            span: udt.span(),
-                        })
+                            name: udt.name.symbol(),
+                            span: udt.name.span(),
+                        });
                     }
                 };
 
                 match udt_kind.as_ref() {
                     UDTKind::Struct(sty) => sty.ty.into(),
                     UDTKind::Enum(ety) => ety.ty,
+                    UDTKind::GenericArg(ty) => self.to_llvm_type(&ty)?,
                 }
             }
 

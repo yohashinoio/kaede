@@ -1,21 +1,19 @@
 use std::{fs, rc::Rc};
 
-use inkwell::{module::Linkage, values::FunctionValue};
-use kaede_ast::{
-    expr::Ident,
-    top::{
-        Enum, EnumVariant, Fn, FnKind, Impl, Import, Param, Params, Struct, TopLevel, TopLevelKind,
-    },
+use inkwell::{module::Linkage, types::StructType, values::FunctionValue};
+use kaede_ast::top::{
+    Enum, EnumVariant, Fn, FnKind, Impl, Import, Param, Params, Struct, StructField, TopLevel,
+    TopLevelKind,
 };
 use kaede_parse::Parser;
-use kaede_symbol::Symbol;
+use kaede_symbol::{Ident, Symbol};
 use kaede_type::{Mutability, RefrenceType, Ty, TyKind, UserDefinedType};
 
 use crate::{
     error::{CodegenError, CodegenResult},
     mangle::{mangle_external_name, mangle_method, mangle_name},
     stmt::{build_block, change_mutability_dup},
-    tcx::{EnumInfo, EnumVariantInfo, ReturnType, StructFieldInfo, StructInfo, VariableTable},
+    tcx::{EnumInfo, EnumVariantInfo, GenericKind, ReturnType, StructInfo, UDTKind, VariableTable},
     CompileUnitCtx,
 };
 
@@ -23,8 +21,25 @@ type FnParams = Vec<(Ident, Rc<Ty>)>;
 
 type FnValueParamsPair<'ctx> = (FunctionValue<'ctx>, FnParams);
 
-pub fn build_top_level(ctx: &mut CompileUnitCtx, node: TopLevel) -> CodegenResult<()> {
-    let mut builder = TopLevelBuilder::new(ctx);
+pub fn create_struct_ty<'ctx>(
+    cucx: &mut CompileUnitCtx<'ctx>,
+    mangled_name: Symbol,
+    fields: &Vec<StructField>,
+) -> CodegenResult<StructType<'ctx>> {
+    let mut field_tys = Vec::new();
+    for field in fields.iter() {
+        field_tys.push(cucx.to_llvm_type(&field.ty)?);
+    }
+
+    let ty = cucx.context().opaque_struct_type(mangled_name.as_str());
+
+    ty.set_body(&field_tys, true);
+
+    Ok(ty)
+}
+
+pub fn build_top_level(cucx: &mut CompileUnitCtx, node: TopLevel) -> CodegenResult<()> {
+    let mut builder = TopLevelBuilder::new(cucx);
 
     builder.build(node)?;
 
@@ -37,7 +52,11 @@ pub fn push_self_to_front(v: &mut Params, struct_name: String, mutability: Mutab
     let self_ident = Ident::new("self".to_string().into(), span);
 
     let struct_ty = Ty {
-        kind: TyKind::UserDefined(UserDefinedType::new(Symbol::from(struct_name), span)).into(),
+        kind: TyKind::UserDefined(UserDefinedType::new(
+            Ident::new(Symbol::from(struct_name), span),
+            None,
+        ))
+        .into(),
         mutability,
     }
     .into();
@@ -119,13 +138,13 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                     true,
                 );
 
-                self.cucx.tcx.add_enum_ty(
+                self.cucx.tcx.add_udt(
                     node.name.symbol(),
-                    EnumInfo {
+                    UDTKind::Enum(EnumInfo {
                         name: node.name,
                         ty: ty.into(),
                         variants: items,
-                    },
+                    }),
                 );
             }
 
@@ -134,13 +153,13 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
 
                 ty.set_body(&[self.cucx.context().i32_type().into()], true);
 
-                self.cucx.tcx.add_enum_ty(
+                self.cucx.tcx.add_udt(
                     node.name.symbol(),
-                    EnumInfo {
+                    UDTKind::Enum(EnumInfo {
                         name: node.name,
                         ty: ty.into(),
                         variants: items,
-                    },
+                    }),
                 );
             }
         }
@@ -153,9 +172,8 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
 
         for item in enum_items.iter() {
             if let Some(ty) = &item.ty {
-                let size = self
-                    .cucx
-                    .get_size_in_bits(&self.cucx.to_llvm_type(ty).unwrap());
+                let llvm_ty = self.cucx.to_llvm_type(ty).unwrap();
+                let size = self.cucx.get_size_in_bits(&llvm_ty);
                 largest = std::cmp::max(size, largest);
             }
         }
@@ -214,7 +232,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
 
         if !path.exists() {
             return Err(CodegenError::FileNotFoundForModule {
-                span: module_path.span,
+                span: module_path.span(),
                 mod_name: module_path.symbol(),
             });
         }
@@ -327,7 +345,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
     }
 
     fn fn_params_to_variable_table(
-        &self,
+        &mut self,
         fn_value: FunctionValue<'ctx>,
         params: FnParams,
     ) -> CodegenResult<VariableTable<'ctx>> {
@@ -336,10 +354,8 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         assert_eq!(fn_value.count_params(), params.len() as u32);
 
         for (idx, (name, param_ty)) in params.into_iter().enumerate() {
-            let alloca = self
-                .cucx
-                .builder
-                .build_alloca(self.cucx.to_llvm_type(&param_ty)?, name.as_str());
+            let llvm_param_ty = self.cucx.to_llvm_type(&param_ty)?;
+            let alloca = self.cucx.builder.build_alloca(llvm_param_ty, name.as_str());
 
             self.cucx
                 .builder
@@ -353,39 +369,30 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
 
     fn struct_(&mut self, node: Struct) -> CodegenResult<()> {
         if node.generic_params.is_some() {
-            // self.cucx.tcx.
-            todo!()
+            // Generic
+            self.cucx
+                .tcx
+                .add_generic(node.name.symbol(), GenericKind::Struct(node));
+
+            return Ok(());
         }
 
-        let mangled_name = mangle_name(self.cucx, node.name.symbol());
-
-        let mut field_tys = Vec::new();
-        for field in node.fields.iter() {
-            field_tys.push(self.cucx.to_llvm_type(&field.ty)?);
-        }
-
-        let ty = self.cucx.context().opaque_struct_type(&mangled_name);
-
-        ty.set_body(&field_tys, true);
+        let ty = create_struct_ty(
+            self.cucx,
+            Symbol::from(mangle_name(self.cucx, node.name.symbol())),
+            &node.fields,
+        )?;
 
         let fields = node
             .fields
             .into_iter()
-            .map(|f| {
-                (
-                    f.name.symbol(),
-                    StructFieldInfo {
-                        ty: f.ty.into(),
-                        vis: f.vis,
-                        offset: f.offset,
-                    },
-                )
-            })
+            .map(|field| (field.name.symbol(), field))
             .collect();
 
-        self.cucx
-            .tcx
-            .add_struct_ty(node.name.symbol(), StructInfo { ty, fields });
+        self.cucx.tcx.add_udt(
+            node.name.symbol(),
+            UDTKind::Struct(StructInfo { ty, fields }),
+        );
 
         Ok(())
     }

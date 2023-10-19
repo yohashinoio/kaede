@@ -1,11 +1,12 @@
 use std::rc::Rc;
 
 use inkwell::values::BasicValue;
-use kaede_ast::expr::{ExprKind, Ident};
+use kaede_ast::expr::ExprKind;
 use kaede_ast::stmt::{
     Assign, AssignKind, Block, Let, LetKind, NormalLet, Stmt, StmtKind, TupleUnpack,
 };
 use kaede_span::Span;
+use kaede_symbol::Ident;
 use kaede_type::{create_inferred_tuple, is_same_type, Mutability, RefrenceType, Ty, TyKind};
 
 use crate::expr::build_tuple_indexing;

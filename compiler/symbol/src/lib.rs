@@ -1,7 +1,34 @@
 use std::{fmt::Display, hash::Hash};
 
+use kaede_span::Span;
 use once_cell::sync::Lazy;
 use slab::Slab;
+
+// Do not derive PartialEq or Eq!
+// Unintended behavior is likely to be caused by comparisons involving span!
+#[derive(Debug, Clone, Copy)]
+pub struct Ident {
+    name: Symbol,
+    span: Span,
+}
+
+impl Ident {
+    pub fn new(name: Symbol, span: Span) -> Self {
+        Self { name, span }
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.name.as_str()
+    }
+
+    pub fn symbol(&self) -> Symbol {
+        self.name
+    }
+
+    pub fn span(&self) -> Span {
+        self.span
+    }
+}
 
 static mut SYMBOLS: Lazy<Slab<String>> = Lazy::new(Default::default);
 

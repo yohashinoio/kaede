@@ -379,6 +379,7 @@ version = "0.1.0"
 name = "kaede_symbol"
 version = "0.1.0"
 dependencies = [
+ "kaede_span",
  "once_cell",
  "slab",
 ]

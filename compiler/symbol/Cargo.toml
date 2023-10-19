@@ -8,3 +8,5 @@ edition = "2021"
 [dependencies]
 once_cell = "1.18.0"
 slab = "0.4.9"
+
+kaede_span = { path = "../span" }

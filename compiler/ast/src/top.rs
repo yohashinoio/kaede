@@ -1,9 +1,10 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, rc::Rc};
 
 use kaede_span::Span;
+use kaede_symbol::Ident;
 use kaede_type::{Mutability, Ty};
 
-use crate::{expr::Ident, stmt::Block};
+use crate::stmt::Block;
 
 /// Accessibility
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Copy)]
@@ -38,10 +39,10 @@ pub struct GenericParams {
     pub span: Span,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct StructField {
     pub name: Ident,
-    pub ty: Ty,
+    pub ty: Rc<Ty>,
     pub vis: Visibility,
     pub offset: u64,
 }

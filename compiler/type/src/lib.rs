@@ -5,7 +5,7 @@ use inkwell::{
     types::{BasicType, BasicTypeEnum},
 };
 use kaede_span::Span;
-use kaede_symbol::Symbol;
+use kaede_symbol::Ident;
 
 pub fn create_inferred_tuple(element_len: usize) -> TyKind {
     TyKind::Tuple({
@@ -142,7 +142,7 @@ impl std::fmt::Display for TyKind {
 
             Self::Str => write!(f, "str"),
 
-            Self::UserDefined(udt) => write!(f, "{}", udt.symbol().as_str()),
+            Self::UserDefined(udt) => write!(f, "{}", udt.name.symbol().as_str()),
 
             Self::Reference(refee) => write!(f, "&{}", refee.refee_ty.kind),
 
@@ -240,29 +240,27 @@ impl FundamentalType {
     }
 }
 
-/// User defined types
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
+pub struct GenericArgs {
+    pub types: Vec<Rc<Ty>>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
 pub struct UserDefinedType {
-    name: (Symbol, Span),
+    pub name: Ident,
+    pub generic_args: Option<GenericArgs>,
 }
 
 impl UserDefinedType {
-    pub fn new(name: Symbol, span: Span) -> Self {
-        Self { name: (name, span) }
-    }
-
-    pub fn symbol(&self) -> Symbol {
-        self.name.0
-    }
-
-    pub fn span(&self) -> Span {
-        self.name.1
+    pub fn new(name: Ident, generic_args: Option<GenericArgs>) -> Self {
+        Self { name, generic_args }
     }
 }
 
 impl PartialEq for UserDefinedType {
     fn eq(&self, other: &Self) -> bool {
-        self.symbol() == other.symbol()
+        self.name.symbol() == other.name.symbol()
     }
 }
 

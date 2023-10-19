@@ -2,42 +2,14 @@ use std::{collections::VecDeque, rc::Rc, slice::Iter};
 
 use inkwell::{context::Context, values::IntValue};
 use kaede_span::Span;
-use kaede_symbol::Symbol;
-use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability, Ty};
+use kaede_symbol::Ident;
+use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability, Ty, UserDefinedType};
 
 use crate::stmt::Block;
 
-// Do not derive PartialEq or Eq!
-// Unintended behavior is likely to be caused by comparisons involving span!
-#[derive(Debug, Clone, Copy)]
-pub struct Ident {
-    name: Symbol,
-    pub span: Span,
-}
-
-impl Ident {
-    pub fn new(name: Symbol, span: Span) -> Self {
-        Self { name, span }
-    }
-
-    pub fn as_str(&self) -> &str {
-        self.name.as_str()
-    }
-
-    pub fn symbol(self) -> Symbol {
-        self.name
-    }
-}
-
-#[derive(Debug)]
-pub struct GenericArgs {
-    pub types: Vec<Rc<Ty>>,
-    pub span: Span,
-}
-
 #[derive(Debug)]
 pub struct StructLiteral {
-    pub struct_name: Ident,
+    pub struct_ty: UserDefinedType,
     pub values: Vec<(Ident, Expr)>,
 }
 

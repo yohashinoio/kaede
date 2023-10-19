@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, rc::Rc};
 
 use kaede_ast::top::{
     Enum, EnumVariant, Fn, FnKind, GenericParams, Impl, Import, Param, Params, Struct, StructField,
@@ -102,7 +102,7 @@ impl Parser {
 
         let module_path = self.ident()?;
 
-        let span = Span::new(start, module_path.span.finish);
+        let span = Span::new(start, module_path.span().finish);
 
         Ok(Import { module_path, span })
     }
@@ -272,7 +272,7 @@ impl Parser {
 
             self.consume(&TokenKind::Colon)?;
 
-            let ty = self.ty()?;
+            let ty = Rc::new(self.ty()?);
 
             if !self.consume_b(&TokenKind::Comma) {
                 break;

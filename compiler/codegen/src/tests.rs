@@ -1975,7 +1975,7 @@ fn tagged_enum_as_argument() -> anyhow::Result<()> {
 }
 
 #[test]
-fn generic_with_single_parameter() -> anyhow::Result<()> {
+fn generic_function_with_single_parameter() -> anyhow::Result<()> {
     let program = r#"fn add_10<T>(n: T):T {
         return n + 10
     }
@@ -1990,7 +1990,7 @@ fn generic_with_single_parameter() -> anyhow::Result<()> {
 }
 
 #[test]
-fn generic_with_multiple_parameters() -> anyhow::Result<()> {
+fn generic_function_with_multiple_parameters() -> anyhow::Result<()> {
     let program = r#"fn add_or_mul<T1, T2, SwitchT>(n1: T1, n2: T2, switcher: SwitchT): T {
         return if switcher {
             n1 + n2
@@ -2009,7 +2009,7 @@ fn generic_with_multiple_parameters() -> anyhow::Result<()> {
 }
 
 #[test]
-fn generic_of_struct() -> anyhow::Result<()> {
+fn generic_function_with_struct_type() -> anyhow::Result<()> {
     let program = r#"struct Sample {
         n: i32,
     }
@@ -2029,7 +2029,7 @@ fn generic_of_struct() -> anyhow::Result<()> {
 }
 
 #[test]
-fn generic_of_tuple() -> anyhow::Result<()> {
+fn generic_function_with_tuple_type() -> anyhow::Result<()> {
     let program = r#"fn get_third<T>(t: T): i32 {
         return t.2
     }
@@ -2045,7 +2045,7 @@ fn generic_of_tuple() -> anyhow::Result<()> {
 }
 
 #[test]
-fn generic_of_array() -> anyhow::Result<()> {
+fn generic_function_with_array_type() -> anyhow::Result<()> {
     let program = r#"fn get_third<T>(a: T): i32 {
         return a[2]
     }
@@ -2053,6 +2053,37 @@ fn generic_of_array() -> anyhow::Result<()> {
     fn main(): i32 {
         let a = [48, 10, 58]
         return get_third<[i32; 3]>(a)
+    }"#;
+
+    assert_eq!(exec(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn generic_struct() -> anyhow::Result<()> {
+    let program = r#"struct Fruits<T1, T2> {
+        apple: T1,
+        ichigo: T2,
+    }
+    struct Any<T> {
+        value: T,
+    }
+    struct Number {
+        value: i32,
+    }
+    fn main(): i32 {
+        let fr1 = Fruits<i32, i32> { apple: 48, ichigo: 10 }
+        let fr2 = Fruits<Any<i32>, Number> { apple: Any<i32> { value: 48 }, ichigo: Number { value: 10 } }
+
+        let fr1_sum = fr1.apple + fr1.ichigo
+        let fr2_sum = fr2.apple.value + fr2.ichigo.value
+
+        if fr1_sum == fr2_sum {
+            return fr2_sum
+        }
+
+        return 123
     }"#;
 
     assert_eq!(exec(program)?, 58);
