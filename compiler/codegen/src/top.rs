@@ -24,11 +24,11 @@ type FnValueParamsPair<'ctx> = (FunctionValue<'ctx>, FnParams);
 pub fn create_struct_ty<'ctx>(
     cucx: &mut CompileUnitCtx<'ctx>,
     mangled_name: Symbol,
-    fields: &Vec<StructField>,
+    fields: &[StructField],
 ) -> CodegenResult<StructType<'ctx>> {
     let mut field_tys = Vec::new();
     for field in fields.iter() {
-        field_tys.push(cucx.to_llvm_type(&field.ty)?);
+        field_tys.push(cucx.conv_to_llvm_type(&field.ty)?);
     }
 
     let ty = cucx.context().opaque_struct_type(mangled_name.as_str());
@@ -172,7 +172,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
 
         for item in enum_items.iter() {
             if let Some(ty) = &item.ty {
-                let llvm_ty = self.cucx.to_llvm_type(ty).unwrap();
+                let llvm_ty = self.cucx.conv_to_llvm_type(ty).unwrap();
                 let size = self.cucx.get_size_in_bits(&llvm_ty);
                 largest = std::cmp::max(size, largest);
             }
@@ -354,7 +354,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         assert_eq!(fn_value.count_params(), params.len() as u32);
 
         for (idx, (name, param_ty)) in params.into_iter().enumerate() {
-            let llvm_param_ty = self.cucx.to_llvm_type(&param_ty)?;
+            let llvm_param_ty = self.cucx.conv_to_llvm_type(&param_ty)?;
             let alloca = self.cucx.builder.build_alloca(llvm_param_ty, name.as_str());
 
             self.cucx

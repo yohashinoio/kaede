@@ -183,7 +183,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             None => builder.position_at_end(entry),
         }
 
-        Ok(builder.build_alloca(self.to_llvm_type(ty)?, name))
+        Ok(builder.build_alloca(self.conv_to_llvm_type(ty)?, name))
     }
 
     // If return_ty is `None`, treat as void
@@ -194,12 +194,12 @@ impl<'ctx> CompileUnitCtx<'ctx> {
     ) -> CodegenResult<FunctionType<'ctx>> {
         let mut param_types = Vec::new();
         for param in params {
-            param_types.push(self.to_llvm_type(param)?.into());
+            param_types.push(self.conv_to_llvm_type(param)?.into());
         }
 
         Ok(match return_ty {
             ReturnType::Type(ty) => self
-                .to_llvm_type(ty)?
+                .conv_to_llvm_type(ty)?
                 .fn_type(param_types.as_slice(), false),
 
             ReturnType::Void => self
@@ -380,7 +380,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         }
     }
 
-    fn to_llvm_type(&mut self, ty: &Ty) -> CodegenResult<BasicTypeEnum<'ctx>> {
+    fn conv_to_llvm_type(&mut self, ty: &Ty) -> CodegenResult<BasicTypeEnum<'ctx>> {
         let context = self.context();
 
         Ok(match ty.kind.as_ref() {
@@ -413,21 +413,23 @@ impl<'ctx> CompileUnitCtx<'ctx> {
                 match udt_kind.as_ref() {
                     UDTKind::Struct(sty) => sty.ty.into(),
                     UDTKind::Enum(ety) => ety.ty,
-                    UDTKind::GenericArg(ty) => self.to_llvm_type(&ty)?,
+                    UDTKind::GenericArg(ty) => self.conv_to_llvm_type(ty)?,
                 }
             }
 
             TyKind::Reference(rty) => self
-                .to_llvm_type(&rty.refee_ty)?
+                .conv_to_llvm_type(&rty.refee_ty)?
                 .ptr_type(AddressSpace::default())
                 .into(),
 
-            TyKind::Array((elem_ty, size)) => self.to_llvm_type(elem_ty)?.array_type(*size).into(),
+            TyKind::Array((elem_ty, size)) => {
+                self.conv_to_llvm_type(elem_ty)?.array_type(*size).into()
+            }
 
             TyKind::Tuple(types) => {
                 let mut llvm_types = Vec::new();
                 for ty in types {
-                    llvm_types.push(self.to_llvm_type(ty)?);
+                    llvm_types.push(self.conv_to_llvm_type(ty)?);
                 }
                 context.struct_type(llvm_types.as_slice(), true).into()
             }
