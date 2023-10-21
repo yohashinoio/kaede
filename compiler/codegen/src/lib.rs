@@ -1,7 +1,7 @@
 use std::{collections::HashSet, path::PathBuf, rc::Rc};
 
 use error::{CodegenError, CodegenResult};
-use generic::{clear_generic_args, expand_generic_args};
+use generic::{def_generic_args, undef_generic_args};
 use inkwell::{
     basic_block::BasicBlock,
     builder::Builder,
@@ -23,7 +23,7 @@ use kaede_type::{
 };
 use mangle::mangle_udt_name;
 use tcx::{FunctionInfo, GenericKind, ReturnType, StructInfo, TypeCtx};
-use top::{build_top_level, create_struct_ty};
+use top::{build_top_level, create_struct_type};
 
 use crate::tcx::UDTKind;
 
@@ -51,6 +51,56 @@ fn get_loaded_pointer<'ctx>(load_instr: &InstructionValue<'ctx>) -> Option<Point
 
     // If the loaded value is not a pointer, return None
     None
+}
+
+fn replace_generic_types_in_struct_with_actual(
+    cucx: &CompileUnitCtx,
+    fields: &[StructField],
+) -> Vec<StructField> {
+    let mut actual = Vec::new();
+
+    for field in fields.iter() {
+        let refee_ty = match field.ty.kind.as_ref() {
+            TyKind::Reference(refty) => refty.refee_ty.clone(),
+            _ => {
+                actual.push(field.clone());
+                continue;
+            }
+        };
+
+        let field_ty_name = match refee_ty.kind.as_ref() {
+            TyKind::UserDefined(udt) => udt.name,
+            _ => {
+                actual.push(field.clone());
+                continue;
+            }
+        };
+
+        let udt_kind = match cucx.tcx.get_udt(field_ty_name.symbol()) {
+            Some(udt_kind) => udt_kind,
+            None => {
+                actual.push(field.clone());
+                continue;
+            }
+        };
+
+        match udt_kind.as_ref() {
+            UDTKind::GenericArg(ty) => {
+                // Replace with actual type
+                actual.push(StructField {
+                    ty: ty.clone(),
+                    ..field.clone()
+                });
+                continue;
+            }
+            _ => {
+                actual.push(field.clone());
+                continue;
+            }
+        }
+    }
+
+    actual
 }
 
 pub fn codegen_compile_unit<'ctx>(
@@ -296,7 +346,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
     }
 
     /// If already created, this function is not created anew
-    fn create_generic_struct_ty(
+    fn create_generic_struct_type(
         &mut self,
         udt: &UserDefinedType,
     ) -> CodegenResult<StructType<'ctx>> {
@@ -316,53 +366,12 @@ impl<'ctx> CompileUnitCtx<'ctx> {
                 }
 
                 // Create generic struct type
-                expand_generic_args(self, ast.generic_params.as_ref().unwrap(), generic_args)?;
-                let generic_struct_ty = create_struct_ty(self, mangled_struct_name, &ast.fields)?;
-                // Replace generic argument types with actual types
-                let mut actual_type_fields = Vec::new();
-                for field in ast.fields.iter() {
-                    let refee_ty = match field.ty.kind.as_ref() {
-                        TyKind::Reference(refty) => refty.refee_ty.clone(),
-                        _ => {
-                            actual_type_fields.push(field.clone());
-                            continue;
-                        }
-                    };
+                def_generic_args(self, ast.generic_params.as_ref().unwrap(), generic_args)?;
+                let generic_struct_ty = create_struct_type(self, mangled_struct_name, &ast.fields)?;
+                let actual_fields = replace_generic_types_in_struct_with_actual(self, &ast.fields);
+                undef_generic_args(self, ast.generic_params.as_ref().unwrap());
 
-                    let field_ty_name = match refee_ty.kind.as_ref() {
-                        TyKind::UserDefined(udt) => udt.name,
-                        _ => {
-                            actual_type_fields.push(field.clone());
-                            continue;
-                        }
-                    };
-
-                    let udt_kind = match self.tcx.get_udt(field_ty_name.symbol()) {
-                        Some(udt_kind) => udt_kind,
-                        None => {
-                            actual_type_fields.push(field.clone());
-                            continue;
-                        }
-                    };
-
-                    match udt_kind.as_ref() {
-                        UDTKind::GenericArg(ty) => {
-                            // Replace with actual type
-                            actual_type_fields.push(StructField {
-                                ty: ty.clone(),
-                                ..field.clone()
-                            });
-                            continue;
-                        }
-                        _ => {
-                            actual_type_fields.push(field.clone());
-                            continue;
-                        }
-                    }
-                }
-                clear_generic_args(self, ast.generic_params.as_ref().unwrap());
-
-                let fields = actual_type_fields
+                let fields = actual_fields
                     .iter()
                     .map(|field| (field.name.symbol(), field.clone()))
                     .collect();
@@ -397,7 +406,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
 
             TyKind::UserDefined(udt) => {
                 if udt.generic_args.is_some() {
-                    return self.create_generic_struct_ty(udt).map(|ty| ty.into());
+                    return self.create_generic_struct_type(udt).map(|ty| ty.into());
                 }
 
                 let udt_kind = match self.tcx.get_udt(udt.name.symbol()) {

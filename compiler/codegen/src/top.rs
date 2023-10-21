@@ -21,7 +21,7 @@ type FnParams = Vec<(Ident, Rc<Ty>)>;
 
 type FnValueParamsPair<'ctx> = (FunctionValue<'ctx>, FnParams);
 
-pub fn create_struct_ty<'ctx>(
+pub fn create_struct_type<'ctx>(
     cucx: &mut CompileUnitCtx<'ctx>,
     mangled_name: Symbol,
     fields: &[StructField],
@@ -377,7 +377,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
             return Ok(());
         }
 
-        let ty = create_struct_ty(
+        let ty = create_struct_type(
             self.cucx,
             Symbol::from(mangle_name(self.cucx, node.name.symbol())),
             &node.fields,

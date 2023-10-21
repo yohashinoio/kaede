@@ -3,7 +3,7 @@ use kaede_type::GenericArgs;
 
 use crate::{error::CodegenResult, tcx::UDTKind, CompileUnitCtx};
 
-pub fn expand_generic_args(
+pub fn def_generic_args(
     cucx: &mut CompileUnitCtx<'_>,
     params: &GenericParams,
     args: &GenericArgs,
@@ -20,7 +20,7 @@ pub fn expand_generic_args(
     Ok(())
 }
 
-pub fn clear_generic_args(cucx: &mut CompileUnitCtx<'_>, params: &GenericParams) {
+pub fn undef_generic_args(cucx: &mut CompileUnitCtx<'_>, params: &GenericParams) {
     for param in params.names.iter() {
         cucx.tcx.remove_udt(param.symbol());
     }
