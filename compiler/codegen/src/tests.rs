@@ -1471,8 +1471,8 @@ fn simple_method() -> anyhow::Result<()> {
     }
 
     impl Person {
-        mt get_age(): i32 {
-            return self.age
+        fn get_age(this): i32 {
+            return this.age
         }
     }
 
@@ -1496,12 +1496,12 @@ fn mutable_method() -> anyhow::Result<()> {
     }
 
     impl Person {
-        mt get_age(): i32 {
-            return self.age
+        fn get_age(this): i32 {
+            return this.age
         }
 
-        mt mut change_age_to(new_age: i32) {
-            self.age = new_age
+        fn change_age_to(mut this, new_age: i32) {
+            this.age = new_age
         }
     }
 
@@ -1525,12 +1525,12 @@ fn call_mutable_methods_from_immutable() {
     }
 
     impl Person {
-        mt get_age(): i32 {
-            return self.age
+        fn get_age(this): i32 {
+            return this.age
         }
 
-        mt mut change_age_to(new_age: i32) {
-            self.age = new_age
+        fn change_age_to(this, new_age: i32) {
+            this.age = new_age
         }
     }
 
@@ -1555,12 +1555,12 @@ fn modify_fields_in_immutable_methods() {
     }
 
     impl Person {
-        mt get_age(): i32 {
-            return self.age
+        fn get_age(this): i32 {
+            return this.age
         }
 
-        mt change_age_to(new_age: i32) {
-            self.age = new_age
+        fn change_age_to(this, new_age: i32) {
+            this.age = new_age
         }
     }
 
@@ -1576,6 +1576,33 @@ fn modify_fields_in_immutable_methods() {
         exec(program),
         Err(CodegenError::CannotAssignTwiceToImutable { .. })
     ));
+}
+
+#[test]
+fn static_method() -> anyhow::Result<()> {
+    let program = r#"struct Person {
+        age: i32,
+    }
+
+    impl Person {
+        fn new(age: i32): Person {
+            return Person { age: age }
+        }
+
+        fn get_age(this): i32 {
+            return this.age
+        }
+    }
+
+    fn main(): i32 {
+        let p = Person::new(58)
+
+        return p.get_age()
+    }"#;
+
+    assert_eq!(exec(program)?, 58);
+
+    Ok(())
 }
 
 #[test]
