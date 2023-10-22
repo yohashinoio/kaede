@@ -1,7 +1,7 @@
 use std::{collections::VecDeque, rc::Rc};
 
 use kaede_ast::top::{
-    Enum, EnumVariant, Fn, FnKind, GenericParams, Impl, Import, Param, Params, Struct, StructField,
+    Enum, EnumVariant, Fn, GenericParams, Impl, Import, Param, Params, Struct, StructField,
     TopLevel, TopLevelKind, Visibility,
 };
 use kaede_lex::token::TokenKind;
@@ -22,12 +22,7 @@ impl Parser {
             }
 
             TokenKind::Fn => {
-                let kind = self.func(FnKind::Normal)?;
-                (kind.span, TopLevelKind::Fn(kind))
-            }
-
-            TokenKind::Mt => {
-                let kind = self.func(FnKind::Method)?;
+                let kind = self.function()?;
                 (kind.span, TopLevelKind::Fn(kind))
             }
 
@@ -107,19 +102,42 @@ impl Parser {
         Ok(Import { module_path, span })
     }
 
-    fn func(&mut self, kind: FnKind) -> ParseResult<Fn> {
-        let start = match kind {
-            FnKind::Normal => self.consume(&TokenKind::Fn).unwrap().start,
-            FnKind::Method => self.consume(&TokenKind::Mt).unwrap().start,
-        };
-
-        let self_mutability = self.consume_b(&TokenKind::Mut).into();
+    fn function(&mut self) -> ParseResult<Fn> {
+        let start = self.consume(&TokenKind::Fn).unwrap().start;
 
         let name = self.ident()?;
 
+        let generic_params = if self.check(&TokenKind::Lt) {
+            Some(self.generic_params()?)
+        } else {
+            None
+        };
+
         let params_start = self.consume(&TokenKind::OpenParen)?.start;
 
-        let params = self.fn_params()?;
+        let mutability = self.consume_b(&TokenKind::Mut).into();
+        let has_this = self.consume_b(&TokenKind::This);
+        let first_param = if has_this {
+            let _ = self.consume(&TokenKind::Comma);
+            None
+        } else {
+            if self.check(&TokenKind::CloseParen) {
+                None
+            } else {
+                let mut param = self.fn_param()?;
+                let _ = self.consume(&TokenKind::Comma);
+                param.mutability = mutability;
+                Some(param)
+            }
+        };
+
+        let params = {
+            let mut params = self.fn_params()?;
+            if first_param.is_some() {
+                params.push_front(first_param.unwrap());
+            }
+            params
+        };
 
         let params_finish = self.consume(&TokenKind::CloseParen)?.finish;
 
@@ -136,9 +154,9 @@ impl Parser {
         let span = Span::new(start, body.span.finish);
 
         Ok(Fn {
-            kind,
-            self_mutability,
+            this: if has_this { Some(mutability) } else { None },
             name,
+            generic_params,
             params,
             body,
             return_ty,
@@ -154,19 +172,7 @@ impl Parser {
         }
 
         loop {
-            let mutability = self.consume_b(&TokenKind::Mut).into();
-
-            let name = self.ident()?;
-
-            self.consume(&TokenKind::Colon)?;
-
-            let ty = self.ty()?;
-
-            params.push_back(Param {
-                name,
-                mutability,
-                ty,
-            });
+            params.push_back(self.fn_param()?);
 
             if !self.consume_b(&TokenKind::Comma) {
                 break;
@@ -174,6 +180,22 @@ impl Parser {
         }
 
         Ok(params)
+    }
+
+    fn fn_param(&mut self) -> ParseResult<Param> {
+        let mutability = self.consume_b(&TokenKind::Mut).into();
+
+        let name = self.ident()?;
+
+        self.consume(&TokenKind::Colon)?;
+
+        let ty = self.ty()?;
+
+        Ok(Param {
+            name,
+            mutability,
+            ty,
+        })
     }
 
     fn enum_(&mut self) -> ParseResult<Enum> {

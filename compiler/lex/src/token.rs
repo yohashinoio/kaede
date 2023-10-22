@@ -75,8 +75,6 @@ pub enum TokenKind {
     // Reserved words
     /// "fn"
     Fn,
-    /// "mt"
-    Mt,
     /// "return"
     Return,
     /// "let"
@@ -107,6 +105,8 @@ pub enum TokenKind {
     Extern,
     /// "as"
     As,
+    /// "this"
+    This,
 
     /// "true"
     True,
@@ -159,7 +159,6 @@ impl std::fmt::Display for TokenKind {
             LogicalOr => write!(f, "'||'"),
 
             Fn => write!(f, "'fn'"),
-            Mt => write!(f, "'mt'"),
             Return => write!(f, "'return'"),
             Let => write!(f, "'let'"),
             Mut => write!(f, "'mut'"),
@@ -175,6 +174,7 @@ impl std::fmt::Display for TokenKind {
             Match => write!(f, "'match'"),
             Extern => write!(f, "'extern'"),
             As => write!(f, "'as'"),
+            This => write!(f, "'this'"),
 
             True => write!(f, "'true'"),
             False => write!(f, "'false'"),

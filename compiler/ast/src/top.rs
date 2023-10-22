@@ -66,17 +66,11 @@ pub struct Param {
 #[derive(Debug)]
 pub struct Params(pub VecDeque<Param>, pub Span);
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Copy)]
-pub enum FnKind {
-    Normal,
-    Method,
-}
-
 #[derive(Debug)]
 pub struct Fn {
-    pub kind: FnKind,
-    pub self_mutability: Mutability,
+    pub this: Option<Mutability>,
     pub name: Ident,
+    pub generic_params: Option<GenericParams>,
     pub params: Params,
     pub body: Block,
     pub return_ty: Option<Ty>,

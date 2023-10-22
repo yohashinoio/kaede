@@ -133,7 +133,6 @@ impl Cursor<'_> {
                 match ident.as_str() {
                     // Reserved words
                     "fn" => self.create_token(TokenKind::Fn),
-                    "mt" => self.create_token(TokenKind::Mt),
                     "return" => self.create_token(TokenKind::Return),
                     "let" => self.create_token(TokenKind::Let),
                     "if" => self.create_token(TokenKind::If),
@@ -151,6 +150,7 @@ impl Cursor<'_> {
                     "match" => self.create_token(TokenKind::Match),
                     "extern" => self.create_token(TokenKind::Extern),
                     "as" => self.create_token(TokenKind::As),
+                    "this" => self.create_token(TokenKind::This),
 
                     // Identifier
                     _ => self.create_token(TokenKind::Ident(ident)),

@@ -2,8 +2,7 @@ use std::{fs, rc::Rc};
 
 use inkwell::{module::Linkage, types::StructType, values::FunctionValue};
 use kaede_ast::top::{
-    Enum, EnumVariant, Fn, FnKind, Impl, Import, Param, Params, Struct, StructField, TopLevel,
-    TopLevelKind,
+    Enum, EnumVariant, Fn, Impl, Import, Param, Params, Struct, StructField, TopLevel, TopLevelKind,
 };
 use kaede_parse::Parser;
 use kaede_symbol::{Ident, Symbol};
@@ -46,23 +45,19 @@ pub fn build_top_level(cucx: &mut CompileUnitCtx, node: TopLevel) -> CodegenResu
     Ok(())
 }
 
-pub fn push_self_to_front(v: &mut Params, struct_name: String, mutability: Mutability) {
+pub fn push_this_to_front(v: &mut Params, struct_name: Symbol, mutability: Mutability) {
     let span = v.1;
 
-    let self_ident = Ident::new("self".to_string().into(), span);
+    let this_ident = Ident::new("this".to_string().into(), span);
 
     let struct_ty = Ty {
-        kind: TyKind::UserDefined(UserDefinedType::new(
-            Ident::new(Symbol::from(struct_name), span),
-            None,
-        ))
-        .into(),
+        kind: TyKind::UserDefined(UserDefinedType::new(Ident::new(struct_name, span), None)).into(),
         mutability,
     }
     .into();
 
     v.0.push_front(Param {
-        name: self_ident,
+        name: this_ident,
         mutability,
         ty: Ty {
             kind: TyKind::Reference(RefrenceType {
@@ -88,7 +83,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         match node.kind {
             TopLevelKind::Import(node) => self.import_(node)?,
 
-            TopLevelKind::Fn(node) => self.func(node)?,
+            TopLevelKind::Fn(node) => self.function(node)?,
 
             TopLevelKind::Struct(node) => self.struct_(node)?,
 
@@ -196,88 +191,8 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         Ok(())
     }
 
-    /// Static method can also be handled by this function
-    ///
-    /// If kind is `Normal`, it becomes a static method (said in C++ style)
-    fn method(&mut self, impl_for: Symbol, mut node: Fn) -> CodegenResult<()> {
-        let mangled_name = mangle_method(self.cucx, impl_for, node.name.symbol());
-
-        match node.kind {
-            FnKind::Method => {
-                push_self_to_front(&mut node.params, impl_for.to_string(), node.self_mutability);
-                self.build_fn(&mangled_name, node)?;
-            }
-
-            // Static method
-            FnKind::Normal => self.build_fn(&mangled_name, node)?,
-        }
-
-        Ok(())
-    }
-
-    fn import_(&mut self, node: Import) -> CodegenResult<()> {
-        self.import_module(node.module_path)
-    }
-
-    fn import_module(&mut self, module_path: Ident) -> CodegenResult<()> {
-        let import_module_name = module_path.as_str();
-
-        let path = self
-            .cucx
-            .file_path
-            .parent()
-            .unwrap()
-            .join(import_module_name)
-            .with_extension("kd");
-
-        if !path.exists() {
-            return Err(CodegenError::FileNotFoundForModule {
-                span: module_path.span(),
-                mod_name: module_path.symbol(),
-            });
-        }
-
-        // TODO: Optimize
-        let psd_module = Parser::new(&fs::read_to_string(&path).unwrap())
-            .run()
-            .unwrap();
-
-        for top_level in psd_module.top_levels {
-            // Do not import if private
-            if top_level.vis.is_private() {
-                continue;
-            }
-
-            match top_level.kind {
-                TopLevelKind::Fn(func) => {
-                    self.declare_fn(
-                        &mangle_external_name(
-                            import_module_name.to_owned().into(),
-                            func.name.symbol(),
-                        ),
-                        func.params,
-                        func.return_ty.into(),
-                        Linkage::External,
-                    )?;
-                }
-
-                TopLevelKind::Struct(_) => todo!(),
-
-                TopLevelKind::Import(_) => todo!(),
-
-                TopLevelKind::Impl(_) => todo!(),
-
-                TopLevelKind::Enum(_) => todo!(),
-            }
-        }
-
-        self.cucx.imported_modules.insert(module_path.symbol());
-
-        Ok(())
-    }
-
-    fn func(&mut self, node: Fn) -> CodegenResult<()> {
-        assert_eq!(node.kind, FnKind::Normal);
+    fn function(&mut self, node: Fn) -> CodegenResult<()> {
+        assert_eq!(node.this, None);
 
         // Suppress mangling of main function
         if node.name.as_str() == "main" {
@@ -286,6 +201,28 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
             let mangled_name = mangle_name(self.cucx, node.name.symbol());
             self.build_fn(&mangled_name, node)
         }
+    }
+
+    /// Static method can also be handled by this function
+    ///
+    /// If kind is `Normal`, it becomes a static method (said in C++ style)
+    fn method(&mut self, impl_for: Symbol, mut node: Fn) -> CodegenResult<()> {
+        let mangled_name = mangle_method(self.cucx, impl_for, node.name.symbol());
+
+        match node.this {
+            Some(mutability) => {
+                // Method
+                push_this_to_front(&mut node.params, impl_for, mutability);
+                self.build_fn(&mangled_name, node)?;
+            }
+
+            None => {
+                // Static method
+                self.build_fn(&mangled_name, node)?;
+            }
+        }
+
+        Ok(())
     }
 
     // Return function value and parameter information reflecting mutability for the types
@@ -365,6 +302,67 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         }
 
         Ok(var_table)
+    }
+
+    fn import_(&mut self, node: Import) -> CodegenResult<()> {
+        self.import_module(node.module_path)
+    }
+
+    fn import_module(&mut self, module_path: Ident) -> CodegenResult<()> {
+        let import_module_name = module_path.as_str();
+
+        let path = self
+            .cucx
+            .file_path
+            .parent()
+            .unwrap()
+            .join(import_module_name)
+            .with_extension("kd");
+
+        if !path.exists() {
+            return Err(CodegenError::FileNotFoundForModule {
+                span: module_path.span(),
+                mod_name: module_path.symbol(),
+            });
+        }
+
+        // TODO: Optimize
+        let psd_module = Parser::new(&fs::read_to_string(&path).unwrap())
+            .run()
+            .unwrap();
+
+        for top_level in psd_module.top_levels {
+            // Do not import if private
+            if top_level.vis.is_private() {
+                continue;
+            }
+
+            match top_level.kind {
+                TopLevelKind::Fn(func) => {
+                    self.declare_fn(
+                        &mangle_external_name(
+                            import_module_name.to_owned().into(),
+                            func.name.symbol(),
+                        ),
+                        func.params,
+                        func.return_ty.into(),
+                        Linkage::External,
+                    )?;
+                }
+
+                TopLevelKind::Struct(_) => todo!(),
+
+                TopLevelKind::Import(_) => todo!(),
+
+                TopLevelKind::Impl(_) => todo!(),
+
+                TopLevelKind::Enum(_) => todo!(),
+            }
+        }
+
+        self.cucx.imported_modules.insert(module_path.symbol());
+
+        Ok(())
     }
 
     fn struct_(&mut self, node: Struct) -> CodegenResult<()> {

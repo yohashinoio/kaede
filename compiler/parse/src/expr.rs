@@ -6,7 +6,7 @@ use kaede_ast::expr::{
 };
 use kaede_lex::token::TokenKind;
 use kaede_span::{Location, Span};
-use kaede_symbol::Ident;
+use kaede_symbol::{Ident, Symbol};
 use kaede_type::{TyKind, UserDefinedType};
 
 use crate::{
@@ -272,6 +272,14 @@ impl Parser {
     }
 
     fn primary(&mut self) -> ParseResult<Expr> {
+        if self.check(&TokenKind::This) {
+            let span = self.consume(&TokenKind::This).unwrap();
+            return Ok(Expr {
+                span,
+                kind: ExprKind::Ident(Ident::new(Symbol::from("this".to_string()), span)),
+            });
+        }
+
         if self.check(&TokenKind::Break) {
             return self.break_();
         }
