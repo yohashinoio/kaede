@@ -2,7 +2,7 @@
 
 ## Install dependencies with homebrew
 
-### LLVM
+### LLVM 15
 
 ```bash
 $ brew install llvm@15
