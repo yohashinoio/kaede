@@ -120,21 +120,19 @@ impl Parser {
         let first_param = if has_this {
             let _ = self.consume(&TokenKind::Comma);
             None
+        } else if self.check(&TokenKind::CloseParen) {
+            None
         } else {
-            if self.check(&TokenKind::CloseParen) {
-                None
-            } else {
-                let mut param = self.fn_param()?;
-                let _ = self.consume(&TokenKind::Comma);
-                param.mutability = mutability;
-                Some(param)
-            }
+            let mut param = self.fn_param()?;
+            let _ = self.consume(&TokenKind::Comma);
+            param.mutability = mutability;
+            Some(param)
         };
 
         let params = {
             let mut params = self.fn_params()?;
-            if first_param.is_some() {
-                params.push_front(first_param.unwrap());
+            if let Some(first_param) = first_param {
+                params.push_front(first_param);
             }
             params
         };
