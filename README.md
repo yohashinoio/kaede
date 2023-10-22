@@ -20,3 +20,8 @@ Below is for bash.
 ```bash
 $ echo 'export LIBRARY_PATH="$LIBRARY_PATH:$(brew --prefix)/lib"' >> ~/.bashrc
 ```
+
+# License
+
+This project is available under the dual Apache 2.0 and MIT license.<br/>
+See LICENSE-* for the full content of the licenses.
