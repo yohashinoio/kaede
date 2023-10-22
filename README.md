@@ -1,0 +1,22 @@
+# Installation
+
+## Install dependencies with homebrew
+
+### LLVM
+
+```bash
+$ brew install llvm@15
+```
+
+### Environment Variable Configuration
+
+```bash
+$ export LIBRARY_PATH="$LIBRARY_PATH:$(brew --prefix)/lib"
+```
+
+If you want to make it permanent, put it in a configuration file of a shell you are using.
+Below is for bash.
+
+```bash
+$ echo 'export LIBRARY_PATH="$LIBRARY_PATH:$(brew --prefix)/lib"' >> ~/.bashrc
+```
