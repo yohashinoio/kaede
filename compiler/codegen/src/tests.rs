@@ -3,6 +3,8 @@
 //!
 //! I tried testing using AOT compilation, but single-threaded JIT compilation was faster
 
+use std::path::Path;
+
 use inkwell::{
     context::Context, module::Module, support::load_library_permanently, OptimizationLevel,
 };
@@ -14,7 +16,9 @@ fn jit_compile(module: &Module) -> i32 {
     const BDWGC_PATH: &str = "/usr/local/lib/libgc.so";
 
     // Load bdw-gc (boehm-gc)
-    if !load_library_permanently(BDWGC_PATH) {
+    if Path::new(BDWGC_PATH).exists() {
+        load_library_permanently(BDWGC_PATH);
+    } else {
         panic!("{} not found!", BDWGC_PATH);
     }
 
