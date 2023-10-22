@@ -11,8 +11,12 @@ use kaede_parse::Parser;
 use super::*;
 
 fn jit_compile(module: &Module) -> i32 {
+    const BDWGC_PATH: &str = "/usr/local/lib/libgc.so";
+
     // Load bdw-gc (boehm-gc)
-    load_library_permanently("/usr/local/lib/libgc.so");
+    if !load_library_permanently(BDWGC_PATH) {
+        panic!("{} not found!", BDWGC_PATH);
+    }
 
     let ee = module
         .create_jit_execution_engine(OptimizationLevel::None)
