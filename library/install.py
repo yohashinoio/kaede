@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Some systems don't have `python3` in their PATH. This isn't supported by x.py directly
 
 import subprocess
 import os
