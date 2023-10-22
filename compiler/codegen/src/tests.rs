@@ -1529,7 +1529,7 @@ fn call_mutable_methods_from_immutable() {
             return this.age
         }
 
-        fn change_age_to(this, new_age: i32) {
+        fn change_age_to(mut this, new_age: i32) {
             this.age = new_age
         }
     }
