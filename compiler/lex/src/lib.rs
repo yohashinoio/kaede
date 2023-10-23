@@ -150,7 +150,7 @@ impl Cursor<'_> {
                     "match" => self.create_token(TokenKind::Match),
                     "extern" => self.create_token(TokenKind::Extern),
                     "as" => self.create_token(TokenKind::As),
-                    "this" => self.create_token(TokenKind::This),
+                    "self" => self.create_token(TokenKind::Self_),
 
                     // Identifier
                     _ => self.create_token(TokenKind::Ident(ident)),

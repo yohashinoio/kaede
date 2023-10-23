@@ -116,8 +116,8 @@ impl Parser {
         let params_start = self.consume(&TokenKind::OpenParen)?.start;
 
         let mutability = self.consume_b(&TokenKind::Mut).into();
-        let has_this = self.consume_b(&TokenKind::This);
-        let first_param = if has_this {
+        let has_self = self.consume_b(&TokenKind::Self_);
+        let first_param = if has_self {
             let _ = self.consume(&TokenKind::Comma);
             None
         } else if self.check(&TokenKind::CloseParen) {
@@ -152,7 +152,7 @@ impl Parser {
         let span = Span::new(start, body.span.finish);
 
         Ok(Fn {
-            this: if has_this { Some(mutability) } else { None },
+            self_: if has_self { Some(mutability) } else { None },
             name,
             generic_params,
             params,

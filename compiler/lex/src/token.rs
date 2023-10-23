@@ -105,8 +105,8 @@ pub enum TokenKind {
     Extern,
     /// "as"
     As,
-    /// "this"
-    This,
+    /// "self"
+    Self_,
 
     /// "true"
     True,
@@ -174,7 +174,7 @@ impl std::fmt::Display for TokenKind {
             Match => write!(f, "'match'"),
             Extern => write!(f, "'extern'"),
             As => write!(f, "'as'"),
-            This => write!(f, "'this'"),
+            Self_ => write!(f, "'self'"),
 
             True => write!(f, "'true'"),
             False => write!(f, "'false'"),

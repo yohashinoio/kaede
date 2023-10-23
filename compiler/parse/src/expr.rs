@@ -272,11 +272,11 @@ impl Parser {
     }
 
     fn primary(&mut self) -> ParseResult<Expr> {
-        if self.check(&TokenKind::This) {
-            let span = self.consume(&TokenKind::This).unwrap();
+        if self.check(&TokenKind::Self_) {
+            let span = self.consume(&TokenKind::Self_).unwrap();
             return Ok(Expr {
                 span,
-                kind: ExprKind::Ident(Ident::new(Symbol::from("this".to_string()), span)),
+                kind: ExprKind::Ident(Ident::new(Symbol::from("self".to_string()), span)),
             });
         }
 

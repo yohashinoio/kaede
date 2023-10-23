@@ -1471,8 +1471,8 @@ fn simple_method() -> anyhow::Result<()> {
     }
 
     impl Person {
-        fn get_age(this): i32 {
-            return this.age
+        fn get_age(self): i32 {
+            return self.age
         }
     }
 
@@ -1496,12 +1496,12 @@ fn mutable_method() -> anyhow::Result<()> {
     }
 
     impl Person {
-        fn get_age(this): i32 {
-            return this.age
+        fn get_age(self): i32 {
+            return self.age
         }
 
-        fn change_age_to(mut this, new_age: i32) {
-            this.age = new_age
+        fn change_age_to(mut self, new_age: i32) {
+            self.age = new_age
         }
     }
 
@@ -1525,12 +1525,12 @@ fn call_mutable_methods_from_immutable() {
     }
 
     impl Person {
-        fn get_age(this): i32 {
-            return this.age
+        fn get_age(self): i32 {
+            return self.age
         }
 
-        fn change_age_to(mut this, new_age: i32) {
-            this.age = new_age
+        fn change_age_to(mut self, new_age: i32) {
+            self.age = new_age
         }
     }
 
@@ -1555,12 +1555,12 @@ fn modify_fields_in_immutable_methods() {
     }
 
     impl Person {
-        fn get_age(this): i32 {
-            return this.age
+        fn get_age(self): i32 {
+            return self.age
         }
 
-        fn change_age_to(this, new_age: i32) {
-            this.age = new_age
+        fn change_age_to(self, new_age: i32) {
+            self.age = new_age
         }
     }
 
@@ -1589,8 +1589,8 @@ fn static_method() -> anyhow::Result<()> {
             return Person { age: age }
         }
 
-        fn get_age(this): i32 {
-            return this.age
+        fn get_age(self): i32 {
+            return self.age
         }
     }
 

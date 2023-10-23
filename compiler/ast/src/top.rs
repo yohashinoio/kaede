@@ -68,7 +68,7 @@ pub struct Params(pub VecDeque<Param>, pub Span);
 
 #[derive(Debug)]
 pub struct Fn {
-    pub this: Option<Mutability>,
+    pub self_: Option<Mutability>,
     pub name: Ident,
     pub generic_params: Option<GenericParams>,
     pub params: Params,

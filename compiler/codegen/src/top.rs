@@ -45,10 +45,8 @@ pub fn build_top_level(cucx: &mut CompileUnitCtx, node: TopLevel) -> CodegenResu
     Ok(())
 }
 
-pub fn push_this_to_front(v: &mut Params, struct_name: Symbol, mutability: Mutability) {
+pub fn push_self_to_front(v: &mut Params, struct_name: Symbol, mutability: Mutability) {
     let span = v.1;
-
-    let this_ident = Ident::new("this".to_string().into(), span);
 
     let struct_ty = Ty {
         kind: TyKind::UserDefined(UserDefinedType::new(Ident::new(struct_name, span), None)).into(),
@@ -57,7 +55,7 @@ pub fn push_this_to_front(v: &mut Params, struct_name: Symbol, mutability: Mutab
     .into();
 
     v.0.push_front(Param {
-        name: this_ident,
+        name: Ident::new("self".to_string().into(), span),
         mutability,
         ty: Ty {
             kind: TyKind::Reference(RefrenceType {
@@ -192,7 +190,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
     }
 
     fn function(&mut self, node: Fn) -> CodegenResult<()> {
-        assert_eq!(node.this, None);
+        assert_eq!(node.self_, None);
 
         // Suppress mangling of main function
         if node.name.as_str() == "main" {
@@ -209,10 +207,10 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
     fn method(&mut self, impl_for: Symbol, mut node: Fn) -> CodegenResult<()> {
         let mangled_name = mangle_method(self.cucx, impl_for, node.name.symbol());
 
-        match node.this {
+        match node.self_ {
             Some(mutability) => {
                 // Method
-                push_this_to_front(&mut node.params, impl_for, mutability);
+                push_self_to_front(&mut node.params, impl_for, mutability);
                 self.build_fn(&mangled_name, node)?;
             }
 
