@@ -8,7 +8,7 @@ use kaede_ast::top::{Struct, StructField, Visibility};
 use kaede_symbol::{Ident, Symbol};
 use kaede_type::Ty;
 
-use crate::error::{CodegenError, CodegenResult};
+use crate::error::CodegenError;
 
 type Variable<'ctx> = (PointerValue<'ctx>, Rc<Ty> /* Variable type */);
 
@@ -104,7 +104,7 @@ pub struct TypeCtx<'ctx> {
 }
 
 impl<'ctx> TypeCtx<'ctx> {
-    pub fn lookup_variable(&self, ident: &Ident) -> CodegenResult<&Variable<'ctx>> {
+    pub fn lookup_variable(&self, ident: &Ident) -> anyhow::Result<&Variable<'ctx>> {
         for variable_table in &self.variable_table_stack {
             if let Some(var) = variable_table.lookup(ident.symbol()) {
                 return Ok(var);
@@ -114,7 +114,8 @@ impl<'ctx> TypeCtx<'ctx> {
         Err(CodegenError::Undeclared {
             name: ident.symbol(),
             span: ident.span(),
-        })
+        }
+        .into())
     }
 
     pub fn add_variable(&mut self, symbol: Symbol, var: Variable<'ctx>) {

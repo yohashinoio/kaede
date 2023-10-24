@@ -34,16 +34,17 @@ fn jit_compile(module: &Module) -> i32 {
 }
 
 /// Return exit status
-fn exec(program: &str) -> CodegenResult<i32> {
+fn exec(program: &str) -> Result<i32, CodegenError> {
     let context = Context::create();
-    let cgcx = CodegenCtx::new(&context)?;
+    let cgcx = CodegenCtx::new(&context).map_err(|e| e.downcast::<CodegenError>().unwrap())?;
 
     let module = codegen_compile_unit(
         &cgcx,
         PathBuf::from("test"),
         Parser::new(program).run().unwrap(),
         OptimizationLevel::None,
-    )?;
+    )
+    .map_err(|e| e.downcast::<CodegenError>().unwrap())?;
 
     Ok(jit_compile(&module))
 }

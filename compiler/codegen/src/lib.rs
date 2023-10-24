@@ -1,6 +1,6 @@
 use std::{collections::HashSet, path::PathBuf, rc::Rc};
 
-use error::{CodegenError, CodegenResult};
+use error::CodegenError;
 use generic::{def_generic_args, undef_generic_args};
 use inkwell::{
     basic_block::BasicBlock,
@@ -108,7 +108,7 @@ pub fn codegen_compile_unit<'ctx>(
     file_path: PathBuf,
     cu: CompileUnit,
     opt_level: OptimizationLevel,
-) -> CodegenResult<Module<'ctx>> {
+) -> anyhow::Result<Module<'ctx>> {
     let cucx = CompileUnitCtx::new(cgcx, file_path)?;
 
     cucx.codegen(cu.top_levels, opt_level)
@@ -123,7 +123,7 @@ pub struct CodegenCtx<'ctx> {
 }
 
 impl<'ctx> CodegenCtx<'ctx> {
-    fn create_target_machine() -> CodegenResult<TargetMachine> {
+    fn create_target_machine() -> anyhow::Result<TargetMachine> {
         let triple = TargetMachine::get_default_triple();
 
         let target = match Target::from_triple(&triple) {
@@ -132,7 +132,9 @@ impl<'ctx> CodegenCtx<'ctx> {
                 return Err(CodegenError::FailedToLookupTarget {
                     triple: triple.as_str().to_str().unwrap().to_string(),
                     what: what.to_string(),
-                })
+                }
+                .into())
+                .into()
             }
         };
 
@@ -145,11 +147,11 @@ impl<'ctx> CodegenCtx<'ctx> {
             CodeModel::Default,
         ) {
             Some(m) => Ok(m),
-            None => Err(CodegenError::FailedToCreateTargetMachine),
+            None => Err(CodegenError::FailedToCreateTargetMachine.into()),
         }
     }
 
-    pub fn new(context: &'ctx Context) -> CodegenResult<Self> {
+    pub fn new(context: &'ctx Context) -> anyhow::Result<Self> {
         // Without initialization, target creation will always fail
         Target::initialize_all(&InitializationConfig::default());
 
@@ -186,7 +188,7 @@ pub struct CompileUnitCtx<'ctx> {
 }
 
 impl<'ctx> CompileUnitCtx<'ctx> {
-    pub fn new(cgcx: &'ctx CodegenCtx<'ctx>, file_path: PathBuf) -> CodegenResult<Self> {
+    pub fn new(cgcx: &'ctx CodegenCtx<'ctx>, file_path: PathBuf) -> anyhow::Result<Self> {
         let module_name = file_path
             .file_stem()
             .unwrap()
@@ -223,7 +225,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         &mut self,
         name: &str,
         ty: &Ty,
-    ) -> CodegenResult<PointerValue<'ctx>> {
+    ) -> anyhow::Result<PointerValue<'ctx>> {
         let builder = self.context().create_builder();
 
         let entry = self.get_current_fn().get_first_basic_block().unwrap();
@@ -241,7 +243,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         &mut self,
         params: &[Rc<Ty>],
         return_ty: &ReturnType,
-    ) -> CodegenResult<FunctionType<'ctx>> {
+    ) -> anyhow::Result<FunctionType<'ctx>> {
         let mut param_types = Vec::new();
         for param in params {
             param_types.push(self.conv_to_llvm_type(param)?.into());
@@ -265,7 +267,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         param_types: Vec<Rc<Ty>>,
         return_type: ReturnType,
         linkage: Option<Linkage>,
-    ) -> CodegenResult<FunctionValue<'ctx>> {
+    ) -> anyhow::Result<FunctionValue<'ctx>> {
         let fn_type = self.create_fn_type(&param_types, &return_type)?;
 
         let fn_value = self.module.add_function(name, fn_type, linkage);
@@ -282,7 +284,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         Ok(fn_value)
     }
 
-    fn gc_init(&mut self) -> CodegenResult<()> {
+    fn gc_init(&mut self) -> anyhow::Result<()> {
         // Declare GC_malloc in boehm-gc
         let return_ty = Ty {
             kind: TyKind::Reference(RefrenceType {
@@ -313,7 +315,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             .map(|_| ())
     }
 
-    fn gc_malloc(&mut self, ty: BasicTypeEnum<'ctx>) -> CodegenResult<PointerValue<'ctx>> {
+    fn gc_malloc(&mut self, ty: BasicTypeEnum<'ctx>) -> anyhow::Result<PointerValue<'ctx>> {
         let gc_mallocd = self.module.get_function("GC_malloc").unwrap();
 
         let size = ty.size_of().unwrap().into();
@@ -349,7 +351,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
     fn create_generic_struct_type(
         &mut self,
         udt: &UserDefinedType,
-    ) -> CodegenResult<StructType<'ctx>> {
+    ) -> anyhow::Result<StructType<'ctx>> {
         let info = self.tcx.get_generic_info(udt.name.symbol()).unwrap();
         let generic_args = udt.generic_args.as_ref().unwrap();
 
@@ -389,7 +391,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         }
     }
 
-    fn conv_to_llvm_type(&mut self, ty: &Ty) -> CodegenResult<BasicTypeEnum<'ctx>> {
+    fn conv_to_llvm_type(&mut self, ty: &Ty) -> anyhow::Result<BasicTypeEnum<'ctx>> {
         let context = self.context();
 
         Ok(match ty.kind.as_ref() {
@@ -415,7 +417,8 @@ impl<'ctx> CompileUnitCtx<'ctx> {
                         return Err(CodegenError::Undeclared {
                             name: udt.name.symbol(),
                             span: udt.name.span(),
-                        });
+                        }
+                        .into());
                     }
                 };
 
@@ -459,12 +462,13 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         pm.run_on(&self.module);
     }
 
-    fn verify_module(&self) -> CodegenResult<()> {
+    fn verify_module(&self) -> anyhow::Result<()> {
         self.module.verify().map_err(|e| {
             self.module.print_to_stderr();
             CodegenError::LLVMError {
                 what: e.to_string(),
             }
+            .into()
         })
     }
 
@@ -495,7 +499,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         mut self,
         top_levels: Vec<TopLevel>,
         opt_level: OptimizationLevel,
-    ) -> CodegenResult<Module<'ctx>> {
+    ) -> anyhow::Result<Module<'ctx>> {
         self.gc_init()?;
 
         for top in top_levels {

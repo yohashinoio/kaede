@@ -9,7 +9,7 @@ use kaede_symbol::{Ident, Symbol};
 use kaede_type::{Mutability, Ty, TyKind};
 
 use crate::{
-    error::{CodegenError, CodegenResult},
+    error::CodegenError,
     mangle::{mangle_external_name, mangle_method, mangle_name},
     stmt::{build_block, change_mutability_dup},
     tcx::{EnumInfo, EnumVariantInfo, GenericKind, ReturnType, StructInfo, UDTKind, VariableTable},
@@ -24,7 +24,7 @@ pub fn create_struct_type<'ctx>(
     cucx: &mut CompileUnitCtx<'ctx>,
     mangled_name: Symbol,
     fields: &[StructField],
-) -> CodegenResult<StructType<'ctx>> {
+) -> anyhow::Result<StructType<'ctx>> {
     let mut field_tys = Vec::new();
     for field in fields.iter() {
         field_tys.push(cucx.conv_to_llvm_type(&field.ty)?);
@@ -37,7 +37,7 @@ pub fn create_struct_type<'ctx>(
     Ok(ty)
 }
 
-pub fn build_top_level(cucx: &mut CompileUnitCtx, node: TopLevel) -> CodegenResult<()> {
+pub fn build_top_level(cucx: &mut CompileUnitCtx, node: TopLevel) -> anyhow::Result<()> {
     let mut builder = TopLevelBuilder::new(cucx);
 
     builder.build(node)?;
@@ -65,7 +65,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
     }
 
     /// Generate top-level code
-    fn build(&mut self, node: TopLevel) -> CodegenResult<()> {
+    fn build(&mut self, node: TopLevel) -> anyhow::Result<()> {
         match node.kind {
             TopLevelKind::Import(node) => self.import_(node)?,
 
@@ -165,7 +165,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         }
     }
 
-    fn impl_(&mut self, node: Impl) -> CodegenResult<()> {
+    fn impl_(&mut self, node: Impl) -> anyhow::Result<()> {
         let ty = Rc::new(node.ty);
 
         for item in node.items {
@@ -179,7 +179,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         Ok(())
     }
 
-    fn function(&mut self, node: Fn) -> CodegenResult<()> {
+    fn function(&mut self, node: Fn) -> anyhow::Result<()> {
         assert_eq!(node.self_, None);
 
         // Suppress mangling of main function
@@ -194,7 +194,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
     /// Static method can also be handled by this function
     ///
     /// If kind is `Normal`, it becomes a static method (said in C++ style)
-    fn method(&mut self, impl_for_ty: Rc<Ty>, mut node: Fn) -> CodegenResult<()> {
+    fn method(&mut self, impl_for_ty: Rc<Ty>, mut node: Fn) -> anyhow::Result<()> {
         // TODO: Optimization
         let impl_for_ty_s = match impl_for_ty.kind.as_ref() {
             TyKind::Reference(refty) => refty.refee_ty.kind.to_string(),
@@ -227,7 +227,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         params: Params,
         return_ty: ReturnType,
         linkage: Linkage,
-    ) -> CodegenResult<FnValueParamsPair<'ctx>> {
+    ) -> anyhow::Result<FnValueParamsPair<'ctx>> {
         let params = params
             .0
             .into_iter()
@@ -244,7 +244,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         Ok((fn_value, params))
     }
 
-    fn build_fn(&mut self, mangled_name: &str, node: Fn) -> CodegenResult<()> {
+    fn build_fn(&mut self, mangled_name: &str, node: Fn) -> anyhow::Result<()> {
         let fn_value_and_params = self.declare_fn(
             mangled_name,
             node.params,
@@ -280,7 +280,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         &mut self,
         fn_value: FunctionValue<'ctx>,
         params: FnParams,
-    ) -> CodegenResult<VariableTable<'ctx>> {
+    ) -> anyhow::Result<VariableTable<'ctx>> {
         let mut var_table = VariableTable::new();
 
         assert_eq!(fn_value.count_params(), params.len() as u32);
@@ -299,11 +299,11 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         Ok(var_table)
     }
 
-    fn import_(&mut self, node: Import) -> CodegenResult<()> {
+    fn import_(&mut self, node: Import) -> anyhow::Result<()> {
         self.import_module(node.module_path)
     }
 
-    fn import_module(&mut self, module_path: Ident) -> CodegenResult<()> {
+    fn import_module(&mut self, module_path: Ident) -> anyhow::Result<()> {
         let import_module_name = module_path.as_str();
 
         let path = self
@@ -318,7 +318,8 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
             return Err(CodegenError::FileNotFoundForModule {
                 span: module_path.span(),
                 mod_name: module_path.symbol(),
-            });
+            }
+            .into());
         }
 
         // TODO: Optimize
@@ -360,7 +361,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         Ok(())
     }
 
-    fn struct_(&mut self, node: Struct) -> CodegenResult<()> {
+    fn struct_(&mut self, node: Struct) -> anyhow::Result<()> {
         if node.generic_params.is_some() {
             // Generic
             self.cucx

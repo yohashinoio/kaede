@@ -12,14 +12,11 @@ use kaede_type::{create_inferred_tuple, is_same_type, Mutability, RefrenceType, 
 use crate::expr::build_tuple_indexing;
 use crate::value::Value;
 use crate::{
-    error::{CodegenError, CodegenResult},
-    expr::build_expression,
-    get_loaded_pointer,
-    tcx::VariableTable,
+    error::CodegenError, expr::build_expression, get_loaded_pointer, tcx::VariableTable,
     CompileUnitCtx,
 };
 
-pub fn build_block(cucx: &mut CompileUnitCtx, block: &Block) -> CodegenResult<()> {
+pub fn build_block(cucx: &mut CompileUnitCtx, block: &Block) -> anyhow::Result<()> {
     cucx.tcx.push_variable_table(VariableTable::new());
 
     for stmt in &block.body {
@@ -31,7 +28,7 @@ pub fn build_block(cucx: &mut CompileUnitCtx, block: &Block) -> CodegenResult<()
     Ok(())
 }
 
-pub fn build_statement(cucx: &mut CompileUnitCtx, node: &Stmt) -> CodegenResult<()> {
+pub fn build_statement(cucx: &mut CompileUnitCtx, node: &Stmt) -> anyhow::Result<()> {
     let mut builder = StmtBuilder::new(cucx);
 
     builder.build(node)?;
@@ -67,13 +64,13 @@ pub fn build_normal_let(
     init: Option<Value<'_>>,
     specified_ty: Rc<Ty>,
     span: Span,
-) -> CodegenResult<()> {
+) -> anyhow::Result<()> {
     if let Some(init) = init {
         if matches!(init.get_type().kind.as_ref(), TyKind::Reference(_))
             && mutability.is_mut()
             && init.get_type().mutability.is_not()
         {
-            return Err(CodegenError::CannotAssignImmutableToMutable { span });
+            return Err(CodegenError::CannotAssignImmutableToMutable { span }.into());
         }
 
         let var_ty = change_mutability_dup(init.get_type(), mutability);
@@ -96,7 +93,8 @@ pub fn build_normal_let(
                         init.get_type().kind.to_string(),
                     ),
                     span,
-                });
+                }
+                .into());
             }
 
             let alloca = cucx.create_entry_block_alloca(name.as_str(), &var_ty)?;
@@ -125,7 +123,7 @@ impl<'a, 'ctx> StmtBuilder<'a, 'ctx> {
     }
 
     /// Generate statement code
-    fn build(&mut self, stmt: &Stmt) -> CodegenResult<()> {
+    fn build(&mut self, stmt: &Stmt) -> anyhow::Result<()> {
         match &stmt.kind {
             StmtKind::Expr(e) => {
                 if matches!(e.kind, ExprKind::If(_) | ExprKind::Match(_)) {
@@ -145,17 +143,19 @@ impl<'a, 'ctx> StmtBuilder<'a, 'ctx> {
         Ok(())
     }
 
-    fn assign(&mut self, node: &Assign) -> CodegenResult<()> {
+    fn assign(&mut self, node: &Assign) -> anyhow::Result<()> {
         let left = build_expression(self.cucx, &node.lhs)?;
 
         if left.get_type().mutability.is_not() {
-            return Err(CodegenError::CannotAssignTwiceToImutable { span: node.span });
+            return Err(CodegenError::CannotAssignTwiceToImutable { span: node.span }.into());
         }
 
         let ptr_to_left =
             match get_loaded_pointer(&left.get_value().as_instruction_value().unwrap()) {
                 Some(p) => p,
-                None => return Err(CodegenError::InvalidLeftOfAssignment { span: node.span }),
+                None => {
+                    return Err(CodegenError::InvalidLeftOfAssignment { span: node.span }.into())
+                }
             };
 
         let right = build_expression(self.cucx, &node.rhs)?;
@@ -167,7 +167,8 @@ impl<'a, 'ctx> StmtBuilder<'a, 'ctx> {
                     right.get_type().kind.to_string(),
                 ),
                 span: node.span,
-            });
+            }
+            .into());
         }
 
         match node.kind {
@@ -180,7 +181,7 @@ impl<'a, 'ctx> StmtBuilder<'a, 'ctx> {
         Ok(())
     }
 
-    fn let_(&mut self, node: &Let) -> CodegenResult<()> {
+    fn let_(&mut self, node: &Let) -> anyhow::Result<()> {
         match &node.kind {
             LetKind::NormalLet(node) => self.normal_let(node),
             LetKind::TupleUnpack(node) => self.tuple_unpacking(node),
@@ -194,11 +195,11 @@ impl<'a, 'ctx> StmtBuilder<'a, 'ctx> {
         init: Option<Value<'ctx>>,
         specified_ty: Rc<Ty>,
         span: Span,
-    ) -> CodegenResult<()> {
+    ) -> anyhow::Result<()> {
         build_normal_let(self.cucx, name, mutability, init, specified_ty, span)
     }
 
-    fn normal_let(&mut self, node: &NormalLet) -> CodegenResult<()> {
+    fn normal_let(&mut self, node: &NormalLet) -> anyhow::Result<()> {
         let value = match &node.init {
             Some(e) => Some(build_expression(self.cucx, e)?),
             None => None,
@@ -213,7 +214,7 @@ impl<'a, 'ctx> StmtBuilder<'a, 'ctx> {
         )
     }
 
-    fn tuple_unpacking(&mut self, node: &TupleUnpack) -> CodegenResult<()> {
+    fn tuple_unpacking(&mut self, node: &TupleUnpack) -> anyhow::Result<()> {
         let tuple = build_expression(self.cucx, &node.init)?;
 
         let tuple_ref_ty = tuple.get_type();
@@ -230,7 +231,8 @@ impl<'a, 'ctx> StmtBuilder<'a, 'ctx> {
                                 kind.to_string(),
                             ),
                             span: node.span,
-                        });
+                        }
+                        .into());
                     }
                 }
             } else {
@@ -240,14 +242,16 @@ impl<'a, 'ctx> StmtBuilder<'a, 'ctx> {
                         tuple_ref_ty.kind.to_string(),
                     ),
                     span: node.span,
-                });
+                }
+                .into());
             };
 
         if node.names.len() != tuple_len {
             return Err(CodegenError::NumberOfTupleFieldsDoesNotMatch {
                 lens: (node.names.len(), tuple_len),
                 span: node.span,
-            });
+            }
+            .into());
         }
 
         // Unpacking
@@ -276,7 +280,7 @@ impl<'a, 'ctx> StmtBuilder<'a, 'ctx> {
         unpacked_name: &Ident,
         unpacked_mutability: Mutability,
         span: Span,
-    ) -> CodegenResult<()> {
+    ) -> anyhow::Result<()> {
         assert!(matches!(
             tuple.get_type().kind.as_ref(),
             TyKind::Reference(_)

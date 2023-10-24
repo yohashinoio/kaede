@@ -1,13 +1,13 @@
 use kaede_ast::top::GenericParams;
 use kaede_type::GenericArgs;
 
-use crate::{error::CodegenResult, tcx::UDTKind, CompileUnitCtx};
+use crate::{tcx::UDTKind, CompileUnitCtx};
 
 pub fn def_generic_args(
     cucx: &mut CompileUnitCtx<'_>,
     params: &GenericParams,
     args: &GenericArgs,
-) -> CodegenResult<()> {
+) -> anyhow::Result<()> {
     assert_eq!(params.names.len(), args.types.len());
 
     for idx in 0..args.types.len() {

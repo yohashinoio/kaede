@@ -7,6 +7,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Context as _};
+use colored::Colorize;
 use inkwell::{context::Context, module::Module, OptimizationLevel};
 use kaede_codegen::{codegen_compile_unit, error::CodegenError, CodegenCtx};
 use kaede_parse::Parser;
@@ -190,7 +191,10 @@ fn main() -> anyhow::Result<()> {
         });
     }
 
-    compile(programs, opt_level, display_llvmir, output_file_path)?;
+    if let Err(err) = compile(programs, opt_level, display_llvmir, output_file_path) {
+        // If backtrace is enabled, it is also displayed
+        eprintln!("{}: {:?}", "Error".bright_red(), err);
+    }
 
     Ok(())
 }

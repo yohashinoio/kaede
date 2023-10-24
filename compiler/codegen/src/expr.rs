@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    error::{CodegenError, CodegenResult},
+    error::CodegenError,
     mangle::{mangle_name, mangle_udt_name},
     stmt::{build_block, build_normal_let, build_statement},
     tcx::{EnumInfo, EnumVariantInfo, ReturnType, UDTKind, VariableTable},
@@ -75,7 +75,7 @@ enum ValuedElse<'ctx> {
 pub fn build_block_expression<'ctx>(
     cucx: &mut CompileUnitCtx<'ctx>,
     block: &Block,
-) -> CodegenResult<Value<'ctx>> {
+) -> anyhow::Result<Value<'ctx>> {
     if block.body.is_empty() {
         return Ok(Value::new_unit());
     }
@@ -113,7 +113,7 @@ pub fn build_block_expression<'ctx>(
 pub fn build_expression<'ctx>(
     cucx: &mut CompileUnitCtx<'ctx>,
     node: &Expr,
-) -> CodegenResult<Value<'ctx>> {
+) -> anyhow::Result<Value<'ctx>> {
     let mut builder = ExprBuilder::new(cucx);
 
     builder.build(node)
@@ -125,7 +125,7 @@ pub fn build_tuple_indexing<'ctx>(
     index: u32,
     tuple_ty: &Rc<Ty>,
     span: Span,
-) -> CodegenResult<Value<'ctx>> {
+) -> anyhow::Result<Value<'ctx>> {
     let llvm_tuple_ty = cucx.conv_to_llvm_type(tuple_ty)?;
 
     let gep = unsafe {
@@ -148,7 +148,8 @@ pub fn build_tuple_indexing<'ctx>(
                 return Err(CodegenError::IndexOutOfRange {
                     index: index as u64,
                     span,
-                })
+                }
+                .into())
             }
         },
         kind => unreachable!("{:?}", kind),
@@ -170,7 +171,7 @@ pub fn create_gc_struct<'ctx>(
     cucx: &mut CompileUnitCtx<'ctx>,
     struct_llvm_ty: BasicTypeEnum<'ctx>,
     inits: &[BasicValueEnum<'ctx>],
-) -> CodegenResult<PointerValue<'ctx>> {
+) -> anyhow::Result<PointerValue<'ctx>> {
     let mallocd = cucx.gc_malloc(struct_llvm_ty)?;
 
     for (index, init) in inits.iter().enumerate() {
@@ -202,7 +203,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
     }
 
     /// Generate expression code
-    fn build(&mut self, node: &Expr) -> CodegenResult<Value<'ctx>> {
+    fn build(&mut self, node: &Expr) -> anyhow::Result<Value<'ctx>> {
         Ok(match &node.kind {
             ExprKind::Block(block) => build_block_expression(self.cucx, block)?,
 
@@ -274,7 +275,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         (enum_name, variant_name, param)
     }
 
-    fn match_(&mut self, node: &Match) -> CodegenResult<Value<'ctx>> {
+    fn match_(&mut self, node: &Match) -> anyhow::Result<Value<'ctx>> {
         let value = self.build(&node.target)?;
 
         let value_ty = value.get_type();
@@ -291,7 +292,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         target_type: &FundamentalType,
         arms: &MatchArmList,
         span: Span,
-    ) -> CodegenResult<()> {
+    ) -> anyhow::Result<()> {
         if arms.wildcard.is_some() {
             return Ok(());
         }
@@ -313,7 +314,8 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                                 self.build(&arm.pattern)?.get_type().kind.to_string(),
                             ),
                             span: arm.pattern.span,
-                        })
+                        }
+                        .into())
                     }
                 }
             }
@@ -326,27 +328,31 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                 return Err(CodegenError::NonExhaustivePatterns {
                     non_exhaustive_patterns: "`false`".to_owned(),
                     span,
-                });
+                }
+                .into());
             }
 
             if has_false {
                 return Err(CodegenError::NonExhaustivePatterns {
                     non_exhaustive_patterns: "`true`".to_owned(),
                     span,
-                });
+                }
+                .into());
             }
 
             return Err(CodegenError::NonExhaustivePatterns {
                 non_exhaustive_patterns: "`true` and `false`".to_owned(),
                 span,
-            });
+            }
+            .into());
         }
 
         // Non-bool integer
         Err(CodegenError::NonExhaustivePatterns {
             non_exhaustive_patterns: "`_`".to_owned(),
             span,
-        })
+        }
+        .into())
     }
 
     fn add_wildcard(&self, if_: &mut ValuedIf<'ctx>, wildcard: &MatchArm) {
@@ -368,7 +374,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         node: &Match,
         target: &Value<'ctx>,
         fty: &FundamentalType,
-    ) -> CodegenResult<Value<'ctx>> {
+    ) -> anyhow::Result<Value<'ctx>> {
         if fty.is_int_or_bool() {
             self.check_exhaustiveness_for_match_on_int(fty, &node.arms, node.span)?;
 
@@ -392,7 +398,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         target: &Value<'ctx>,
         mut arms: Iter<MatchArm>,
         span: Span,
-    ) -> CodegenResult<Option<ValuedIf<'ctx>>> {
+    ) -> anyhow::Result<Option<ValuedIf<'ctx>>> {
         let current_arm = match arms.next() {
             Some(c) => c,
             None => return Ok(None),
@@ -408,7 +414,8 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                         arm_value.get_type().kind.to_string(),
                     ),
                     span: current_arm.pattern.span,
-                });
+                }
+                .into());
             }
 
             self.build_int_equal(
@@ -443,7 +450,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         enum_info: &EnumInfo,
         arms: &MatchArmList,
         span: Span,
-    ) -> CodegenResult<()> {
+    ) -> anyhow::Result<()> {
         if arms.wildcard.is_some() {
             return Ok(());
         }
@@ -464,14 +471,16 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                     variant_name: variant_name.symbol(),
                     parent_name: enum_name.symbol(),
                     span: variant_name.span(),
-                });
+                }
+                .into());
             }
 
             if !pattern_variant_names.insert(variant_name.as_str()) {
                 // There were multiple identical patterns
                 return Err(CodegenError::UnreachablePattern {
                     span: enum_name.span(),
-                });
+                }
+                .into());
             }
         }
 
@@ -489,7 +498,8 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                     .collect::<Vec<_>>()
                     .join(" and "),
                 span,
-            });
+            }
+            .into());
         }
 
         Ok(())
@@ -500,7 +510,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         node: &Match,
         target: &Value<'ctx>,
         refty: &RefrenceType,
-    ) -> CodegenResult<Value<'ctx>> {
+    ) -> anyhow::Result<Value<'ctx>> {
         let refee_ty = &refty.refee_ty;
 
         let udt = match refee_ty.kind.as_ref() {
@@ -514,7 +524,8 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                 return Err(CodegenError::Undeclared {
                     name: udt.name.symbol(),
                     span: udt.name.span(),
-                })
+                }
+                .into())
             }
         };
 
@@ -524,7 +535,8 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                 return Err(CodegenError::Undeclared {
                     name: udt.name.symbol(),
                     span: udt.name.span(),
-                })
+                }
+                .into())
             }
         };
 
@@ -539,7 +551,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         target: &Value<'ctx>,
         arms: &MatchArmList,
         span: Span,
-    ) -> CodegenResult<Value<'ctx>> {
+    ) -> anyhow::Result<Value<'ctx>> {
         let target_offset = self.load_enum_variant_offset_from_value(target);
 
         let mut valued_if = self
@@ -567,7 +579,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         target_offset: &Value<'ctx>,
         mut arms: Iter<MatchArm>,
         span: Span,
-    ) -> CodegenResult<Option<ValuedIf<'ctx>>> {
+    ) -> anyhow::Result<Option<ValuedIf<'ctx>>> {
         let current_arm = match arms.next() {
             Some(c) => c,
             None => return Ok(None),
@@ -624,7 +636,8 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                         )
                         .into(),
                         span: current_arm.pattern.span,
-                    })
+                    }
+                    .into())
                 }
             }
         } else {
@@ -662,7 +675,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         &self,
         enum_info: &'e EnumInfo,
         pattern: &'pat Expr,
-    ) -> CodegenResult<(&'e EnumVariantInfo, Option<&'pat Args>)> {
+    ) -> anyhow::Result<(&'e EnumVariantInfo, Option<&'pat Args>)> {
         let (enum_name, variant_name, param) = self.dismantle_enum_variant_pattern(pattern);
 
         if enum_info.name.symbol() != enum_name.symbol() {
@@ -682,7 +695,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         &self,
         enum_info: &'e EnumInfo,
         variant_name: (Symbol, Span),
-    ) -> CodegenResult<&'e EnumVariantInfo> {
+    ) -> anyhow::Result<&'e EnumVariantInfo> {
         let variant = match enum_info.variants.get(&variant_name.0) {
             Some(item) => item,
             None => {
@@ -690,25 +703,26 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                     variant_name: variant_name.0,
                     parent_name: enum_info.name.symbol(),
                     span: variant_name.1,
-                })
+                }
+                .into())
             }
         };
 
         Ok(variant)
     }
 
-    fn break_(&self, node: &Break) -> CodegenResult<Value<'ctx>> {
+    fn break_(&self, node: &Break) -> anyhow::Result<Value<'ctx>> {
         match self.cucx.loop_break_bb_stk.last() {
             Some(bb) => {
                 self.cucx.builder.build_unconditional_branch(*bb);
                 Ok(Value::new_never())
             }
 
-            None => Err(CodegenError::BreakOutsideOfLoop { span: node.span }),
+            None => Err(CodegenError::BreakOutsideOfLoop { span: node.span }.into()),
         }
     }
 
-    fn return_(&mut self, node: &Return) -> CodegenResult<Value<'ctx>> {
+    fn return_(&mut self, node: &Return) -> anyhow::Result<Value<'ctx>> {
         match &node.val {
             Some(val) => {
                 let value = build_expression(self.cucx, val)?;
@@ -721,7 +735,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         Ok(Value::new_never())
     }
 
-    fn loop_(&mut self, node: &Loop) -> CodegenResult<Value<'ctx>> {
+    fn loop_(&mut self, node: &Loop) -> anyhow::Result<Value<'ctx>> {
         let parent = self.cucx.get_current_fn();
 
         let body_bb = self.cucx.context().append_basic_block(parent, "loopbody");
@@ -746,7 +760,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         Ok(Value::new_never())
     }
 
-    fn conv_to_valued_if(&mut self, orig: &If) -> CodegenResult<ValuedIf<'ctx>> {
+    fn conv_to_valued_if(&mut self, orig: &If) -> anyhow::Result<ValuedIf<'ctx>> {
         let cond = build_expression(self.cucx, &orig.cond)?;
 
         let else_ = match &orig.else_ {
@@ -766,18 +780,18 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         })
     }
 
-    fn if_(&mut self, node: &If) -> CodegenResult<Value<'ctx>> {
+    fn if_(&mut self, node: &If) -> anyhow::Result<Value<'ctx>> {
         let valued_if = self.conv_to_valued_if(node)?;
         self.build_if(&valued_if, false)
     }
 
     /// If unreachable_else is true and there is no else, build unreachable
-    fn build_if(&mut self, node: &ValuedIf, unreachable_else: bool) -> CodegenResult<Value<'ctx>> {
+    fn build_if(&mut self, node: &ValuedIf, unreachable_else: bool) -> anyhow::Result<Value<'ctx>> {
         let if_value = self.unsafe_build_if(node, unreachable_else)?;
 
         // All control paths will be 'never'
         if if_value.is_never_ty() {
-            return Err(CodegenError::NeverIfExpr { span: node.span });
+            return Err(CodegenError::NeverIfExpr { span: node.span }.into());
         }
 
         Ok(if_value)
@@ -792,7 +806,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         &mut self,
         node: &ValuedIf,
         unreachable_else: bool,
-    ) -> CodegenResult<Value<'ctx>> {
+    ) -> anyhow::Result<Value<'ctx>> {
         let span = node.span;
 
         let parent = self.cucx.get_current_fn();
@@ -850,7 +864,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                     self.cucx.builder.build_unreachable();
                     Value::new_never()
                 } else {
-                    return Err(CodegenError::IfMustHaveElseUsedAsExpr { span });
+                    return Err(CodegenError::IfMustHaveElseUsedAsExpr { span }.into());
                 }
             }
         };
@@ -876,7 +890,8 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                     else_val.get_type().kind.to_string(),
                 ),
                 span,
-            });
+            }
+            .into());
         }
 
         // Either then_val or else_val could be never
@@ -899,7 +914,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         Ok(Value::new(phi.as_basic_value(), phi_ty))
     }
 
-    fn build_enum_unpack(&mut self, enum_unpack: &EnumUnpack) -> CodegenResult<()> {
+    fn build_enum_unpack(&mut self, enum_unpack: &EnumUnpack) -> anyhow::Result<()> {
         let variant_ty_llvm = match enum_unpack.variant_ty.kind.as_ref() {
             TyKind::Reference(refty) => self.cucx.conv_to_llvm_type(&refty.refee_ty),
             _ => self.cucx.conv_to_llvm_type(&enum_unpack.variant_ty),
@@ -946,7 +961,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         Ok(())
     }
 
-    fn struct_literal(&mut self, node: &StructLiteral) -> CodegenResult<Value<'ctx>> {
+    fn struct_literal(&mut self, node: &StructLiteral) -> anyhow::Result<Value<'ctx>> {
         let mangled_name = mangle_udt_name(self.cucx, &node.struct_ty);
 
         let struct_ty = Ty {
@@ -963,7 +978,8 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                 return Err(CodegenError::Undeclared {
                     name: mangled_name,
                     span: node.struct_ty.name.span(),
-                });
+                }
+                .into());
             }
         };
 
@@ -974,7 +990,8 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                 return Err(CodegenError::Undeclared {
                     name: mangled_name,
                     span: node.struct_ty.name.span(),
-                });
+                }
+                .into());
             }
         };
 
@@ -1001,7 +1018,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         ))
     }
 
-    fn tuple_literal(&mut self, node: &TupleLiteral) -> CodegenResult<Value<'ctx>> {
+    fn tuple_literal(&mut self, node: &TupleLiteral) -> anyhow::Result<Value<'ctx>> {
         let element_values = {
             let mut v = Vec::new();
             for e in node.elements.iter() {
@@ -1032,7 +1049,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         ))
     }
 
-    fn array_literal(&mut self, node: &ArrayLiteral) -> CodegenResult<Value<'ctx>> {
+    fn array_literal(&mut self, node: &ArrayLiteral) -> anyhow::Result<Value<'ctx>> {
         assert!(!node.elements.is_empty());
 
         let mut elems = Vec::new();
@@ -1080,7 +1097,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         ))
     }
 
-    fn array_indexing(&mut self, node: &Indexing) -> CodegenResult<Value<'ctx>> {
+    fn array_indexing(&mut self, node: &Indexing) -> anyhow::Result<Value<'ctx>> {
         // A raw array cannot be passed, but a pointer(reference) to an array
         let array_ref = build_expression(self.cucx, &node.operand)?;
 
@@ -1127,7 +1144,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         ))
     }
 
-    fn logical_not(&mut self, node: &LogicalNot) -> CodegenResult<Value<'ctx>> {
+    fn logical_not(&mut self, node: &LogicalNot) -> anyhow::Result<Value<'ctx>> {
         let operand = build_expression(self.cucx, &node.operand)?;
 
         let zero = self
@@ -1193,7 +1210,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         )
     }
 
-    fn ident_expr(&mut self, ident: &Ident) -> CodegenResult<Value<'ctx>> {
+    fn ident_expr(&mut self, ident: &Ident) -> anyhow::Result<Value<'ctx>> {
         let (ptr, ty) = self.cucx.tcx.lookup_variable(ident)?.clone();
 
         let llvm_ty = self.cucx.conv_to_llvm_type(&ty)?;
@@ -1204,7 +1221,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         ))
     }
 
-    fn binary_op(&mut self, node: &Binary) -> CodegenResult<Value<'ctx>> {
+    fn binary_op(&mut self, node: &Binary) -> anyhow::Result<Value<'ctx>> {
         use BinaryKind::*;
 
         match node.kind {
@@ -1216,7 +1233,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         }
     }
 
-    fn scope_resolution(&mut self, node: &Binary) -> CodegenResult<Value<'ctx>> {
+    fn scope_resolution(&mut self, node: &Binary) -> anyhow::Result<Value<'ctx>> {
         assert!(matches!(node.kind, BinaryKind::ScopeResolution));
 
         let left = match &node.lhs.kind {
@@ -1248,14 +1265,15 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         enum_name: &Ident,
         variant_name: &Ident,
         value: Option<&Expr>,
-    ) -> CodegenResult<Value<'ctx>> {
+    ) -> anyhow::Result<Value<'ctx>> {
         let udt_kind = match self.cucx.tcx.get_udt(enum_name.symbol()) {
             Some(udt) => udt,
             None => {
                 return Err(CodegenError::Undeclared {
                     name: enum_name.symbol(),
                     span: enum_name.span(),
-                })
+                }
+                .into())
             }
         };
 
@@ -1265,7 +1283,8 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                 return Err(CodegenError::Undeclared {
                     name: enum_name.symbol(),
                     span: enum_name.span(),
-                })
+                }
+                .into())
             }
         };
 
@@ -1362,7 +1381,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         )
     }
 
-    fn binary_arithmetic_op(&mut self, node: &Binary) -> CodegenResult<Value<'ctx>> {
+    fn binary_arithmetic_op(&mut self, node: &Binary) -> anyhow::Result<Value<'ctx>> {
         use BinaryKind::*;
 
         let left = self.build(node.lhs.as_ref())?;
@@ -1571,7 +1590,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
     }
 
     /// Struct access or module item access
-    fn access(&mut self, node: &Binary) -> CodegenResult<Value<'ctx>> {
+    fn access(&mut self, node: &Binary) -> anyhow::Result<Value<'ctx>> {
         assert!(matches!(node.kind, BinaryKind::Access));
 
         if let ExprKind::Ident(modname) = &node.lhs.kind {
@@ -1601,7 +1620,8 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             } else {
                 Err(CodegenError::HasNoFields {
                     span: node.lhs.span,
-                })
+                }
+                .into())
             }
         } else {
             // No possibility of raw tuple or struct
@@ -1609,7 +1629,8 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
             Err(CodegenError::HasNoFields {
                 span: node.lhs.span,
-            })
+            }
+            .into())
         }
     }
 
@@ -1618,7 +1639,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         left: &Value<'ctx>,
         left_span: Span,
         right: &Expr,
-    ) -> CodegenResult<Value<'ctx>> {
+    ) -> anyhow::Result<Value<'ctx>> {
         assert!(matches!(
             left.get_type().kind.as_ref(),
             TyKind::Reference(_)
@@ -1636,7 +1657,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
             TyKind::Tuple(_) => self.tuple_indexing(left, right, refee_ty),
 
-            _ => Err(CodegenError::HasNoFields { span: left_span }),
+            _ => Err(CodegenError::HasNoFields { span: left_span }.into()),
         }
     }
 
@@ -1646,7 +1667,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         left: &Value<'ctx>,
         right: &Expr,
         struct_ty: &Rc<Ty>,
-    ) -> CodegenResult<Value<'ctx>> {
+    ) -> anyhow::Result<Value<'ctx>> {
         let (udt, mangled_struct_name) = if let TyKind::UserDefined(udt) = struct_ty.kind.as_ref() {
             (udt, mangle_udt_name(self.cucx, udt))
         } else {
@@ -1677,7 +1698,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         mangled_struct_name: Symbol,
         struct_ty: &Rc<Ty>,
         field_name: &Ident,
-    ) -> CodegenResult<Value<'ctx>> {
+    ) -> anyhow::Result<Value<'ctx>> {
         let llvm_struct_ty = self.cucx.conv_to_llvm_type(struct_ty)?;
 
         let udt_kind = self.cucx.tcx.get_udt(mangled_struct_name).unwrap();
@@ -1694,7 +1715,8 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                     member_name: field_name.symbol(),
                     parent_name: struct_name,
                     span: field_name.span(),
-                });
+                }
+                .into());
             }
         };
 
@@ -1729,7 +1751,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         struct_value: &Value<'ctx>,
         struct_name: Symbol,
         call_node: &FnCall,
-    ) -> CodegenResult<Value<'ctx>> {
+    ) -> anyhow::Result<Value<'ctx>> {
         // For 'get_age' method of 'Person' structure
         // Person.get_age
         let actual_method_name = format!("{}.{}", struct_name, call_node.name.as_str());
@@ -1756,10 +1778,10 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         left: &Value<'ctx>,
         right: &Expr,
         tuple_ty: &Rc<Ty>,
-    ) -> CodegenResult<Value<'ctx>> {
+    ) -> anyhow::Result<Value<'ctx>> {
         let index = match &right.kind {
             ExprKind::Int(i) => i.as_u64(),
-            _ => return Err(CodegenError::TupleRequireAccessByIndex { span: right.span }),
+            _ => return Err(CodegenError::TupleRequireAccessByIndex { span: right.span }.into()),
         };
 
         let left_value = left.get_value().into_pointer_value();
@@ -1767,7 +1789,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         build_tuple_indexing(self.cucx, left_value, index as u32, tuple_ty, right.span)
     }
 
-    fn call_fn(&mut self, node: &FnCall) -> CodegenResult<Value<'ctx>> {
+    fn call_fn(&mut self, node: &FnCall) -> anyhow::Result<Value<'ctx>> {
         let args = {
             let mut args = VecDeque::new();
 
@@ -1786,13 +1808,13 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         name: Symbol,
         args: VecDeque<(Value<'ctx>, Span)>,
         span: Span,
-    ) -> CodegenResult<Value<'ctx>> {
+    ) -> anyhow::Result<Value<'ctx>> {
         let func = self.cucx.module.get_function(&mangle_name(self.cucx, name));
 
         let func = match func {
             Some(func) => func,
 
-            None => return Err(CodegenError::Undeclared { name, span }),
+            None => return Err(CodegenError::Undeclared { name, span }.into()),
         };
 
         let function_info = self.cucx.tcx.get_function_info(func).unwrap();
@@ -1832,7 +1854,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         &self,
         args: &VecDeque<(Value<'ctx>, Span)>,
         params: &[Rc<Ty>],
-    ) -> CodegenResult<()> {
+    ) -> anyhow::Result<()> {
         for (idx, arg) in args.iter().enumerate() {
             let param = &params[idx];
 
@@ -1843,12 +1865,13 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                         params[idx].kind.to_string(),
                     ),
                     span: arg.1,
-                });
+                }
+                .into());
             }
 
             // Check mutability
             if arg.0.get_type().mutability.is_not() && param.mutability.is_mut() {
-                return Err(CodegenError::CannotAssignImmutableToMutable { span: arg.1 });
+                return Err(CodegenError::CannotAssignImmutableToMutable { span: arg.1 }.into());
             }
         }
 

@@ -91,24 +91,3 @@ pub enum CodegenError {
     #[error("failed to create target machine")]
     FailedToCreateTargetMachine,
 }
-
-#[derive(Debug, Error)]
-#[error("From {}:{} in `{}`", .line, .column, .file)]
-pub struct ErrLoc {
-    pub file: &'static str,
-    pub line: u32,
-    pub column: u32,
-}
-
-#[macro_export]
-macro_rules! here {
-    () => {
-        crate::error::ErrLoc {
-            file: file!(),
-            line: line!(),
-            column: column!(),
-        }
-    };
-}
-
-pub type CodegenResult<T> = Result<T, CodegenError>;
