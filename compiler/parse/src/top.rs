@@ -73,7 +73,7 @@ impl Parser {
     fn impl_(&mut self) -> ParseResult<Impl> {
         let start = self.consume(&TokenKind::Impl).unwrap().start;
 
-        let name = self.ident()?;
+        let ty = self.ty()?;
 
         self.consume(&TokenKind::OpenBrace)?;
 
@@ -82,7 +82,7 @@ impl Parser {
         loop {
             if let Ok(span) = self.consume(&TokenKind::CloseBrace) {
                 return Ok(Impl {
-                    name,
+                    ty,
                     items,
                     span: Span::new(start, span.finish),
                 });
@@ -187,7 +187,7 @@ impl Parser {
 
         self.consume(&TokenKind::Colon)?;
 
-        let ty = self.ty()?;
+        let ty = Rc::new(self.ty()?);
 
         Ok(Param {
             name,

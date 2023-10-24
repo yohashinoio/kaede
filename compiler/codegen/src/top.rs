@@ -6,7 +6,7 @@ use kaede_ast::top::{
 };
 use kaede_parse::Parser;
 use kaede_symbol::{Ident, Symbol};
-use kaede_type::{Mutability, RefrenceType, Ty, TyKind, UserDefinedType};
+use kaede_type::{Mutability, Ty, TyKind};
 
 use crate::{
     error::{CodegenError, CodegenResult},
@@ -45,25 +45,13 @@ pub fn build_top_level(cucx: &mut CompileUnitCtx, node: TopLevel) -> CodegenResu
     Ok(())
 }
 
-pub fn push_self_to_front(v: &mut Params, struct_name: Symbol, mutability: Mutability) {
+pub fn push_self_to_front(v: &mut Params, impl_for_ty: Rc<Ty>, mutability: Mutability) {
     let span = v.1;
-
-    let struct_ty = Ty {
-        kind: TyKind::UserDefined(UserDefinedType::new(Ident::new(struct_name, span), None)).into(),
-        mutability,
-    }
-    .into();
 
     v.0.push_front(Param {
         name: Ident::new("self".to_string().into(), span),
         mutability,
-        ty: Ty {
-            kind: TyKind::Reference(RefrenceType {
-                refee_ty: struct_ty,
-            })
-            .into(),
-            mutability,
-        },
+        ty: impl_for_ty,
     });
 }
 
@@ -178,9 +166,11 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
     }
 
     fn impl_(&mut self, node: Impl) -> CodegenResult<()> {
+        let ty = Rc::new(node.ty);
+
         for item in node.items {
             match item.kind {
-                TopLevelKind::Fn(fn_) => self.method(node.name.symbol(), fn_)?,
+                TopLevelKind::Fn(fn_) => self.method(ty.clone(), fn_)?,
 
                 _ => todo!("Error"),
             }
@@ -204,13 +194,20 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
     /// Static method can also be handled by this function
     ///
     /// If kind is `Normal`, it becomes a static method (said in C++ style)
-    fn method(&mut self, impl_for: Symbol, mut node: Fn) -> CodegenResult<()> {
-        let mangled_name = mangle_method(self.cucx, impl_for, node.name.symbol());
+    fn method(&mut self, impl_for_ty: Rc<Ty>, mut node: Fn) -> CodegenResult<()> {
+        // TODO: Optimization
+        let impl_for_ty_s = match impl_for_ty.kind.as_ref() {
+            TyKind::Reference(refty) => refty.refee_ty.kind.to_string(),
+            _ => impl_for_ty.kind.to_string(),
+        };
+
+        let mangled_name =
+            mangle_method(self.cucx, Symbol::from(impl_for_ty_s), node.name.symbol());
 
         match node.self_ {
             Some(mutability) => {
                 // Method
-                push_self_to_front(&mut node.params, impl_for, mutability);
+                push_self_to_front(&mut node.params, impl_for_ty, mutability);
                 self.build_fn(&mangled_name, node)?;
             }
 

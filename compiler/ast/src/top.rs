@@ -59,7 +59,7 @@ pub struct Struct {
 pub struct Param {
     pub name: Ident,
     pub mutability: Mutability,
-    pub ty: Ty,
+    pub ty: Rc<Ty>,
 }
 
 /// Deque because sometimes it is necessary to insert self (C++ style: this) at the front
@@ -85,7 +85,7 @@ pub struct Import {
 
 #[derive(Debug)]
 pub struct Impl {
-    pub name: Ident,
+    pub ty: Ty,
     pub items: Vec<TopLevel>,
     pub span: Span,
 }
