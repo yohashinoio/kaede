@@ -134,7 +134,6 @@ impl<'ctx> CodegenCtx<'ctx> {
                     what: what.to_string(),
                 }
                 .into())
-                .into()
             }
         };
 
