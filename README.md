@@ -27,11 +27,11 @@ When I began development, I did not expect development to continue through to th
 
 Therefore, I decided to develop in Rust to make the compiler as fast as possible.
 
-Also the reason for choosing Rust over C++ was simple: I had written a compiler in C++ before.
+Also, I chose Rust over C++ because I had previously written a compiler in C++ and was troubled by access to null pointers, template errors, and lack of a package manager (conan and others were available but underpowered).
 
 Ever since I remembered that it might be possible to self-host, I regret that I should have written it in OCaml or something like that instead of Rust.
 
 # License
 
 This project is available under the dual Apache 2.0 and MIT license.<br/>
-See LICENSE-* for the full content of the licenses.
+See LICENSE-\* for the full content of the licenses.
