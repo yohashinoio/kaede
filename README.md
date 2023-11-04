@@ -24,6 +24,10 @@ Below is for bash.
 $ echo 'export LIBRARY_PATH="$LIBRARY_PATH:$(brew --prefix)/lib"' >> ~/.bashrc
 ```
 
+## Install standard library and compiler
+
+**WIP**
+
 # Why write the boot compiler in Rust?
 
 When I began development, I did not expect development to continue through to the self-hosting phase.
