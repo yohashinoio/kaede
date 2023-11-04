@@ -1,3 +1,6 @@
+> **Warning**<br />
+> As this project is still in the pre-release phase, there is still a possibility that the language specifications could change significantly
+
 # Installation
 
 ## Install dependencies with homebrew
