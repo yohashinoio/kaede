@@ -1624,6 +1624,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                 .into())
             }
         } else {
+            // --- Fundamental type method call ---
             let call_node = match &node.rhs.kind {
                 ExprKind::FnCall(call_node) => call_node,
                 _ => {
