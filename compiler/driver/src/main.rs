@@ -13,6 +13,10 @@ use kaede_codegen::{codegen_compile_unit, error::CodegenError, CodegenCtx};
 use kaede_parse::Parser;
 use tempfile::{NamedTempFile, TempPath};
 
+fn kaede_dir() -> String {
+    std::env::var("KAEDE_DIR").unwrap_or(concat!(env!("HOME"), "/.kaede").to_string())
+}
+
 #[derive(clap::Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
@@ -89,7 +93,7 @@ fn emit_exe_file(obj_path: &Path, output_file_path: &Path) -> anyhow::Result<()>
             "-o",
             output_file_path.to_str().unwrap(),
             obj_path.to_str().unwrap(),
-            "-lgc", // Link bdwgc
+            &format!("{}/lib/libkgc.so", kaede_dir()), // Link with garbage collector
         ])
         .status()?;
 

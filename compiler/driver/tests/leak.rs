@@ -3,6 +3,8 @@ use assert_fs::prelude::*;
 use predicates::prelude::*;
 use std::process::Command;
 
+const KAEDE_GC_LIB_PATH: &str = concat!(env!("HOME"), "/.kaede/lib/libkgc.so");
+
 #[test]
 fn leak_check_with_valgrind() -> anyhow::Result<()> {
     let program_file = assert_fs::NamedTempFile::new("leak.kd")?;
@@ -62,7 +64,7 @@ fn leak_check_with_valgrind() -> anyhow::Result<()> {
         .args([
             "-g",
             asm.path().to_str().unwrap(),
-            "-lgc",
+            KAEDE_GC_LIB_PATH,
             "-o",
             executable.path().to_str().unwrap(),
         ])

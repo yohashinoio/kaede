@@ -13,13 +13,13 @@ use kaede_parse::Parser;
 use super::*;
 
 fn jit_compile(module: &Module) -> i32 {
-    const BDWGC_PATH: &str = "/usr/local/lib/libgc.so";
+    const KAEDE_GC_LIB_PATH: &str = concat!(env!("HOME"), "/.kaede/lib/libkgc.so");
 
     // Load bdw-gc (boehm-gc)
-    if Path::new(BDWGC_PATH).exists() {
-        load_library_permanently(BDWGC_PATH);
+    if Path::new(KAEDE_GC_LIB_PATH).exists() {
+        load_library_permanently(KAEDE_GC_LIB_PATH);
     } else {
-        panic!("{} not found!", BDWGC_PATH);
+        panic!("{} not found!", KAEDE_GC_LIB_PATH);
     }
 
     let ee = module
