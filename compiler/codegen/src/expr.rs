@@ -1624,14 +1624,51 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                 .into())
             }
         } else {
-            // No possibility of raw tuple or struct
-            // All tuples and structs in this language are used via reference
+            let call_node = match &node.rhs.kind {
+                ExprKind::FnCall(call_node) => call_node,
+                _ => {
+                    return Err(CodegenError::HasNoFields {
+                        span: node.lhs.span,
+                    }
+                    .into())
+                }
+            };
 
-            Err(CodegenError::HasNoFields {
-                span: node.lhs.span,
+            if let TyKind::Fundamental(fty) = left_ty.kind.as_ref() {
+                self.call_fundamental_type_method(&left, fty.kind.to_string().into(), call_node)
+            } else {
+                Err(CodegenError::HasNoFields {
+                    span: node.lhs.span,
+                }
+                .into())
             }
-            .into())
         }
+    }
+
+    fn call_fundamental_type_method(
+        &mut self,
+        value: &Value<'ctx>,
+        fundamental_ty_name: Symbol,
+        call_node: &FnCall,
+    ) -> anyhow::Result<Value<'ctx>> {
+        // For example: i32.add
+        let actual_method_name = format!("{}.{}", fundamental_ty_name, call_node.name.as_str());
+
+        // Convert arguments(exprs) to values
+        let mut args = {
+            let mut args = VecDeque::new();
+
+            for arg in call_node.args.0.iter() {
+                args.push_back((self.build(arg)?, arg.span));
+            }
+
+            args
+        };
+
+        // Push self to front
+        args.push_front((value.clone(), call_node.args.1));
+
+        self.build_call_fn(actual_method_name.into(), args, call_node.span)
     }
 
     fn struct_access_or_tuple_indexing(
@@ -1685,7 +1722,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             ),
 
             // Method
-            ExprKind::FnCall(node) => self.struct_method_access(left, mangled_struct_name, node),
+            ExprKind::FnCall(node) => self.call_struct_method(left, mangled_struct_name, node),
 
             kind => unreachable!("{:?}", kind),
         }
@@ -1746,14 +1783,13 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         ))
     }
 
-    fn struct_method_access(
+    fn call_struct_method(
         &mut self,
         struct_value: &Value<'ctx>,
         struct_name: Symbol,
         call_node: &FnCall,
     ) -> anyhow::Result<Value<'ctx>> {
-        // For 'get_age' method of 'Person' structure
-        // Person.get_age
+        // For example: Person.get_age
         let actual_method_name = format!("{}.{}", struct_name, call_node.name.as_str());
 
         // Convert arguments(exprs) to values
