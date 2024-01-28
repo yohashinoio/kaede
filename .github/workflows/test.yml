@@ -69,8 +69,8 @@ jobs:
             ./target/
           key: ${{ steps.cache-rust-restore.outputs.cache-primary-key }}
 
-      - name: Install standard library
-        run: cd library && chmod +x install.py && sudo ./install.py
+      - name: Install kaede
+        run: chmod +x install.py && ./install.py
 
       - name: Run format
         run: cargo fmt --all -- --check
@@ -80,4 +80,4 @@ jobs:
 
       - name: Run test
         # Execute in single thread because errors occur in parallel
-        run: cargo test --release --all-features --no-fail-fast -- --test-threads=1
+        run: cargo test --release --no-fail-fast -- --test-threads=1

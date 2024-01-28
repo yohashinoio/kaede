@@ -7,24 +7,22 @@ import shutil
 
 
 kaede_dir = os.path.expanduser("~/.kaede")
-if not os.path.exists(kaede_dir):
-    os.mkdir(kaede_dir)
 kaede_bin_dir = os.path.join(kaede_dir, "bin")
-if not os.path.exists(kaede_bin_dir):
-    os.mkdir(kaede_bin_dir)
 
 
-def get_profile_path():
+def shell_config_path():
     shell = os.environ.get("SHELL")
 
-    if "zsh" in shell:
+    if shell is None:
+        return None
+    elif "zsh" in shell:
         return "~/.zprofile"
     elif "fish" in shell:
         return "~/.config/fish/config.fish"
     elif "bash" in shell:
         return "~/.bash_profile"
-    else:
-        return None
+
+    return None
 
 
 def install_kaede():
@@ -39,10 +37,14 @@ def install_kaede():
 
 if __name__ == '__main__':
     if os.path.exists(kaede_dir):
-        print("Already installed!")
         print(
-            "If you need to reinstall, delete %s and run this program again" % kaede_dir)
+            "Already installed, if you need to reinstall, delete '%s' and run this program again!" % kaede_dir)
         exit(1)
+
+    if not os.path.exists(kaede_dir):
+        os.mkdir(kaede_dir)
+    if not os.path.exists(kaede_bin_dir):
+        os.mkdir(kaede_bin_dir)
 
     library.install(kaede_dir)
 
@@ -50,7 +52,7 @@ if __name__ == '__main__':
     install_kaede()
 
     # Set environment variable
-    profile_path = get_profile_path()
+    profile_path = shell_config_path()
     exoprt_kaede_bin_command = "export PATH=$PATH:%s" % kaede_bin_dir
     if profile_path is None:
         print("Write the following commands in your shell configuration file:")
