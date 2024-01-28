@@ -1,4 +1,4 @@
-use assert_cmd::prelude::*;
+use assert_cmd::{crate_name, prelude::*};
 use assert_fs::prelude::*;
 use predicates::prelude::*;
 use std::process::Command;
@@ -37,7 +37,7 @@ fn leak_check_with_valgrind() -> anyhow::Result<()> {
     )?;
 
     // Compile
-    let compile_output = Command::cargo_bin(env!("CARGO_PKG_NAME"))?
+    let compile_output = Command::cargo_bin(crate_name!())?
         .args([
             "-O0",
             "--display-llvm-ir",

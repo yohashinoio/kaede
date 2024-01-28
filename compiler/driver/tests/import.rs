@@ -1,6 +1,6 @@
 //! Testing under the assumption that `lli` is installed!
 
-use assert_cmd::prelude::*;
+use assert_cmd::{crate_name, prelude::*};
 use assert_fs::prelude::*;
 use predicates::prelude::*;
 use std::process::Command;
@@ -24,7 +24,7 @@ fn import_function() -> anyhow::Result<()> {
         }"#,
     )?;
 
-    let compile_output = Command::cargo_bin(env!("CARGO_PKG_NAME"))?
+    let compile_output = Command::cargo_bin(crate_name!())?
         .args([
             "--display-llvm-ir",
             main.path().to_str().unwrap(),
