@@ -10,21 +10,6 @@ kaede_dir = os.path.expanduser("~/.kaede")
 kaede_bin_dir = os.path.join(kaede_dir, "bin")
 
 
-def shell_config_path():
-    shell = os.environ.get("SHELL")
-
-    if shell is None:
-        return None
-    elif "zsh" in shell:
-        return "~/.zprofile"
-    elif "fish" in shell:
-        return "~/.config/fish/config.fish"
-    elif "bash" in shell:
-        return "~/.bash_profile"
-
-    return None
-
-
 def install_kaede():
     print("Installing kaede...")
 
@@ -51,14 +36,12 @@ if __name__ == '__main__':
     os.environ["KAEDE_DIR"] = kaede_dir
     install_kaede()
 
-    # Set environment variable
-    profile_path = shell_config_path()
-    exoprt_kaede_bin_command = "export PATH=$PATH:%s" % kaede_bin_dir
-    if profile_path is None:
-        print("Write the following commands in your shell configuration file:")
-        print(exoprt_kaede_bin_command)
-    else:
-        with open(os.path.expanduser(profile_path), "a") as f:
-            f.write(exoprt_kaede_bin_command + "\n")
-        print("Finally, enter the following command to finish the installation:")
-        print("source %s" % profile_path)
+    # Create shell script for setting environment variables
+    env_script_path = "$HOME/.kaede/env"
+    with open(env_script_path, "x") as f:
+        f.write("export PATH=$PATH:%s" % kaede_bin_dir + "\n")
+    with open(os.path.expanduser("~/.profile"), "a+") as f:
+        f.write('. "%s"' % env_script_path + "\n")
+
+    print("Enter the following commands:")
+    print("source ~/.profile")
