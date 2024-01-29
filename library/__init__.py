@@ -3,14 +3,14 @@
 import subprocess
 import os
 
-library_dir = os.path.dirname(os.path.abspath(__file__))
+this_dir = os.path.dirname(os.path.abspath(__file__))
 
 
 def install_bdwgc(third_party_dir):
     install_dir = os.path.join(third_party_dir, "bdwgc")
 
-    bdwgc_dir = os.path.join(library_dir, "bdwgc")
-    bdwgc_build_dir = os.path.join(library_dir, "bdwgc_build")
+    bdwgc_dir = os.path.join(this_dir, "bdwgc")
+    bdwgc_build_dir = os.path.join(this_dir, "bdwgc_build")
 
     def build_bdwgc():
         subprocess.run(["cmake", "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_INSTALL_PREFIX=%s" %
