@@ -17,11 +17,11 @@ $ brew install llvm@15
 $ export LIBRARY_PATH="$LIBRARY_PATH:$(brew --prefix)/lib"
 ```
 
-If you want to make it permanent, put it in a configuration file of a shell you are using.
-Below is for bash.
+If you want to make it permanent, put it in a shell initialization file.<br/>
+For example, in the case of a `~/.profile`.
 
 ```bash
-$ echo 'export LIBRARY_PATH="$LIBRARY_PATH:$(brew --prefix)/lib"' >> ~/.bashrc
+$ echo 'export LIBRARY_PATH="$LIBRARY_PATH:$(brew --prefix)/lib"' >> ~/.profile
 ```
 
 ## Install standard library and compiler
