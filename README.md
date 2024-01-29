@@ -26,18 +26,19 @@ $ echo 'export LIBRARY_PATH="$LIBRARY_PATH:$(brew --prefix)/lib"' >> ~/.bashrc
 
 ## Install standard library and compiler
 
-After making sure that Python3 is installed, you can install it by executing the following command.
+Make sure you have Python3 installed.
 
 ```bash
 $ ./install.py
 ```
 
 You can check if the installation was successful with the following command.
-If it does not exist, please re-login once.
 
 ```bash
 $ kaede --help
 ```
+
+If it does not exist, please re-login once.
 
 # Why write the boot compiler in Rust?
 
