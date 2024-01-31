@@ -7,9 +7,36 @@ import shutil
 
 
 unexpanded_kaede_dir = "$HOME/.kaede"
-unexpanded_kaede_bin_dir = "$HOME/.kaede/bin"
+unexpanded_kaede_bin_dir = os.path.join(unexpanded_kaede_dir, "bin")
 kaede_dir = os.path.expandvars(unexpanded_kaede_dir)
 kaede_bin_dir = os.path.expandvars(unexpanded_kaede_bin_dir)
+
+
+def shell_initianlize_file():
+    shell = os.environ["SHELL"]
+
+    if shell == "/bin/bash":
+        profile = "~/.bash_profile"
+        login = "~/.bash_login"
+    elif shell == "/bin/zsh":
+        profile = "~/.zprofile"
+        login = "~/.zlogin"
+    elif shell == "/bin/fish":
+        profile = "~/.config/fish/config.fish"
+        login = None
+    else:
+        # Not supported
+        return None
+
+    # If shell profile file exists, use it
+    if os.path.exists(os.path.expanduser(profile)):
+        return profile
+
+    # If shell login file exists, use it
+    if os.path.exists(os.path.expanduser(login)):
+        return login
+
+    return "~/.profile"
 
 
 def install_compiler():
@@ -29,12 +56,22 @@ def install():
 
 
 def create_shell_script_for_setting_env():
-    unexpanded_env_script_path = os.path.join(unexpanded_kaede_dir, "env")
-    with open(os.path.expandvars(unexpanded_env_script_path), "w+") as f:
+    env_script_path = os.path.join(unexpanded_kaede_dir, "env")
+    with open(os.path.expandvars(env_script_path), "w+") as f:
         f.writelines(["#!/bin/sh\n", "\n", 'export PATH="%s:$PATH"\n' %
                      unexpanded_kaede_bin_dir])
-    with open(os.path.expanduser("~/.profile"), "a+") as f:
-        f.write('. "%s"' % unexpanded_env_script_path + "\n")
+
+    shell_init_file = shell_initianlize_file()
+
+    if shell_init_file is None:
+        print("This script is not compatible with your shell!")
+        print("Please add the following to your shell init file:")
+        print('. "%s"' % env_script_path)
+    else:
+        with open(os.path.expanduser(shell_init_file), "a+") as f:
+            f.write('. "%s"' % env_script_path + "\n")
+        print("Please enter the following command:")
+        print("source %s" % shell_init_file)
 
 
 if __name__ == '__main__':
@@ -51,6 +88,3 @@ if __name__ == '__main__':
     install()
 
     create_shell_script_for_setting_env()
-
-    print("Please enter the following commands:")
-    print("source ~/.profile")
