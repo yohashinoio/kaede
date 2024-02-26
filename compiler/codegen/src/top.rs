@@ -90,11 +90,14 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         match node.lang_linkage {
             Some(lang_linkage) => match lang_linkage.syb.as_str() {
                 "C" => {
+                    let is_var_args = node.fn_decl.params.is_var_args;
+
                     self.declare_fn(
                         node.fn_decl.name.as_str(),
                         node.fn_decl.params,
                         node.fn_decl.return_ty.into(),
                         Linkage::External,
+                        is_var_args,
                     )
                     .unwrap();
                 }
@@ -263,6 +266,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         params: Params,
         return_ty: ReturnType,
         linkage: Linkage,
+        is_var_args: bool,
     ) -> anyhow::Result<FnValueParamsPair<'ctx>> {
         let params = params
             .v
@@ -275,6 +279,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
             params.iter().map(|e| e.1.clone()).collect(),
             return_ty,
             Some(linkage),
+            is_var_args,
         )?;
 
         Ok((fn_value, params))
@@ -286,6 +291,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
             node.decl.params,
             node.decl.return_ty.into(),
             Linkage::External,
+            false,
         )?;
 
         let fn_value = fn_value_and_params.0;
@@ -379,6 +385,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                         func.decl.params,
                         func.decl.return_ty.into(),
                         Linkage::External,
+                        false,
                     )?;
                 }
 

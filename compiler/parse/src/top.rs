@@ -189,7 +189,7 @@ impl Parser {
             return Ok(Params {
                 v: params,
                 span: Span::new(span_start, span.finish),
-                is_variadic: false,
+                is_var_args: false,
             });
         }
 
@@ -199,7 +199,7 @@ impl Parser {
                 break Ok(Params {
                     v: params,
                     span: Span::new(span_start, finish),
-                    is_variadic: true,
+                    is_var_args: true,
                 });
             }
 
@@ -210,7 +210,7 @@ impl Parser {
                 break Ok(Params {
                     v: params,
                     span: Span::new(span_start, finish),
-                    is_variadic: false,
+                    is_var_args: false,
                 });
             }
         }

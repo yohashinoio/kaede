@@ -67,7 +67,7 @@ pub struct Param {
 pub struct Params {
     pub v: VecDeque<Param>,
     pub span: Span,
-    pub is_variadic: bool,
+    pub is_var_args: bool,
 }
 
 #[derive(Debug)]

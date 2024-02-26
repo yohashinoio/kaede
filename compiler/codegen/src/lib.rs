@@ -242,6 +242,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         &mut self,
         params: &[Rc<Ty>],
         return_ty: &ReturnType,
+        is_var_args: bool,
     ) -> anyhow::Result<FunctionType<'ctx>> {
         let mut param_types = Vec::new();
         for param in params {
@@ -251,12 +252,12 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         Ok(match return_ty {
             ReturnType::Type(ty) => self
                 .conv_to_llvm_type(ty)?
-                .fn_type(param_types.as_slice(), false),
+                .fn_type(param_types.as_slice(), is_var_args),
 
             ReturnType::Void => self
                 .context()
                 .void_type()
-                .fn_type(param_types.as_slice(), false),
+                .fn_type(param_types.as_slice(), is_var_args),
         })
     }
 
@@ -266,8 +267,9 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         param_types: Vec<Rc<Ty>>,
         return_type: ReturnType,
         linkage: Option<Linkage>,
+        is_var_args: bool,
     ) -> anyhow::Result<FunctionValue<'ctx>> {
-        let fn_type = self.create_fn_type(&param_types, &return_type)?;
+        let fn_type = self.create_fn_type(&param_types, &return_type, is_var_args)?;
 
         let fn_value = self.module.add_function(name, fn_type, linkage);
 
@@ -310,8 +312,14 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         }
         .into()];
 
-        self.declare_fn("GC_malloc", param_types, ReturnType::Type(return_ty), None)
-            .map(|_| ())
+        self.declare_fn(
+            "GC_malloc",
+            param_types,
+            ReturnType::Type(return_ty),
+            None,
+            false,
+        )
+        .map(|_| ())
     }
 
     fn gc_malloc(&mut self, ty: BasicTypeEnum<'ctx>) -> anyhow::Result<PointerValue<'ctx>> {
