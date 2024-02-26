@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+import sys
 import library
 import subprocess
 import shutil
@@ -58,8 +59,15 @@ def install():
 def create_shell_script_for_setting_env():
     env_script_path = os.path.join(unexpanded_kaede_dir, "env")
     with open(os.path.expandvars(env_script_path), "w+") as f:
-        f.writelines(["#!/bin/sh\n", "\n", 'export PATH="%s:$PATH"\n' %
-                     unexpanded_kaede_bin_dir])
+        f.writelines(["#!/bin/sh\n",
+                      "\n",
+                      'export PATH="%s:$PATH"\n' % unexpanded_kaede_bin_dir,
+                      "\n",
+                      'export LD_LIBRARY_PATH="%s:$LD_LIBRARY_PATH"\n'
+                      % os.path.join(unexpanded_kaede_dir, "third_party", "bdwgc", "lib")])
+
+    if "--no-setenv" in sys.argv:
+        return
 
     shell_init_file = shell_initianlize_file()
 
