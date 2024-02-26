@@ -75,6 +75,7 @@ impl Parser {
 
         Ok(match type_ident.as_str() {
             "i32" => make_fundamental_type(I32, Mutability::Not),
+            "i8" => make_fundamental_type(I8, Mutability::Not),
             "bool" => make_fundamental_type(Bool, Mutability::Not),
             "str" => Ty {
                 kind: TyKind::Str.into(),
