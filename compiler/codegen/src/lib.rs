@@ -442,7 +442,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
                 .into(),
 
             TyKind::Pointer(pointee_ty) => self
-                .conv_to_llvm_type(&pointee_ty)?
+                .conv_to_llvm_type(pointee_ty)?
                 .ptr_type(AddressSpace::default())
                 .into(),
 
