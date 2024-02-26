@@ -2,7 +2,8 @@ use std::{fs, rc::Rc};
 
 use inkwell::{module::Linkage, types::StructType, values::FunctionValue};
 use kaede_ast::top::{
-    Enum, EnumVariant, Fn, Impl, Import, Param, Params, Struct, StructField, TopLevel, TopLevelKind,
+    Enum, EnumVariant, Extern, Fn, Impl, Import, Param, Params, Struct, StructField, TopLevel,
+    TopLevelKind,
 };
 use kaede_parse::Parser;
 use kaede_symbol::{Ident, Symbol};
@@ -76,7 +77,41 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
             TopLevelKind::Impl(node) => self.impl_(node)?,
 
             TopLevelKind::Enum(node) => self.enum_(node),
+
+            TopLevelKind::Extern(node) => self.extern_(node)?,
         }
+
+        Ok(())
+    }
+
+    fn extern_(&mut self, node: Extern) -> anyhow::Result<()> {
+        if node.fn_decl.self_.is_some() {
+            todo!("error")
+        }
+
+        match node.lang_linkage {
+            Some(lang_linkage) => match lang_linkage.syb.as_str() {
+                "C" => {
+                    self.declare_fn(
+                        node.fn_decl.name.as_str(),
+                        node.fn_decl.params,
+                        node.fn_decl.return_ty.into(),
+                        Linkage::External,
+                    )
+                    .unwrap();
+                }
+
+                _ => {
+                    return Err(CodegenError::UnsupportedLanguageLinkage {
+                        span: lang_linkage.span,
+                        lang_linkage: lang_linkage.syb,
+                    }
+                    .into());
+                }
+            },
+
+            _ => unimplemented!(),
+        };
 
         Ok(())
     }
@@ -180,13 +215,13 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
     }
 
     fn function(&mut self, node: Fn) -> anyhow::Result<()> {
-        assert_eq!(node.self_, None);
+        assert_eq!(node.decl.self_, None);
 
         // Suppress mangling of main function
-        if node.name.as_str() == "main" {
+        if node.decl.name.as_str() == "main" {
             self.build_fn("kdmain", node)
         } else {
-            let mangled_name = mangle_name(self.cucx, node.name.symbol());
+            let mangled_name = mangle_name(self.cucx, node.decl.name.symbol());
             self.build_fn(&mangled_name, node)
         }
     }
@@ -201,13 +236,16 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
             _ => impl_for_ty.kind.to_string(),
         };
 
-        let mangled_name =
-            mangle_method(self.cucx, Symbol::from(impl_for_ty_s), node.name.symbol());
+        let mangled_name = mangle_method(
+            self.cucx,
+            Symbol::from(impl_for_ty_s),
+            node.decl.name.symbol(),
+        );
 
-        match node.self_ {
+        match node.decl.self_ {
             Some(mutability) => {
                 // Method
-                push_self_to_front(&mut node.params, impl_for_ty, mutability);
+                push_self_to_front(&mut node.decl.params, impl_for_ty, mutability);
                 self.build_fn(&mangled_name, node)?;
             }
 
@@ -247,8 +285,8 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
     fn build_fn(&mut self, mangled_name: &str, node: Fn) -> anyhow::Result<()> {
         let fn_value_and_params = self.declare_fn(
             mangled_name,
-            node.params,
-            node.return_ty.into(),
+            node.decl.params,
+            node.decl.return_ty.into(),
             Linkage::External,
         )?;
 
@@ -338,10 +376,10 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                     self.declare_fn(
                         &mangle_external_name(
                             import_module_name.to_owned().into(),
-                            func.name.symbol(),
+                            func.decl.name.symbol(),
                         ),
-                        func.params,
-                        func.return_ty.into(),
+                        func.decl.params,
+                        func.decl.return_ty.into(),
                         Linkage::External,
                     )?;
                 }
@@ -353,6 +391,8 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                 TopLevelKind::Impl(_) => todo!(),
 
                 TopLevelKind::Enum(_) => todo!(),
+
+                TopLevelKind::Extern(_) => todo!(),
             }
         }
 

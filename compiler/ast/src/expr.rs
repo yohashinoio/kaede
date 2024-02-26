@@ -2,10 +2,16 @@ use std::{collections::VecDeque, rc::Rc, slice::Iter};
 
 use inkwell::{context::Context, values::IntValue};
 use kaede_span::Span;
-use kaede_symbol::Ident;
+use kaede_symbol::{Ident, Symbol};
 use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability, Ty, UserDefinedType};
 
 use crate::stmt::Block;
+
+#[derive(Debug)]
+pub struct StringLiteral {
+    pub syb: Symbol,
+    pub span: Span,
+}
 
 #[derive(Debug)]
 pub struct StructLiteral {
@@ -228,7 +234,7 @@ pub struct Expr {
 #[derive(Debug)]
 pub enum ExprKind {
     Int(Int),
-    StringLiteral(String),
+    StringLiteral(StringLiteral),
     Binary(Binary),
     Ident(Ident),
     FnCall(FnCall),

@@ -2,7 +2,8 @@ use std::{collections::VecDeque, rc::Rc};
 
 use kaede_ast::expr::{
     Args, ArrayLiteral, Binary, BinaryKind, Break, Else, Expr, ExprKind, FnCall, If, Indexing, Int,
-    IntKind, LogicalNot, Loop, Match, MatchArm, MatchArmList, Return, StructLiteral, TupleLiteral,
+    IntKind, LogicalNot, Loop, Match, MatchArm, MatchArmList, Return, StringLiteral, StructLiteral,
+    TupleLiteral,
 };
 use kaede_lex::token::TokenKind;
 use kaede_span::{Location, Span};
@@ -551,15 +552,22 @@ impl Parser {
     }
 
     fn string_literal(&mut self) -> Option<Expr> {
+        self.string_literal_internal().map(|s| Expr {
+            span: s.span,
+            kind: ExprKind::StringLiteral(s),
+        })
+    }
+
+    pub fn string_literal_internal(&mut self) -> Option<StringLiteral> {
         if matches!(self.first().kind, TokenKind::StringLiteral(_)) {
             let token = self.bump().unwrap();
 
-            Some(Expr {
-                span: token.span,
-                kind: ExprKind::StringLiteral(match token.kind {
-                    TokenKind::StringLiteral(s) => s,
+            Some(StringLiteral {
+                syb: match token.kind {
+                    TokenKind::StringLiteral(s) => s.into(),
                     _ => unreachable!(),
-                }),
+                },
+                span: token.span,
             })
         } else {
             None

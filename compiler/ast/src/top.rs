@@ -4,7 +4,7 @@ use kaede_span::Span;
 use kaede_symbol::Ident;
 use kaede_type::{Mutability, Ty};
 
-use crate::stmt::Block;
+use crate::{expr::StringLiteral, stmt::Block};
 
 /// Accessibility
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Copy)]
@@ -67,13 +67,19 @@ pub struct Param {
 pub struct Params(pub VecDeque<Param>, pub Span);
 
 #[derive(Debug)]
-pub struct Fn {
+pub struct FnDecl {
     pub self_: Option<Mutability>,
     pub name: Ident,
     pub generic_params: Option<GenericParams>,
     pub params: Params,
-    pub body: Block,
     pub return_ty: Option<Ty>,
+    pub span: Span,
+}
+
+#[derive(Debug)]
+pub struct Fn {
+    pub decl: FnDecl,
+    pub body: Block,
     pub span: Span,
 }
 
@@ -106,6 +112,13 @@ pub struct Enum {
 }
 
 #[derive(Debug)]
+pub struct Extern {
+    pub lang_linkage: Option<StringLiteral>,
+    pub fn_decl: FnDecl,
+    pub span: Span,
+}
+
+#[derive(Debug)]
 pub struct TopLevel {
     pub kind: TopLevelKind,
     pub vis: Visibility,
@@ -119,4 +132,5 @@ pub enum TopLevelKind {
     Import(Import),
     Impl(Impl),
     Enum(Enum),
+    Extern(Extern),
 }

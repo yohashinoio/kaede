@@ -212,7 +212,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                 Rc::new(int.get_type()),
             ),
 
-            ExprKind::StringLiteral(s) => self.string_literal(s),
+            ExprKind::StringLiteral(s) => self.string_literal(s.syb.as_str()),
 
             ExprKind::StructLiteral(node) => self.struct_literal(node)?,
 
@@ -1846,7 +1846,11 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         args: VecDeque<(Value<'ctx>, Span)>,
         span: Span,
     ) -> anyhow::Result<Value<'ctx>> {
-        let func = self.cucx.module.get_function(&mangle_name(self.cucx, name));
+        let func = self
+            .cucx
+            .module
+            .get_function(&mangle_name(self.cucx, name))
+            .or_else(|| self.cucx.module.get_function(name.as_str())); // No mangled function (like C standard library functions
 
         let func = match func {
             Some(func) => func,

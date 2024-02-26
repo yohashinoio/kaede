@@ -1,8 +1,8 @@
 use std::{collections::VecDeque, rc::Rc};
 
 use kaede_ast::top::{
-    Enum, EnumVariant, Fn, GenericParams, Impl, Import, Param, Params, Struct, StructField,
-    TopLevel, TopLevelKind, Visibility,
+    Enum, EnumVariant, Extern, Fn, FnDecl, GenericParams, Impl, Import, Param, Params, Struct,
+    StructField, TopLevel, TopLevelKind, Visibility,
 };
 use kaede_lex::token::TokenKind;
 use kaede_span::Span;
@@ -41,12 +41,31 @@ impl Parser {
                 (kind.span, TopLevelKind::Enum(kind))
             }
 
+            TokenKind::Extern => {
+                let kind = self.extern_()?;
+                (kind.span, TopLevelKind::Extern(kind))
+            }
+
             _ => unreachable!("{:?}", token.kind),
         };
 
         self.consume_semi()?;
 
         Ok(TopLevel { kind, vis, span })
+    }
+
+    fn extern_(&mut self) -> ParseResult<Extern> {
+        let start = self.consume(&TokenKind::Extern).unwrap().start;
+
+        let lang_linkage = self.string_literal_internal();
+
+        let fn_decl = self.fn_decl()?;
+
+        Ok(Extern {
+            span: Span::new(start, fn_decl.span.finish),
+            lang_linkage,
+            fn_decl,
+        })
     }
 
     fn generic_params(&mut self) -> ParseResult<GenericParams> {
@@ -102,7 +121,7 @@ impl Parser {
         Ok(Import { module_path, span })
     }
 
-    fn function(&mut self) -> ParseResult<Fn> {
+    fn fn_decl(&mut self) -> ParseResult<FnDecl> {
         let start = self.consume(&TokenKind::Fn).unwrap().start;
 
         let name = self.ident()?;
@@ -141,25 +160,30 @@ impl Parser {
 
         let params = Params(params, Span::new(params_start, params_finish));
 
-        let return_ty = if self.consume_b(&TokenKind::Colon) {
-            Some(self.ty()?)
+        let (return_ty, finish) = if let Ok(span) = self.consume(&TokenKind::Colon) {
+            (Some(self.ty()?), span.finish)
         } else {
-            None
+            (None, params_finish)
         };
 
-        let body = self.block()?;
-
-        let span = Span::new(start, body.span.finish);
-
-        Ok(Fn {
+        Ok(FnDecl {
             self_: if has_self { Some(mutability) } else { None },
             name,
             generic_params,
             params,
-            body,
             return_ty,
-            span,
+            span: Span::new(start, finish),
         })
+    }
+
+    fn function(&mut self) -> ParseResult<Fn> {
+        let decl = self.fn_decl()?;
+
+        let body = self.block()?;
+
+        let span = Span::new(decl.span.start, body.span.finish);
+
+        Ok(Fn { decl, body, span })
     }
 
     fn fn_params(&mut self) -> ParseResult<VecDeque<Param>> {

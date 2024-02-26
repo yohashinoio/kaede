@@ -2196,7 +2196,7 @@ fn match_unpack_unit_variant() {
 
 #[test]
 fn c_ffi() -> anyhow::Result<()> {
-    let program = r#"extern "C" abs(n: i32): i32
+    let program = r#"extern "C" fn abs(n: i32): i32
 
     fn main(): i32 {
         return abs(-48) + abs(10)
@@ -2209,7 +2209,7 @@ fn c_ffi() -> anyhow::Result<()> {
 
 #[test]
 fn c_ffi_with_ptr_and_vararg() -> anyhow::Result<()> {
-    let program = r#"extern "C" printf(format: *i8, ...): i32
+    let program = r#"extern "C" fn printf(format: *i8, ...): i32
 
     fn main(): i32 {
         let n = printf("%s%d\n".as_ptr(), "hello, ".as_ptr(), 58)

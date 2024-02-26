@@ -78,6 +78,9 @@ pub enum CodegenError {
         span: Span,
     },
 
+    #[error("{}:{} unsupported language linkage `{}`", span.start.line, span.start.column, lang_linkage)]
+    UnsupportedLanguageLinkage { lang_linkage: Symbol, span: Span },
+
     #[error("`main` function not found")]
     MainNotFound,
 
