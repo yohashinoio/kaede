@@ -46,11 +46,9 @@ pub fn build_top_level(cucx: &mut CompileUnitCtx, node: TopLevel) -> anyhow::Res
     Ok(())
 }
 
-pub fn push_self_to_front(v: &mut Params, impl_for_ty: Rc<Ty>, mutability: Mutability) {
-    let span = v.1;
-
-    v.0.push_front(Param {
-        name: Ident::new("self".to_string().into(), span),
+pub fn push_self_to_front(params: &mut Params, impl_for_ty: Rc<Ty>, mutability: Mutability) {
+    params.v.push_front(Param {
+        name: Ident::new("self".to_string().into(), params.span),
         mutability,
         ty: impl_for_ty,
     });
@@ -267,7 +265,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         linkage: Linkage,
     ) -> anyhow::Result<FnValueParamsPair<'ctx>> {
         let params = params
-            .0
+            .v
             .into_iter()
             .map(|e| (e.name, change_mutability_dup(e.ty, e.mutability)))
             .collect::<Vec<_>>();

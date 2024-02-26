@@ -35,6 +35,10 @@ pub enum TokenKind {
     DoubleColon,
     /// "."
     Dot,
+    /// ".."
+    DotDot,
+    /// "..."
+    DotDotDot,
     /// "->"
     Arrow,
 
@@ -139,6 +143,8 @@ impl std::fmt::Display for TokenKind {
             Colon => write!(f, "':'"),
             DoubleColon => write!(f, "'::'"),
             Dot => write!(f, "'.'"),
+            DotDot => write!(f, "'..'"),
+            DotDotDot => write!(f, "'...'"),
             Arrow => write!(f, "'->'"),
 
             Plus => write!(f, "'+'"),

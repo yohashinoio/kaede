@@ -433,6 +433,11 @@ impl<'ctx> CompileUnitCtx<'ctx> {
                 .ptr_type(AddressSpace::default())
                 .into(),
 
+            TyKind::Pointer(pointee_ty) => self
+                .conv_to_llvm_type(&pointee_ty)?
+                .ptr_type(AddressSpace::default())
+                .into(),
+
             TyKind::Array((elem_ty, size)) => {
                 self.conv_to_llvm_type(elem_ty)?.array_type(*size).into()
             }

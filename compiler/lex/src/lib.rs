@@ -172,7 +172,22 @@ impl Cursor<'_> {
             ']' => self.create_token(TokenKind::CloseBracket),
             ',' => self.create_token(TokenKind::Comma),
             ';' => self.create_token(TokenKind::Semi),
-            '.' => self.create_token(TokenKind::Dot),
+            '.' => {
+                if self.first() == '.' {
+                    self.bump().unwrap();
+                    if self.first() == '.' {
+                        // ...
+                        self.bump().unwrap();
+                        self.create_token(TokenKind::DotDotDot)
+                    } else {
+                        // ..
+                        self.create_token(TokenKind::DotDot)
+                    }
+                } else {
+                    // .
+                    self.create_token(TokenKind::Dot)
+                }
+            }
             ':' => {
                 if self.first() == ':' {
                     // ::

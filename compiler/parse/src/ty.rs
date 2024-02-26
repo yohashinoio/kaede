@@ -47,6 +47,11 @@ impl Parser {
     pub fn ty(&mut self) -> ParseResult<Ty> {
         use FundamentalTypeKind::*;
 
+        if self.check(&TokenKind::Asterisk) {
+            // Pointer type
+            return self.pointer_ty();
+        }
+
         if self.check(&TokenKind::OpenBracket) {
             // Array type
             return self.array_ty();
@@ -90,6 +95,21 @@ impl Parser {
                     mutability: Mutability::Not,
                 })
             }
+        })
+    }
+
+    fn pointer_ty(&mut self) -> ParseResult<Ty> {
+        // *i32
+        // ^
+        self.consume(&TokenKind::Asterisk)?;
+
+        // *i32
+        //  ^~~
+        let ty = self.ty()?;
+
+        Ok(Ty {
+            kind: TyKind::Pointer(Rc::new(ty)).into(),
+            mutability: Mutability::Not,
         })
     }
 

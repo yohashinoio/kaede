@@ -64,7 +64,11 @@ pub struct Param {
 
 /// Deque because sometimes it is necessary to insert self (C++ style: this) at the front
 #[derive(Debug)]
-pub struct Params(pub VecDeque<Param>, pub Span);
+pub struct Params {
+    pub v: VecDeque<Param>,
+    pub span: Span,
+    pub is_variadic: bool,
+}
 
 #[derive(Debug)]
 pub struct FnDecl {

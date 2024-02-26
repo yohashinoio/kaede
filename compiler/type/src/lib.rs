@@ -123,6 +123,8 @@ pub enum TyKind {
 
     Reference(RefrenceType),
 
+    Pointer(Rc<Ty> /* Pointee type */),
+
     Array((Rc<Ty> /* Element type */, u32 /* Size */)),
 
     Tuple(Vec<Rc<Ty>> /* Element types */),
@@ -145,6 +147,8 @@ impl std::fmt::Display for TyKind {
             Self::UserDefined(udt) => write!(f, "{}", udt.name.symbol().as_str()),
 
             Self::Reference(refee) => write!(f, "&{}", refee.refee_ty.kind),
+
+            Self::Pointer(pointee) => write!(f, "*{}", pointee.kind),
 
             Self::Array((elem_ty, size)) => write!(f, "[{}; {}]", elem_ty.kind, size),
 
@@ -174,6 +178,7 @@ impl TyKind {
             Self::UserDefined(_) => todo!(),
             Self::Reference(ty) => ty.refee_ty.kind.is_signed(),
 
+            Self::Pointer(_) => panic!("Cannot get sign information of pointer type!"),
             Self::Array(_) => panic!("Cannot get sign information of array type!"),
             Self::Tuple(_) => panic!("Cannot get sign information of tuple type!"),
             Self::Str => panic!("Cannot get sign information of str type!"),
@@ -191,6 +196,7 @@ impl TyKind {
 
             Self::Array(_)
             | Self::Tuple(_)
+            | Self::Pointer(_)
             | Self::Str
             | Self::Unit
             | Self::Never

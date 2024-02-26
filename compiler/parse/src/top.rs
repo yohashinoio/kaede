@@ -5,7 +5,7 @@ use kaede_ast::top::{
     StructField, TopLevel, TopLevelKind, Visibility,
 };
 use kaede_lex::token::TokenKind;
-use kaede_span::Span;
+use kaede_span::{Location, Span};
 
 use crate::{error::ParseResult, Parser};
 
@@ -149,21 +149,17 @@ impl Parser {
         };
 
         let params = {
-            let mut params = self.fn_params()?;
+            let mut params = self.fn_params(params_start)?;
             if let Some(first_param) = first_param {
-                params.push_front(first_param);
+                params.v.push_front(first_param);
             }
             params
         };
 
-        let params_finish = self.consume(&TokenKind::CloseParen)?.finish;
-
-        let params = Params(params, Span::new(params_start, params_finish));
-
         let (return_ty, finish) = if let Ok(span) = self.consume(&TokenKind::Colon) {
             (Some(self.ty()?), span.finish)
         } else {
-            (None, params_finish)
+            (None, params.span.finish)
         };
 
         Ok(FnDecl {
@@ -186,22 +182,38 @@ impl Parser {
         Ok(Fn { decl, body, span })
     }
 
-    fn fn_params(&mut self) -> ParseResult<VecDeque<Param>> {
+    fn fn_params(&mut self, span_start: Location) -> ParseResult<Params> {
         let mut params = VecDeque::new();
 
-        if self.check(&TokenKind::CloseParen) {
-            return Ok(params);
+        if let Ok(span) = self.consume(&TokenKind::CloseParen) {
+            return Ok(Params {
+                v: params,
+                span: Span::new(span_start, span.finish),
+                is_variadic: false,
+            });
         }
 
         loop {
+            if self.var_arg().is_some() {
+                let finish = self.consume(&TokenKind::CloseParen)?.finish;
+                break Ok(Params {
+                    v: params,
+                    span: Span::new(span_start, finish),
+                    is_variadic: true,
+                });
+            }
+
             params.push_back(self.fn_param()?);
 
             if !self.consume_b(&TokenKind::Comma) {
-                break;
+                let finish = self.consume(&TokenKind::CloseParen)?.finish;
+                break Ok(Params {
+                    v: params,
+                    span: Span::new(span_start, finish),
+                    is_variadic: false,
+                });
             }
         }
-
-        Ok(params)
     }
 
     fn fn_param(&mut self) -> ParseResult<Param> {
@@ -218,6 +230,14 @@ impl Parser {
             mutability,
             ty,
         })
+    }
+
+    fn var_arg(&mut self) -> Option<()> {
+        if self.consume_b(&TokenKind::DotDotDot) {
+            Some(())
+        } else {
+            None
+        }
     }
 
     fn enum_(&mut self) -> ParseResult<Enum> {
