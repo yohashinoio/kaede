@@ -13,7 +13,7 @@ kaede_bin_dir = os.path.expandvars(unexpanded_kaede_bin_dir)
 
 
 def shell_initianlize_file():
-    shell = os.environ["SHELL"]
+    shell = os.environ.get("SHELL")
 
     if shell == "/bin/bash":
         profile = "~/.bash_profile"
