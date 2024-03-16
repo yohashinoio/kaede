@@ -142,7 +142,7 @@ pub fn build_tuple_indexing<'ctx>(
 
     let elem_ty = match tuple_ty.kind.as_ref() {
         TyKind::Tuple(types) => match types.get(index as usize) {
-            Some(ty) => ty,
+            Some(ty) => ty.clone(),
 
             None => {
                 return Err(CodegenError::IndexOutOfRange {
@@ -152,10 +152,35 @@ pub fn build_tuple_indexing<'ctx>(
                 .into())
             }
         },
+
+        // (*i8, u64)
+        TyKind::Str => match index {
+            0 => Rc::new(Ty {
+                kind: TyKind::Pointer(
+                    make_fundamental_type(FundamentalTypeKind::I8, Mutability::Not).into(),
+                )
+                .into(),
+                mutability: Mutability::Not,
+            }),
+
+            1 => Rc::new(make_fundamental_type(
+                FundamentalTypeKind::U64,
+                Mutability::Not,
+            )),
+
+            _ => {
+                return Err(CodegenError::IndexOutOfRange {
+                    index: index as u64,
+                    span,
+                }
+                .into())
+            }
+        },
+
         kind => unreachable!("{:?}", kind),
     };
 
-    let llvm_elem_ty = cucx.conv_to_llvm_type(elem_ty)?;
+    let llvm_elem_ty = cucx.conv_to_llvm_type(&elem_ty)?;
 
     Ok(Value::new(
         cucx.builder.build_load(llvm_elem_ty, gep, ""),
@@ -212,7 +237,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                 Rc::new(int.get_type()),
             ),
 
-            ExprKind::StringLiteral(s) => self.string_literal(s.syb.as_str()),
+            ExprKind::StringLiteral(s) => self.string_literal(s.syb.as_str())?,
 
             ExprKind::StructLiteral(node) => self.struct_literal(node)?,
 
@@ -243,6 +268,8 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             ExprKind::If(node) => self.if_(node)?,
 
             ExprKind::Match(node) => self.match_(node)?,
+
+            ExprKind::Ty(_) => Value::new_unit(), /* Do nothing! */
         })
     }
 
@@ -1184,30 +1211,33 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         )
     }
 
-    fn string_literal(&self, s: &str) -> Value<'ctx> {
+    fn string_literal(&mut self, s: &str) -> anyhow::Result<Value<'ctx>> {
         let global_s = self.cucx.builder.build_global_string_ptr(s, "str");
 
-        Value::new(
-            self.cucx
-                .context()
-                .const_struct(
-                    &[
-                        global_s.as_basic_value_enum(),
-                        self.cucx
-                            .context()
-                            .i64_type()
-                            .const_int(s.len() as u64, false)
-                            .into(),
-                    ],
-                    true,
-                )
-                .into(),
-            Ty {
-                kind: TyKind::Str.into(),
-                mutability: Mutability::Not,
-            }
-            .into(),
-        )
+        let str_ty = Rc::new(Ty {
+            kind: TyKind::Str.into(),
+            mutability: Mutability::Not,
+        });
+
+        let str_llvm_ty = self.cucx.conv_to_llvm_type(&str_ty).unwrap();
+
+        let p = create_gc_struct(
+            self.cucx,
+            str_llvm_ty,
+            &[
+                global_s.as_basic_value_enum(),
+                self.cucx
+                    .context()
+                    .i64_type()
+                    .const_int(s.len() as u64, false)
+                    .into(),
+            ],
+        )?;
+
+        Ok(Value::new(
+            p.into(),
+            wrap_in_ref(str_ty, Mutability::Not).into(),
+        ))
     }
 
     fn ident_expr(&mut self, ident: &Ident) -> anyhow::Result<Value<'ctx>> {
@@ -1229,8 +1259,79 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
             ScopeResolution => self.scope_resolution(node),
 
+            Cast => self.cast(node),
+
             _ => self.binary_arithmetic_op(node),
         }
+    }
+
+    fn cast(&mut self, node: &Binary) -> anyhow::Result<Value<'ctx>> {
+        assert!(matches!(node.kind, BinaryKind::Cast));
+
+        let cast_ty = match &node.rhs.kind {
+            ExprKind::Ty(ty) => ty,
+            _ => todo!("Error"),
+        };
+
+        let value = build_expression(self.cucx, &node.lhs)?;
+
+        if value.get_type().kind.is_int_or_bool() && cast_ty.kind.is_int_or_bool() {
+            self.build_int_cast(value, cast_ty.clone())
+        } else if matches!(
+            value.get_type().kind.as_ref(),
+            TyKind::Reference(_) | TyKind::Pointer(_)
+        ) && matches!(
+            cast_ty.kind.as_ref(),
+            TyKind::Reference(_) | TyKind::Pointer(_)
+        ) {
+            self.build_ptr_cast(value, cast_ty.clone())
+        } else {
+            todo!("Error");
+        }
+    }
+
+    fn build_int_cast(
+        &mut self,
+        value: Value<'ctx>,
+        cast_ty: Rc<Ty>,
+    ) -> anyhow::Result<Value<'ctx>> {
+        assert!(value.get_type().kind.is_int_or_bool());
+        assert!(cast_ty.kind.is_int_or_bool());
+
+        let cast_llvm_ty = self.cucx.conv_to_llvm_type(&cast_ty)?;
+
+        Ok(Value::new(
+            self.cucx
+                .builder
+                .build_int_cast_sign_flag(
+                    value.get_value().into_int_value(),
+                    cast_llvm_ty.into_int_type(),
+                    cast_ty.kind.is_signed(),
+                    "",
+                )
+                .as_basic_value_enum(),
+            cast_ty,
+        ))
+    }
+
+    fn build_ptr_cast(
+        &mut self,
+        value: Value<'ctx>,
+        cast_ty: Rc<Ty>,
+    ) -> anyhow::Result<Value<'ctx>> {
+        let cast_llvm_ty = self.cucx.conv_to_llvm_type(&cast_ty)?;
+
+        Ok(Value::new(
+            self.cucx
+                .builder
+                .build_pointer_cast(
+                    value.get_value().into_pointer_value(),
+                    cast_llvm_ty.into_pointer_type(),
+                    "",
+                )
+                .as_basic_value_enum(),
+            cast_ty,
+        ))
     }
 
     fn scope_resolution(&mut self, node: &Binary) -> anyhow::Result<Value<'ctx>> {
@@ -1586,6 +1687,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
             Access => unreachable!(),
             ScopeResolution => unreachable!(),
+            Cast => unreachable!(),
         })
     }
 
@@ -1614,9 +1716,9 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             // ---  Struct access or tuple indexing ---
             if matches!(
                 rty.get_base_type_of_reference().kind.as_ref(),
-                TyKind::UserDefined(_) | TyKind::Tuple(_)
+                TyKind::UserDefined(_) | TyKind::Tuple(_) | TyKind::Str
             ) {
-                return self.struct_access_or_tuple_indexing(&left, node.lhs.span, &node.rhs);
+                self.struct_access_or_tuple_indexing(&left, node.lhs.span, &node.rhs)
             } else {
                 Err(CodegenError::HasNoFields {
                     span: node.lhs.span,
@@ -1693,7 +1795,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         match refee_ty.kind.as_ref() {
             TyKind::UserDefined(_) => self.struct_access(left, right, refee_ty),
 
-            TyKind::Tuple(_) => self.tuple_indexing(left, right, refee_ty),
+            TyKind::Tuple(_) | TyKind::Str => self.tuple_indexing(left, right, refee_ty),
 
             _ => Err(CodegenError::HasNoFields { span: left_span }.into()),
         }
@@ -1860,7 +1962,11 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
         let function_info = self.cucx.tcx.get_function_info(func).unwrap();
 
-        self.verify_args(&args, &function_info.param_types)?;
+        if func.get_type().is_var_arg() {
+            self.verify_var_args(&args, &function_info.param_types)?;
+        } else {
+            self.verify_args(&args, &function_info.param_types)?;
+        }
 
         let return_value = self
             .cucx
@@ -1891,29 +1997,42 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         })
     }
 
+    fn verify_var_args(
+        &self,
+        args: &VecDeque<(Value<'ctx>, Span)>,
+        params: &[Rc<Ty>],
+    ) -> anyhow::Result<()> {
+        for (idx, param) in params.iter().enumerate() {
+            self.verify_arg(&args[idx], param)?;
+        }
+
+        Ok(())
+    }
+
     fn verify_args(
         &self,
         args: &VecDeque<(Value<'ctx>, Span)>,
         params: &[Rc<Ty>],
     ) -> anyhow::Result<()> {
         for (idx, arg) in args.iter().enumerate() {
-            let param = &params[idx];
+            self.verify_arg(arg, &params[idx])?;
+        }
 
-            if !is_same_type(&arg.0.get_type(), param) {
-                return Err(CodegenError::MismatchedTypes {
-                    types: (
-                        arg.0.get_type().kind.to_string(),
-                        params[idx].kind.to_string(),
-                    ),
-                    span: arg.1,
-                }
-                .into());
-            }
+        Ok(())
+    }
 
-            // Check mutability
-            if arg.0.get_type().mutability.is_not() && param.mutability.is_mut() {
-                return Err(CodegenError::CannotAssignImmutableToMutable { span: arg.1 }.into());
+    fn verify_arg(&self, arg: &(Value<'ctx>, Span), param: &Rc<Ty>) -> anyhow::Result<()> {
+        if !is_same_type(&arg.0.get_type(), param) {
+            return Err(CodegenError::MismatchedTypes {
+                types: (arg.0.get_type().kind.to_string(), param.kind.to_string()),
+                span: arg.1,
             }
+            .into());
+        }
+
+        // Check mutability
+        if arg.0.get_type().mutability.is_not() && param.mutability.is_mut() {
+            return Err(CodegenError::CannotAssignImmutableToMutable { span: arg.1 }.into());
         }
 
         Ok(())

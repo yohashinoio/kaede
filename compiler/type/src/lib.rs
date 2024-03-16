@@ -54,6 +54,13 @@ impl Ty {
             mutability,
         }
     }
+
+    pub fn new_str(mutability: Mutability) -> Self {
+        Self {
+            kind: TyKind::Str.into(),
+            mutability,
+        }
+    }
 }
 
 /// Represents whether a value can be changed
@@ -87,8 +94,8 @@ impl Mutability {
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum FundamentalTypeKind {
-    I32,
     I8,
+    I32,
     U64,
     Bool,
 }

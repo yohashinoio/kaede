@@ -92,7 +92,7 @@ impl Parser {
     fn impl_(&mut self) -> ParseResult<Impl> {
         let start = self.consume(&TokenKind::Impl).unwrap().start;
 
-        let ty = self.ty()?;
+        let (ty, _) = self.ty()?;
 
         self.consume(&TokenKind::OpenBrace)?;
 
@@ -157,7 +157,7 @@ impl Parser {
         };
 
         let (return_ty, finish) = if let Ok(span) = self.consume(&TokenKind::Colon) {
-            (Some(self.ty()?), span.finish)
+            (Some(self.ty()?.0), span.finish)
         } else {
             (None, params.span.finish)
         };
@@ -223,12 +223,12 @@ impl Parser {
 
         self.consume(&TokenKind::Colon)?;
 
-        let ty = Rc::new(self.ty()?);
+        let (ty, _) = self.ty()?;
 
         Ok(Param {
             name,
             mutability,
-            ty,
+            ty: Rc::new(ty),
         })
     }
 
@@ -271,7 +271,7 @@ impl Parser {
             let name = self.ident()?;
 
             let ty = if self.consume_b(&TokenKind::OpenParen) {
-                let ty = self.ty()?;
+                let (ty, _) = self.ty()?;
                 self.consume(&TokenKind::CloseParen)?;
                 Some(ty)
             } else {
@@ -336,7 +336,7 @@ impl Parser {
 
             self.consume(&TokenKind::Colon)?;
 
-            let ty = Rc::new(self.ty()?);
+            let (ty, _) = self.ty()?;
 
             if !self.consume_b(&TokenKind::Comma) {
                 break;
@@ -344,7 +344,7 @@ impl Parser {
 
             fields.push(StructField {
                 name,
-                ty,
+                ty: Rc::new(ty),
                 vis: Visibility::Public,
                 offset,
             });

@@ -168,7 +168,7 @@ impl Parser {
 
     fn unary(&mut self) -> ParseResult<Expr> {
         if self.consume_b(&TokenKind::Plus) {
-            return self.access();
+            return self.cast();
         }
 
         if let Ok(span) = self.consume(&TokenKind::Minus) {
@@ -182,7 +182,7 @@ impl Parser {
             }
             .into();
 
-            let e = self.access()?;
+            let e = self.cast()?;
 
             return Ok(Expr {
                 span: Span::new(span.start, e.span.finish),
@@ -192,7 +192,7 @@ impl Parser {
 
         // Logical not
         if let Ok(span) = self.consume(&TokenKind::LogicalNot) {
-            let operand = self.access()?;
+            let operand = self.cast()?;
             let span = Span::new(span.start, operand.span.finish);
 
             return Ok(Expr {
@@ -204,10 +204,30 @@ impl Parser {
             });
         }
 
-        self.access()
+        self.cast()
     }
 
-    /// Field access or module item access or tuple indexing
+    fn cast(&mut self) -> ParseResult<Expr> {
+        let mut node = self.access()?;
+
+        loop {
+            if self.consume_b(&TokenKind::As) {
+                let right = self.access()?;
+                node = Expr {
+                    span: Span::new(node.span.start, right.span.finish),
+                    kind: ExprKind::Binary(Binary::new(
+                        node.into(),
+                        BinaryKind::Cast,
+                        right.into(),
+                    )),
+                };
+            } else {
+                return Ok(node);
+            }
+        }
+    }
+
+    // Field access or module item access or tuple indexing
     fn access(&mut self) -> ParseResult<Expr> {
         let mut node = self.indexing()?;
 
@@ -349,7 +369,7 @@ impl Parser {
             return Ok(node);
         }
 
-        if let Ok(ty) = self.ty() {
+        if let Ok((ty, span)) = self.ty() {
             if let TyKind::Reference(refty) = ty.kind.as_ref() {
                 if let TyKind::UserDefined(udt) = refty.refee_ty.kind.as_ref() {
                     // Function call
@@ -376,6 +396,12 @@ impl Parser {
                     });
                 }
             }
+
+            // Type
+            return Ok(Expr {
+                span,
+                kind: ExprKind::Ty(Rc::new(ty)),
+            });
         }
 
         Err(ParseError::ExpectedError {

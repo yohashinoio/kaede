@@ -122,7 +122,7 @@ impl Parser {
         }
 
         self.consume(&TokenKind::Colon)?;
-        let ty = self.ty()?;
+        let (ty, _) = self.ty()?;
 
         let init = if self.consume_b(&TokenKind::Eq) {
             Some(Rc::new(self.expr()?))

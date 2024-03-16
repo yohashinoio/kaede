@@ -103,6 +103,8 @@ pub enum BinaryKind {
     LogicalAnd,
 
     ScopeResolution,
+
+    Cast,
 }
 
 #[derive(Debug)]
@@ -251,4 +253,5 @@ pub enum ExprKind {
     Break(Break),
     Match(Match),
     Block(Block),
+    Ty(Rc<Ty>),
 }

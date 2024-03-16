@@ -29,7 +29,7 @@ impl Parser {
         let mut types = Vec::new();
 
         loop {
-            types.push(Rc::new(self.ty()?));
+            types.push(Rc::new(self.ty()?.0));
 
             if !self.consume_b(&TokenKind::Comma) {
                 break;
@@ -44,7 +44,7 @@ impl Parser {
         })
     }
 
-    pub fn ty(&mut self) -> ParseResult<Ty> {
+    pub fn ty(&mut self) -> ParseResult<(Ty, Span)> {
         use FundamentalTypeKind::*;
 
         if self.check(&TokenKind::Asterisk) {
@@ -73,45 +73,51 @@ impl Parser {
             }
         };
 
-        Ok(match type_ident.as_str() {
-            "i32" => make_fundamental_type(I32, Mutability::Not),
-            "i8" => make_fundamental_type(I8, Mutability::Not),
-            "bool" => make_fundamental_type(Bool, Mutability::Not),
-            "str" => Ty {
-                kind: TyKind::Str.into(),
-                mutability: Mutability::Not,
-            },
-
-            // User defined type
-            _ => {
-                let generic_args = if self.check(&TokenKind::Lt) {
-                    Some(self.generic_args()?)
-                } else {
-                    None
-                };
-
-                wrap_in_reference(Ty {
-                    kind: TyKind::UserDefined(UserDefinedType::new(type_ident, generic_args))
-                        .into(),
+        Ok((
+            match type_ident.as_str() {
+                "i32" => make_fundamental_type(I32, Mutability::Not),
+                "i8" => make_fundamental_type(I8, Mutability::Not),
+                "bool" => make_fundamental_type(Bool, Mutability::Not),
+                "str" => Ty {
+                    kind: TyKind::Str.into(),
                     mutability: Mutability::Not,
-                })
-            }
-        })
+                },
+
+                // User defined type
+                _ => {
+                    let generic_args = if self.check(&TokenKind::Lt) {
+                        Some(self.generic_args()?)
+                    } else {
+                        None
+                    };
+
+                    wrap_in_reference(Ty {
+                        kind: TyKind::UserDefined(UserDefinedType::new(type_ident, generic_args))
+                            .into(),
+                        mutability: Mutability::Not,
+                    })
+                }
+            },
+            type_ident.span(),
+        ))
     }
 
-    fn pointer_ty(&mut self) -> ParseResult<Ty> {
+    fn pointer_ty(&mut self) -> ParseResult<(Ty, Span)> {
         // *i32
         // ^
-        self.consume(&TokenKind::Asterisk)?;
+        let start = self.consume(&TokenKind::Asterisk)?.start;
 
         // *i32
         //  ^~~
-        let ty = self.ty()?;
+        let (ty, span) = self.ty()?;
 
-        Ok(Ty {
-            kind: TyKind::Pointer(Rc::new(ty)).into(),
-            mutability: Mutability::Not,
-        })
+        Ok((
+            Ty {
+                kind: TyKind::Pointer(Rc::new(ty)).into(),
+                mutability: Mutability::Not,
+            },
+            Span::new(start, span.finish),
+        ))
     }
 
     fn array_size(&mut self) -> ParseResult<u32> {
@@ -131,14 +137,14 @@ impl Parser {
         }
     }
 
-    fn array_ty(&mut self) -> ParseResult<Ty> {
+    fn array_ty(&mut self) -> ParseResult<(Ty, Span)> {
         // [i32; 58]
         // ^
-        self.consume(&TokenKind::OpenBracket)?;
+        let start = self.consume(&TokenKind::OpenBracket)?.start;
 
         // [i32; 58]
         //  ^~~
-        let element_ty = self.ty()?;
+        let (element_ty, _) = self.ty()?;
 
         // [i32; 58]
         //     ^
@@ -150,31 +156,37 @@ impl Parser {
 
         // [i32; 58]
         //         ^
-        self.consume(&TokenKind::CloseBracket)?;
+        let finish = self.consume(&TokenKind::CloseBracket)?.finish;
 
-        Ok(wrap_in_reference(Ty {
-            kind: TyKind::Array((element_ty.into(), size)).into(),
-            mutability: Mutability::Not,
-        }))
+        Ok((
+            wrap_in_reference(Ty {
+                kind: TyKind::Array((element_ty.into(), size)).into(),
+                mutability: Mutability::Not,
+            }),
+            Span::new(start, finish),
+        ))
     }
 
-    fn tuple_ty(&mut self) -> ParseResult<Ty> {
+    fn tuple_ty(&mut self) -> ParseResult<(Ty, Span)> {
         // (i32, bool)
         // ^
-        self.consume(&TokenKind::OpenParen)?;
+        let start = self.consume(&TokenKind::OpenParen)?.start;
 
         // (i32, bool)
         //  ^~~~~~~~~
         let mut field_types = Vec::new();
 
         loop {
-            field_types.push(self.ty()?.into());
+            field_types.push(self.ty()?.0.into());
 
-            if self.consume_b(&TokenKind::CloseParen) {
-                return Ok(wrap_in_reference(Ty {
-                    kind: TyKind::Tuple(field_types).into(),
-                    mutability: Mutability::Not,
-                }));
+            if let Ok(span) = self.consume(&TokenKind::CloseParen) {
+                return Ok((
+                    wrap_in_reference(Ty {
+                        kind: TyKind::Tuple(field_types).into(),
+                        mutability: Mutability::Not,
+                    }),
+                    Span::new(start, span.finish),
+                ));
             }
 
             self.consume(&TokenKind::Comma)?;
