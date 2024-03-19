@@ -323,6 +323,21 @@ impl Cursor<'_> {
         loop {
             let c = self.first();
 
+            // Escape sequence
+            if c == '\\' {
+                self.bump().unwrap();
+                let c = self.bump().unwrap();
+                match c {
+                    'n' => lit.push('\n'),
+                    'r' => lit.push('\r'),
+                    't' => lit.push('\t'),
+                    '\\' => lit.push('\\'),
+                    '"' => lit.push('"'),
+                    _ => unreachable!(),
+                }
+                continue;
+            }
+
             if c == '"' {
                 // The last double quote is also consumed
                 self.bump().unwrap();
