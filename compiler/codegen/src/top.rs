@@ -268,7 +268,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
     }
 
     fn define_buildin_type_method(&mut self, impl_for_ty: Rc<Ty>, node: Fn) -> anyhow::Result<()> {
-        assert!(impl_for_ty.is_user_defined_type() == false);
+        assert!(!impl_for_ty.is_user_defined_type());
 
         let mangled_name = self.mangle_builtin_type_method(&impl_for_ty, &node);
 
@@ -285,12 +285,12 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
             Some(mutability) => {
                 // Method
                 push_self_to_front(&mut node.decl.params, impl_for_ty, mutability);
-                self.build_fn(&mangled_name, node)?;
+                self.build_fn(mangled_name, node)?;
             }
 
             None => {
                 // Static method
-                self.build_fn(&mangled_name, node)?;
+                self.build_fn(mangled_name, node)?;
             }
         }
 
@@ -308,7 +308,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                 // Method
                 push_self_to_front(&mut node.decl.params, impl_for_ty, mutability);
                 self.declare_fn(
-                    &mangled_name,
+                    mangled_name,
                     node.decl.params,
                     node.decl.return_ty.into(),
                     Linkage::External,
@@ -319,7 +319,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
             None => {
                 // Static method
                 self.declare_fn(
-                    &mangled_name,
+                    mangled_name,
                     node.decl.params,
                     node.decl.return_ty.into(),
                     Linkage::External,
