@@ -107,7 +107,7 @@ impl std::fmt::Display for FundamentalTypeKind {
         match self {
             I32 => write!(f, "i32"),
             I8 => write!(f, "i8"),
-            U64 => write!(f, "u32"),
+            U64 => write!(f, "u64"),
 
             Bool => write!(f, "bool"),
         }
