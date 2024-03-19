@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 
+import pathlib
+import shutil
 import subprocess
 import os
+import tempfile
 
 this_dir = os.path.dirname(os.path.abspath(__file__))
 
 
 def install_bdwgc(third_party_dir):
+    print("Installing garbage collector...")
+
     install_dir = os.path.join(third_party_dir, "bdwgc")
 
     bdwgc_dir = os.path.join(this_dir, "bdwgc")
@@ -23,6 +28,8 @@ def install_bdwgc(third_party_dir):
 
     install_bdwgc()
 
+    print("Done!")
+
     return install_dir
 
 
@@ -33,10 +40,29 @@ def create_link_to_bdwgc(bdwgc_install_dir, dst):
     os.symlink(bdwgc_lib_path, dst)
 
 
+def install_standard_library(kaede_lib_dir):
+    print("Installing standard library...")
+
+    # Copy standard library source files
+    kaede_lib_src_dir = os.path.join(kaede_lib_dir, "src")
+    shutil.copytree(os.path.join(this_dir, "src"),
+                    kaede_lib_src_dir)
+
+    # Build standard library
+    libs = []
+    for f in pathlib.Path(kaede_lib_src_dir).glob("**/*.kd"):
+        libs.append(str(f))
+    with tempfile.NamedTemporaryFile() as t:
+        subprocess.run(["cargo", "run", "--release", "--", "--no-autoload",
+                       "-c", "-o", t.name, *libs])
+        subprocess.run(["gcc", "-shared", "-fPIC", "-o",
+                       os.path.join(kaede_lib_dir, "libkd.so"), t.name])
+
+    print("Done!")
+
+
 # Install libraries
 def install(kaede_dir):
-    print("Installing libraries...")
-
     third_party_dir = os.path.join(kaede_dir, "third_party")
     if not os.path.exists(third_party_dir):
         os.mkdir(third_party_dir)
@@ -47,7 +73,7 @@ def install(kaede_dir):
     if not os.path.exists(kaede_lib_dir):
         os.mkdir(kaede_lib_dir)
 
+    install_standard_library(kaede_lib_dir)
+
     kaede_libgc_path = os.path.join(kaede_lib_dir, "libkgc.so")
     create_link_to_bdwgc(bdwgc_install_dir, kaede_libgc_path)
-
-    print("Done!")

@@ -43,6 +43,7 @@ fn exec(program: &str) -> Result<i32, CodegenError> {
         PathBuf::from("test"),
         Parser::new(program).run().unwrap(),
         OptimizationLevel::None,
+        false,
     )
     .map_err(|e| e.downcast::<CodegenError>().unwrap())?;
 

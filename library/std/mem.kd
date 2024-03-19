@@ -1,3 +1,0 @@
-pub fn transmute<Src, Dst>(src: Src) -> Dst {
-    // Compiler magic
-}

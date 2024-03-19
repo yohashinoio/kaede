@@ -14,10 +14,12 @@ use inkwell::{
     AddressSpace, OptimizationLevel,
 };
 use kaede_ast::{
-    top::{StructField, TopLevel},
+    top::{Import, StructField, TopLevel, TopLevelKind, Visibility},
     CompileUnit,
 };
-use kaede_symbol::Symbol;
+use kaede_common::kaede_dir;
+use kaede_span::Span;
+use kaede_symbol::{Ident, Symbol};
 use kaede_type::{
     FundamentalType, FundamentalTypeKind, Mutability, RefrenceType, Ty, TyKind, UserDefinedType,
 };
@@ -108,10 +110,11 @@ pub fn codegen_compile_unit<'ctx>(
     file_path: PathBuf,
     cu: CompileUnit,
     opt_level: OptimizationLevel,
+    no_autoload: bool,
 ) -> anyhow::Result<Module<'ctx>> {
     let cucx = CompileUnitCtx::new(cgcx, file_path)?;
 
-    cucx.codegen(cu.top_levels, opt_level)
+    cucx.codegen(cu.top_levels, opt_level, no_autoload)
 }
 
 /// Do **not** create this struct multiple times!
@@ -484,6 +487,32 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         })
     }
 
+    fn import_autoloads(&mut self) -> anyhow::Result<()> {
+        let autoload_libs = std::fs::read_dir(format!("{}/lib/src/autoload/", kaede_dir()))?
+            .map(|entry| entry.unwrap().path())
+            .filter(|path| path.is_file() && path.extension().is_some_and(|e| e == "kd")) // Exclude non-source files
+            .collect::<Vec<_>>();
+
+        for lib in autoload_libs {
+            build_top_level(
+                self,
+                TopLevel {
+                    kind: TopLevelKind::Import(Import {
+                        module_path: Ident::new(
+                            Symbol::from(lib.to_str().unwrap().to_string()),
+                            Span::dummy(),
+                        ),
+                        span: Span::dummy(),
+                    }),
+                    vis: Visibility::Private,
+                    span: Span::dummy(),
+                },
+            )?;
+        }
+
+        Ok(())
+    }
+
     /// If there was no user-defined main in the module, do nothing
     fn build_main_fn(&mut self) {
         let main_internal = match self.module.get_function("kdmain") {
@@ -511,8 +540,13 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         mut self,
         top_levels: Vec<TopLevel>,
         opt_level: OptimizationLevel,
+        no_autoload: bool,
     ) -> anyhow::Result<Module<'ctx>> {
         self.gc_init()?;
+
+        if !no_autoload {
+            self.import_autoloads()?;
+        }
 
         for top in top_levels {
             build_top_level(&mut self, top)?;

@@ -53,12 +53,19 @@ impl Span {
     pub fn new(start: Location, finish: Location) -> Self {
         Self { start, finish }
     }
+
+    pub fn dummy() -> Self {
+        Self {
+            start: Location::dummy(),
+            finish: Location::dummy(),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Location {
-    pub line: u32,
-    pub column: u32,
+    pub line: i32,
+    pub column: i32,
 }
 
 impl Default for Location {
@@ -68,6 +75,13 @@ impl Default for Location {
 }
 
 impl Location {
+    pub fn dummy() -> Self {
+        Self {
+            line: -1,
+            column: -1,
+        }
+    }
+
     pub fn new() -> Self {
         Self { line: 1, column: 1 }
     }

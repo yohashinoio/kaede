@@ -394,12 +394,17 @@ dependencies = [
  "anyhow",
  "inkwell",
  "kaede_ast",
+ "kaede_common",
  "kaede_parse",
  "kaede_span",
  "kaede_symbol",
  "kaede_type",
  "thiserror",
 ]
+
+[[package]]
+name = "kaede_common"
+version = "0.1.0"
 
 [[package]]
 name = "kaede_compiler_driver"
@@ -413,6 +418,7 @@ dependencies = [
  "inkwell",
  "kaede_ast",
  "kaede_codegen",
+ "kaede_common",
  "kaede_parse",
  "predicates",
  "tempfile",

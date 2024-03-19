@@ -8,5 +8,6 @@ members = [
   "compiler/span",
   "compiler/symbol",
   "compiler/type",
+  "compiler/common",
 ]
 resolver = "2"
