@@ -13,13 +13,21 @@ use kaede_parse::Parser;
 use super::*;
 
 fn jit_compile(module: &Module) -> i32 {
-    const KAEDE_GC_LIB_PATH: &str = concat!(env!("HOME"), "/.kaede/lib/libkgc.so");
+    let kaede_gc_lib_path = format!("{}/lib/libkgc.so", kaede_dir());
+    let kaede_std_lib_path = format!("{}/lib/libkd.so", kaede_dir());
 
     // Load bdw-gc (boehm-gc)
-    if Path::new(KAEDE_GC_LIB_PATH).exists() {
-        load_library_permanently(KAEDE_GC_LIB_PATH);
+    if Path::new(&kaede_gc_lib_path).exists() {
+        load_library_permanently(&kaede_gc_lib_path);
     } else {
-        panic!("{} not found!", KAEDE_GC_LIB_PATH);
+        panic!("{} not found!", kaede_gc_lib_path);
+    }
+
+    // Load standard libarary
+    if Path::new(&kaede_std_lib_path).exists() {
+        load_library_permanently(&kaede_std_lib_path);
+    } else {
+        panic!("{} not found!", kaede_std_lib_path);
     }
 
     let ee = module
@@ -2213,7 +2221,8 @@ fn c_ffi_with_ptr_and_vararg() -> anyhow::Result<()> {
     let program = r#"extern "C" fn printf(format: *i8, ...): i32
 
     fn main(): i32 {
-        let n = printf("%s%d\n".as_ptr(), "hello, ".as_ptr(), 58)
+        let format = "%s%d\n"
+        let n = printf(format.as_ptr(), "hello, ".as_ptr(), 58)
         return 48 + n
     }"#;
 
