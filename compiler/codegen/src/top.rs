@@ -68,7 +68,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         match node.kind {
             TopLevelKind::Import(node) => self.import_(node)?,
 
-            TopLevelKind::Fn(node) => self.function(node)?,
+            TopLevelKind::Fn(node) => self.func(node)?,
 
             TopLevelKind::Struct(node) => self.struct_(node)?,
 
@@ -204,18 +204,28 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
     fn impl_(&mut self, node: Impl) -> anyhow::Result<()> {
         let ty = Rc::new(node.ty);
 
-        for item in node.items {
-            match item.kind {
-                TopLevelKind::Fn(fn_) => self.method(ty.clone(), fn_)?,
-
-                _ => todo!("Error"),
+        if ty.is_user_defined_type() {
+            // User defined types
+            for item in node.items {
+                match item.kind {
+                    TopLevelKind::Fn(fn_) => self.define_method(ty.clone(), fn_)?,
+                    _ => todo!("Error"),
+                }
+            }
+        } else {
+            // Buildin types
+            for item in node.items {
+                match item.kind {
+                    TopLevelKind::Fn(fn_) => self.define_buildin_type_method(ty.clone(), fn_)?,
+                    _ => todo!("Error"),
+                }
             }
         }
 
         Ok(())
     }
 
-    fn function(&mut self, node: Fn) -> anyhow::Result<()> {
+    fn func(&mut self, node: Fn) -> anyhow::Result<()> {
         assert_eq!(node.decl.self_, None);
 
         // Suppress mangling of main function
@@ -227,22 +237,50 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         }
     }
 
-    /// Static method can also be handled by this function
-    ///
-    /// If kind is `Normal`, it becomes a static method (said in C++ style)
-    fn method(&mut self, impl_for_ty: Rc<Ty>, mut node: Fn) -> anyhow::Result<()> {
-        // TODO: Optimization
+    fn mangle_method(&mut self, impl_for_ty: &Ty, node: &Fn) -> String {
         let impl_for_ty_s = match impl_for_ty.kind.as_ref() {
             TyKind::Reference(refty) => refty.refee_ty.kind.to_string(),
             _ => impl_for_ty.kind.to_string(),
         };
 
-        let mangled_name = mangle_method(
+        mangle_method(
             self.cucx,
             Symbol::from(impl_for_ty_s),
             node.decl.name.symbol(),
-        );
+        )
+    }
 
+    fn mangle_builtin_type_method(&mut self, impl_for_ty: &Ty, node: &Fn) -> String {
+        let impl_for_ty_s = match impl_for_ty.kind.as_ref() {
+            TyKind::Reference(refty) => refty.refee_ty.kind.to_string(),
+            _ => impl_for_ty.kind.to_string(),
+        };
+
+        format!("{}.{}", impl_for_ty_s, node.decl.name.symbol().as_str())
+    }
+
+    /// Static method can also be handled by this function
+    ///
+    /// If kind is `Normal`, it becomes a static method (said in C++ style)
+    fn define_method(&mut self, impl_for_ty: Rc<Ty>, node: Fn) -> anyhow::Result<()> {
+        let mangled_name = self.mangle_method(&impl_for_ty, &node);
+        self.define_method_internal(&mangled_name, impl_for_ty, node)
+    }
+
+    fn define_buildin_type_method(&mut self, impl_for_ty: Rc<Ty>, node: Fn) -> anyhow::Result<()> {
+        assert!(impl_for_ty.is_user_defined_type() == false);
+
+        let mangled_name = self.mangle_builtin_type_method(&impl_for_ty, &node);
+
+        self.define_method_internal(&mangled_name, impl_for_ty, node)
+    }
+
+    fn define_method_internal(
+        &mut self,
+        mangled_name: &str,
+        impl_for_ty: Rc<Ty>,
+        mut node: Fn,
+    ) -> anyhow::Result<()> {
         match node.decl.self_ {
             Some(mutability) => {
                 // Method
@@ -253,6 +291,40 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
             None => {
                 // Static method
                 self.build_fn(&mangled_name, node)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn declare_method(
+        &mut self,
+        mangled_name: &str,
+        impl_for_ty: Rc<Ty>,
+        mut node: Fn,
+    ) -> anyhow::Result<()> {
+        match node.decl.self_ {
+            Some(mutability) => {
+                // Method
+                push_self_to_front(&mut node.decl.params, impl_for_ty, mutability);
+                self.declare_fn(
+                    &mangled_name,
+                    node.decl.params,
+                    node.decl.return_ty.into(),
+                    Linkage::External,
+                    false,
+                )?;
+            }
+
+            None => {
+                // Static method
+                self.declare_fn(
+                    &mangled_name,
+                    node.decl.params,
+                    node.decl.return_ty.into(),
+                    Linkage::External,
+                    false,
+                )?;
             }
         }
 
@@ -370,13 +442,12 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
             .unwrap();
 
         for top_level in psd_module.top_levels {
-            // Do not import if private
-            if top_level.vis.is_private() {
-                continue;
-            }
-
             match top_level.kind {
                 TopLevelKind::Fn(func) => {
+                    if top_level.vis.is_private() {
+                        continue;
+                    }
+
                     self.declare_fn(
                         &mangle_external_name(
                             import_module_name.to_owned().into(),
@@ -389,11 +460,13 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                     )?;
                 }
 
+                TopLevelKind::Impl(impl_) => {
+                    self.import_impl(impl_)?;
+                }
+
                 TopLevelKind::Struct(_) => todo!(),
 
                 TopLevelKind::Import(_) => todo!(),
-
-                TopLevelKind::Impl(_) => todo!(),
 
                 TopLevelKind::Enum(_) => todo!(),
 
@@ -402,6 +475,34 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         }
 
         self.cucx.imported_modules.insert(module_path.symbol());
+
+        Ok(())
+    }
+
+    fn import_impl(&mut self, impl_: Impl) -> anyhow::Result<()> {
+        let impl_for_ty = Rc::new(impl_.ty);
+
+        for item in impl_.items {
+            match item.kind {
+                TopLevelKind::Fn(func) => {
+                    if item.vis.is_private() {
+                        continue;
+                    }
+
+                    let mangled_name = if impl_for_ty.is_user_defined_type() {
+                        // Methods for user defined types
+                        self.mangle_method(&impl_for_ty, &func)
+                    } else {
+                        // Methods for built-in types
+                        self.mangle_builtin_type_method(&impl_for_ty, &func)
+                    };
+
+                    self.declare_method(&mangled_name, impl_for_ty.clone(), func)?;
+                }
+
+                _ => todo!(),
+            }
+        }
 
         Ok(())
     }

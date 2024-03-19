@@ -1795,7 +1795,9 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         match refee_ty.kind.as_ref() {
             TyKind::UserDefined(_) => self.struct_access(left, right, refee_ty),
 
-            TyKind::Tuple(_) | TyKind::Str => self.tuple_indexing(left, right, refee_ty),
+            TyKind::Str => self.str_indexing_or_method_call(left, right, refee_ty),
+
+            TyKind::Tuple(_) => self.tuple_indexing(left, right, refee_ty),
 
             _ => Err(CodegenError::HasNoFields { span: left_span }.into()),
         }
@@ -1910,6 +1912,36 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         args.push_front((struct_value.clone(), call_node.args.1));
 
         self.build_call_fn(actual_method_name.into(), args, call_node.span)
+    }
+
+    fn str_indexing_or_method_call(
+        &mut self,
+        left: &Value<'ctx>,
+        right: &Expr,
+        str_ty: &Rc<Ty>,
+    ) -> anyhow::Result<Value<'ctx>> {
+        match &right.kind {
+            // Method call
+            ExprKind::FnCall(node) => {
+                let method_name = format!("str.{}", node.name.symbol());
+
+                let mut args = {
+                    let mut args = VecDeque::new();
+
+                    for arg in node.args.0.iter() {
+                        args.push_back((self.build(arg)?, arg.span));
+                    }
+
+                    args
+                };
+
+                args.push_front((left.clone(), node.args.1));
+
+                self.build_call_fn(method_name.into(), args, node.span)
+            }
+
+            _ => self.tuple_indexing(left, right, str_ty),
+        }
     }
 
     fn tuple_indexing(

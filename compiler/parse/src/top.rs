@@ -22,7 +22,7 @@ impl Parser {
             }
 
             TokenKind::Fn => {
-                let kind = self.function()?;
+                let kind = self.func()?;
                 (kind.span, TopLevelKind::Fn(kind))
             }
 
@@ -172,7 +172,7 @@ impl Parser {
         })
     }
 
-    fn function(&mut self) -> ParseResult<Fn> {
+    fn func(&mut self) -> ParseResult<Fn> {
         let decl = self.fn_decl()?;
 
         let body = self.block()?;

@@ -6,7 +6,7 @@ use predicates::prelude::*;
 use std::process::Command;
 
 #[test]
-fn import_function() -> anyhow::Result<()> {
+fn import_functions() -> anyhow::Result<()> {
     let tempdir = assert_fs::TempDir::new()?;
 
     let module1 = tempdir.child("m1.kd");
@@ -30,6 +30,47 @@ fn import_function() -> anyhow::Result<()> {
             main.path().to_str().unwrap(),
             module1.path().to_str().unwrap(),
             module2.path().to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    let llvm_ir = assert_fs::NamedTempFile::new("ir")?;
+    llvm_ir.write_binary(&compile_output.get_output().stdout)?;
+
+    Command::new("lli")
+        .arg(llvm_ir.path())
+        .assert()
+        .code(predicate::eq(58));
+
+    Ok(())
+}
+
+#[test]
+fn import_i32_methods() -> anyhow::Result<()> {
+    let tempdir = assert_fs::TempDir::new()?;
+
+    let module = tempdir.child("m.kd");
+    module.write_str(
+        r#"impl i32 {
+            pub fn add(self, other: i32): i32 {
+                return self + other
+            }
+    }"#,
+    )?;
+
+    let main = tempdir.child("main.kd");
+    main.write_str(
+        r#"import m
+        fn main(): i32 {
+            return 48.add(10)
+        }"#,
+    )?;
+
+    let compile_output = Command::cargo_bin(env!("CARGO_BIN_EXE_kaede"))?
+        .args([
+            "--display-llvm-ir",
+            main.path().to_str().unwrap(),
+            module.path().to_str().unwrap(),
         ])
         .assert()
         .success();

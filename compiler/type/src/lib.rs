@@ -61,6 +61,10 @@ impl Ty {
             mutability,
         }
     }
+
+    pub fn is_user_defined_type(&self) -> bool {
+        matches!(self.kind.as_ref(), TyKind::UserDefined(_))
+    }
 }
 
 /// Represents whether a value can be changed
