@@ -32,8 +32,3 @@ Make sure Python3 is installed.
 $ ./install.py
 $ kaede -h
 ```
-
-# License
-
-This project is available under the dual Apache 2.0 and MIT license.<br/>
-See LICENSE-\* for the full content of the licenses.
