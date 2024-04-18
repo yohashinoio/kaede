@@ -18,7 +18,7 @@ def install_bdwgc(third_party_dir):
     bdwgc_build_dir = os.path.join(this_dir, "bdwgc_build")
 
     def build_bdwgc():
-        subprocess.run(["cmake", "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_INSTALL_PREFIX=%s" %
+        subprocess.run(["cmake", "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_INSTALL_PREFIX='%s'" %
                        install_dir, "-S", bdwgc_dir, "-B", bdwgc_build_dir])
         subprocess.run(["cmake", "--build", bdwgc_build_dir, "-j"])
 
