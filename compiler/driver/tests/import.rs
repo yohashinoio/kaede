@@ -3,7 +3,31 @@
 use assert_cmd::prelude::*;
 use assert_fs::prelude::*;
 use predicates::prelude::*;
-use std::process::Command;
+use std::{ffi::OsString, path::Path, process::Command};
+
+fn test(expect: i32, file_paths: &[&Path]) -> anyhow::Result<()> {
+    let mut args = file_paths
+        .into_iter()
+        .map(|p| p.as_os_str().to_os_string())
+        .collect::<Vec<OsString>>();
+
+    args.push(OsString::from("--display-llvm-ir"));
+
+    let compile_output = Command::cargo_bin(env!("CARGO_BIN_EXE_kaede"))?
+        .args(args)
+        .assert()
+        .success();
+
+    let llvm_ir = assert_fs::NamedTempFile::new("ir")?;
+    llvm_ir.write_binary(&compile_output.get_output().stdout)?;
+
+    Command::new("lli")
+        .arg(llvm_ir.path())
+        .assert()
+        .code(predicate::eq(expect));
+
+    Ok(())
+}
 
 #[test]
 fn import_functions() -> anyhow::Result<()> {
@@ -24,25 +48,7 @@ fn import_functions() -> anyhow::Result<()> {
         }"#,
     )?;
 
-    let compile_output = Command::cargo_bin(env!("CARGO_BIN_EXE_kaede"))?
-        .args([
-            "--display-llvm-ir",
-            main.path().to_str().unwrap(),
-            module1.path().to_str().unwrap(),
-            module2.path().to_str().unwrap(),
-        ])
-        .assert()
-        .success();
-
-    let llvm_ir = assert_fs::NamedTempFile::new("ir")?;
-    llvm_ir.write_binary(&compile_output.get_output().stdout)?;
-
-    Command::new("lli")
-        .arg(llvm_ir.path())
-        .assert()
-        .code(predicate::eq(58));
-
-    Ok(())
+    test(58, &[module1.path(), module2.path(), main.path()])
 }
 
 #[test]
@@ -66,24 +72,7 @@ fn import_i32_methods() -> anyhow::Result<()> {
         }"#,
     )?;
 
-    let compile_output = Command::cargo_bin(env!("CARGO_BIN_EXE_kaede"))?
-        .args([
-            "--display-llvm-ir",
-            main.path().to_str().unwrap(),
-            module.path().to_str().unwrap(),
-        ])
-        .assert()
-        .success();
-
-    let llvm_ir = assert_fs::NamedTempFile::new("ir")?;
-    llvm_ir.write_binary(&compile_output.get_output().stdout)?;
-
-    Command::new("lli")
-        .arg(llvm_ir.path())
-        .assert()
-        .code(predicate::eq(58));
-
-    Ok(())
+    test(58, &[module.path(), main.path()])
 }
 
 #[test]
@@ -133,23 +122,5 @@ fn import_struct_methods() -> anyhow::Result<()> {
         }"#,
     )?;
 
-    let compile_output = Command::cargo_bin(env!("CARGO_BIN_EXE_kaede"))?
-        .args([
-            "--display-llvm-ir",
-            main.path().to_str().unwrap(),
-            module1.path().to_str().unwrap(),
-            module2.path().to_str().unwrap(),
-        ])
-        .assert()
-        .success();
-
-    let llvm_ir = assert_fs::NamedTempFile::new("ir")?;
-    llvm_ir.write_binary(&compile_output.get_output().stdout)?;
-
-    Command::new("lli")
-        .arg(llvm_ir.path())
-        .assert()
-        .code(predicate::eq(58));
-
-    Ok(())
+    test(58, &[module1.path(), module2.path(), main.path()])
 }
