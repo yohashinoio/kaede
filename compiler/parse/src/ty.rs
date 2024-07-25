@@ -83,10 +83,7 @@ impl Parser {
                 "u64" => make_fundamental_type(U64, Mutability::Not),
                 "bool" => make_fundamental_type(Bool, Mutability::Not),
 
-                "str" => wrap_in_reference(Ty {
-                    kind: TyKind::Str.into(),
-                    mutability: Mutability::Not,
-                }),
+                "str" => wrap_in_reference(make_fundamental_type(Str, Mutability::Not)),
 
                 // User defined type
                 _ => {

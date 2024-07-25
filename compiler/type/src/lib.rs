@@ -3,6 +3,7 @@ use std::rc::Rc;
 use inkwell::{
     context::Context,
     types::{BasicType, BasicTypeEnum},
+    AddressSpace,
 };
 use kaede_span::Span;
 use kaede_symbol::Ident;
@@ -57,13 +58,30 @@ impl Ty {
 
     pub fn new_str(mutability: Mutability) -> Self {
         Self {
-            kind: TyKind::Str.into(),
+            kind: TyKind::Fundamental(FundamentalType {
+                kind: FundamentalTypeKind::Str,
+            })
+            .into(),
             mutability,
         }
     }
 
-    pub fn is_user_defined_type(&self) -> bool {
-        matches!(self.kind.as_ref(), TyKind::UserDefined(_))
+    /// Return true if it is a user-defined type
+    pub fn is_udt(&self) -> bool {
+        match self.kind.as_ref() {
+            TyKind::Reference(rty) => matches!(rty.refee_ty.kind.as_ref(), TyKind::UserDefined(_)),
+            _ => false,
+        }
+    }
+
+    pub fn is_str(&self) -> bool {
+        if let TyKind::Reference(rty) = self.kind.as_ref() {
+            if let TyKind::Fundamental(fty) = rty.refee_ty.kind.as_ref() {
+                return matches!(fty.kind, FundamentalTypeKind::Str);
+            }
+        }
+
+        false
     }
 }
 
@@ -105,6 +123,7 @@ pub enum FundamentalTypeKind {
     I64,
     U64,
     Bool,
+    Str,
 }
 
 impl std::fmt::Display for FundamentalTypeKind {
@@ -120,6 +139,7 @@ impl std::fmt::Display for FundamentalTypeKind {
             U64 => write!(f, "u64"),
 
             Bool => write!(f, "bool"),
+            Str => write!(f, "str"),
         }
     }
 }
@@ -134,7 +154,6 @@ pub fn make_fundamental_type(kind: FundamentalTypeKind, mutability: Mutability) 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TyKind {
     Fundamental(FundamentalType),
-    Str,
 
     UserDefined(UserDefinedType),
 
@@ -158,8 +177,6 @@ impl std::fmt::Display for TyKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Fundamental(fty) => write!(f, "{}", fty.kind),
-
-            Self::Str => write!(f, "str"),
 
             Self::UserDefined(udt) => write!(f, "{}", udt.name.symbol().as_str()),
 
@@ -198,7 +215,6 @@ impl TyKind {
             Self::Pointer(_) => panic!("Cannot get sign information of pointer type!"),
             Self::Array(_) => panic!("Cannot get sign information of array type!"),
             Self::Tuple(_) => panic!("Cannot get sign information of tuple type!"),
-            Self::Str => panic!("Cannot get sign information of str type!"),
             Self::Unit => panic!("Cannot get sign information of unit type!"),
             Self::Never => panic!("Cannot get sign information of never type!"),
             Self::Inferred => panic!("Cannot get sign information of inferred type!"),
@@ -214,7 +230,6 @@ impl TyKind {
             Self::Array(_)
             | Self::Tuple(_)
             | Self::Pointer(_)
-            | Self::Str
             | Self::Unit
             | Self::Never
             | Self::Inferred => false,
@@ -244,6 +259,14 @@ impl FundamentalType {
             U64 => context.i64_type().as_basic_type_enum(),
 
             Bool => context.bool_type().as_basic_type_enum(),
+            Str => {
+                let str_ty = context.i8_type().ptr_type(AddressSpace::default());
+                let len_ty = context.i64_type();
+                // { *i8, i64 }
+                context
+                    .struct_type(&[str_ty.into(), len_ty.into()], true)
+                    .into()
+            }
         }
     }
 
@@ -254,6 +277,7 @@ impl FundamentalType {
             I8 | I32 | I64 => true,
             U8 | U32 | U64 => false,
             Bool => false,
+            Str => false,
         }
     }
 
@@ -262,6 +286,7 @@ impl FundamentalType {
 
         match self.kind {
             I8 | U8 | I32 | U32 | I64 | U64 | Bool => true,
+            Str => false,
         }
     }
 }

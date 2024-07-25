@@ -11,7 +11,7 @@ use kaede_type::{Mutability, Ty, TyKind};
 
 use crate::{
     error::CodegenError,
-    mangle::{mangle_external_name, mangle_method, mangle_name},
+    mangle::{mangle_external_name, mangle_method, mangle_name, mangle_static_method},
     stmt::{build_block, change_mutability_dup},
     tcx::{EnumInfo, EnumVariantInfo, GenericKind, ReturnType, StructInfo, UDTKind, VariableTable},
     CompileUnitCtx,
@@ -204,21 +204,10 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
     fn impl_(&mut self, node: Impl) -> anyhow::Result<()> {
         let ty = Rc::new(node.ty);
 
-        if ty.is_user_defined_type() {
-            // User defined types
-            for item in node.items {
-                match item.kind {
-                    TopLevelKind::Fn(fn_) => self.define_method(ty.clone(), fn_)?,
-                    _ => todo!("Error"),
-                }
-            }
-        } else {
-            // Buildin types
-            for item in node.items {
-                match item.kind {
-                    TopLevelKind::Fn(fn_) => self.define_buildin_type_method(ty.clone(), fn_)?,
-                    _ => todo!("Error"),
-                }
+        for item in node.items {
+            match item.kind {
+                TopLevelKind::Fn(fn_) => self.define_method(ty.clone(), fn_)?,
+                _ => todo!("Error"),
             }
         }
 
@@ -243,20 +232,32 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
             _ => impl_for_ty.kind.to_string(),
         };
 
-        mangle_method(
-            self.cucx,
-            Symbol::from(impl_for_ty_s),
-            node.decl.name.symbol(),
-        )
-    }
+        if impl_for_ty.is_udt() {
+            if node.decl.self_.is_none() {
+                return mangle_static_method(
+                    self.cucx,
+                    Symbol::from(impl_for_ty_s),
+                    node.decl.name.symbol(),
+                );
+            };
 
-    fn mangle_builtin_type_method(&mut self, impl_for_ty: &Ty, node: &Fn) -> String {
-        let impl_for_ty_s = match impl_for_ty.kind.as_ref() {
-            TyKind::Reference(refty) => refty.refee_ty.kind.to_string(),
-            _ => impl_for_ty.kind.to_string(),
-        };
+            mangle_method(
+                self.cucx,
+                Symbol::from(impl_for_ty_s),
+                node.decl.name.symbol(),
+            )
+        } else {
+            // Builtin types
 
-        format!("{}.{}", impl_for_ty_s, node.decl.name.symbol().as_str())
+            if node.decl.self_.is_none() {
+                // Static method
+                // Without module name
+                return format!("{}::{}", impl_for_ty_s, node.decl.name.symbol().as_str());
+            };
+
+            // Without module name
+            format!("{}.{}", impl_for_ty_s, node.decl.name.symbol().as_str())
+        }
     }
 
     /// Static method can also be handled by this function
@@ -264,14 +265,6 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
     /// If kind is `Normal`, it becomes a static method (said in C++ style)
     fn define_method(&mut self, impl_for_ty: Rc<Ty>, node: Fn) -> anyhow::Result<()> {
         let mangled_name = self.mangle_method(&impl_for_ty, &node);
-        self.define_method_internal(&mangled_name, impl_for_ty, node)
-    }
-
-    fn define_buildin_type_method(&mut self, impl_for_ty: Rc<Ty>, node: Fn) -> anyhow::Result<()> {
-        assert!(!impl_for_ty.is_user_defined_type());
-
-        let mangled_name = self.mangle_builtin_type_method(&impl_for_ty, &node);
-
         self.define_method_internal(&mangled_name, impl_for_ty, node)
     }
 
@@ -489,13 +482,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                         continue;
                     }
 
-                    let mangled_name = if impl_for_ty.is_user_defined_type() {
-                        // Methods for user defined types
-                        self.mangle_method(&impl_for_ty, &func)
-                    } else {
-                        // Methods for built-in types
-                        self.mangle_builtin_type_method(&impl_for_ty, &func)
-                    };
+                    let mangled_name = self.mangle_method(&impl_for_ty, &func);
 
                     self.declare_method(&mangled_name, impl_for_ty.clone(), func)?;
                 }

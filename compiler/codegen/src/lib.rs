@@ -407,15 +407,6 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         Ok(match ty.kind.as_ref() {
             TyKind::Fundamental(t) => t.as_llvm_type(self.context()),
 
-            TyKind::Str => {
-                let str_ty = context.i8_type().ptr_type(AddressSpace::default());
-                let len_ty = context.i64_type();
-                // { *i8, i64 }
-                context
-                    .struct_type(&[str_ty.into(), len_ty.into()], true)
-                    .into()
-            }
-
             TyKind::UserDefined(udt) => {
                 if udt.generic_args.is_some() {
                     return self.create_generic_struct_type(udt).map(|ty| ty.into());

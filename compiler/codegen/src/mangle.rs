@@ -17,6 +17,15 @@ pub fn mangle_method(cucx: &CompileUnitCtx, impl_for: Symbol, name: Symbol) -> S
     )
 }
 
+pub fn mangle_static_method(cucx: &CompileUnitCtx, impl_for: Symbol, name: Symbol) -> String {
+    format!(
+        "{}.{}::{}",
+        cucx.module.get_name().to_str().unwrap(),
+        impl_for,
+        name
+    )
+}
+
 pub fn mangle_udt_name(cucx: &CompileUnitCtx, udt: &UserDefinedType) -> Symbol {
     if let Some(generic_args) = &udt.generic_args {
         Symbol::from(format!(

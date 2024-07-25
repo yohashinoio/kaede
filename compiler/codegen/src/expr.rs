@@ -154,7 +154,7 @@ pub fn build_tuple_indexing<'ctx>(
         },
 
         // (*i8, u64)
-        TyKind::Str => match index {
+        _ if tuple_ty.is_str() => match index {
             0 => Rc::new(Ty {
                 kind: TyKind::Pointer(
                     make_fundamental_type(FundamentalTypeKind::I8, Mutability::Not).into(),
@@ -1214,10 +1214,10 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
     fn string_literal(&mut self, s: &str) -> anyhow::Result<Value<'ctx>> {
         let global_s = self.cucx.builder.build_global_string_ptr(s, "str");
 
-        let str_ty = Rc::new(Ty {
-            kind: TyKind::Str.into(),
-            mutability: Mutability::Not,
-        });
+        let str_ty = Rc::new(make_fundamental_type(
+            FundamentalTypeKind::Str,
+            Mutability::Not,
+        ));
 
         let str_llvm_ty = self.cucx.conv_to_llvm_type(&str_ty).unwrap();
 
@@ -1342,7 +1342,8 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             _ => todo!(),
         };
 
-        // Create enum variant with value
+        // Try to create new enum variant with value
+        // If it fails, try to call static methods
         if let ExprKind::FnCall(right) = &node.rhs.kind {
             if right.args.0.len() != 1 {
                 todo!("Error");
@@ -1350,15 +1351,42 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
             let value = right.args.0.front().unwrap();
 
-            return self.create_enum_variant(left, &right.name, Some(value));
+            if let Ok(val) = self.create_enum_variant(left, &right.name, Some(value)) {
+                return Ok(val);
+            }
+
+            // Couldn't create static method, so try to call static methods
+            return self.call_static_method(left, right);
         }
 
-        // Create enum variant
+        // Create enum variant without value
         if let ExprKind::Ident(right) = &node.rhs.kind {
             return self.create_enum_variant(left, right, None);
         }
 
         todo!()
+    }
+
+    fn call_static_method(
+        &mut self,
+        object_name: &Ident,
+        call: &FnCall,
+    ) -> anyhow::Result<Value<'ctx>> {
+        // For example: Apple::from
+        let actual_method_name = format!("{}::{}", object_name.as_str(), call.name.as_str());
+
+        // Convert arguments(exprs) to values
+        let args = {
+            let mut args = VecDeque::new();
+
+            for arg in call.args.0.iter() {
+                args.push_back((self.build(arg)?, arg.span));
+            }
+
+            args
+        };
+
+        self.build_call_fn(actual_method_name.into(), args, call.span)
     }
 
     fn create_enum_variant(
@@ -1712,11 +1740,15 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
         let left_ty = &left.get_type();
 
+        if left_ty.is_str() {
+            return self.str_indexing_or_method_call(&left, &node.rhs, left_ty);
+        }
+
         if let TyKind::Reference(rty) = left_ty.kind.as_ref() {
             // ---  Struct access or tuple indexing ---
             if matches!(
                 rty.get_base_type_of_reference().kind.as_ref(),
-                TyKind::UserDefined(_) | TyKind::Tuple(_) | TyKind::Str
+                TyKind::UserDefined(_) | TyKind::Tuple(_)
             ) {
                 self.struct_access_or_tuple_indexing(&left, node.lhs.span, &node.rhs)
             } else {
@@ -1726,7 +1758,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                 .into())
             }
         } else {
-            // --- Fundamental type method call ---
+            // --- Fundamental type method calling ---
             let call_node = match &node.rhs.kind {
                 ExprKind::FnCall(call_node) => call_node,
                 _ => {
@@ -1794,8 +1826,6 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
         match refee_ty.kind.as_ref() {
             TyKind::UserDefined(_) => self.struct_access(left, right, refee_ty),
-
-            TyKind::Str => self.str_indexing_or_method_call(left, right, refee_ty),
 
             TyKind::Tuple(_) => self.tuple_indexing(left, right, refee_ty),
 
@@ -1984,7 +2014,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             .cucx
             .module
             .get_function(&mangle_name(self.cucx, name))
-            .or_else(|| self.cucx.module.get_function(name.as_str())); // No mangled function (like C standard library functions
+            .or_else(|| self.cucx.module.get_function(name.as_str())); // No mangled function (like C standard library functions)
 
         let func = match func {
             Some(func) => func,
