@@ -2054,6 +2054,25 @@ fn generic_function_with_multiple_parameters() -> anyhow::Result<()> {
 }
 
 #[test]
+fn generic_function_param_inference() -> anyhow::Result<()> {
+    let program = r#"fn add_or_mul<T1, T2, SwitchT>(n1: T1, n2: T2, switcher: SwitchT): T1 {
+        return if switcher {
+            n1 + n2
+        } else {
+            n1 * n2
+        }
+    }
+
+    fn main(): i32 {
+        return add_or_mul(48, 10, true)
+    }"#;
+
+    assert_eq!(exec(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
 fn generic_function_with_struct_type() -> anyhow::Result<()> {
     let program = r#"struct Sample {
         n: i32,
