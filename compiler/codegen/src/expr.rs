@@ -1770,33 +1770,43 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                 rty.get_base_type_of_reference().kind.as_ref(),
                 TyKind::UserDefined(_) | TyKind::Tuple(_)
             ) {
-                self.struct_access_or_tuple_indexing(&left, node.lhs.span, &node.rhs)
+                return self.struct_access_or_tuple_indexing(&left, node.lhs.span, &node.rhs);
             } else {
-                Err(CodegenError::HasNoFields {
+                return Err(CodegenError::HasNoFields {
                     span: node.lhs.span,
                 }
-                .into())
+                .into());
             }
-        } else {
-            // --- Fundamental type method calling ---
-            let call_node = match &node.rhs.kind {
-                ExprKind::FnCall(call_node) => call_node,
-                _ => {
-                    return Err(CodegenError::HasNoFields {
-                        span: node.lhs.span,
-                    }
-                    .into())
-                }
-            };
+        }
 
-            if let TyKind::Fundamental(fty) = left_ty.kind.as_ref() {
-                self.call_fundamental_type_method(&left, fty.kind.to_string().into(), call_node)
-            } else {
-                Err(CodegenError::HasNoFields {
+        if let TyKind::Generic(gty) = left_ty.kind.as_ref() {
+            let udt = self.cucx.tcx.get_udt(gty.name.symbol());
+
+            if let UDTKind::GenericArg(actual) = udt.as_ref().unwrap().as_ref() {
+                // GenericArg(type) -> type
+                let left = Value::new(left.get_value(), actual.clone());
+                return self.struct_access_or_tuple_indexing(&left, node.lhs.span, &node.rhs);
+            }
+        }
+
+        // --- Fundamental type method calling ---
+        let call_node = match &node.rhs.kind {
+            ExprKind::FnCall(call_node) => call_node,
+            _ => {
+                return Err(CodegenError::HasNoFields {
                     span: node.lhs.span,
                 }
                 .into())
             }
+        };
+
+        if let TyKind::Fundamental(fty) = left_ty.kind.as_ref() {
+            self.call_fundamental_type_method(&left, fty.kind.to_string().into(), call_node)
+        } else {
+            Err(CodegenError::HasNoFields {
+                span: node.lhs.span,
+            }
+            .into())
         }
     }
 
@@ -1897,7 +1907,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
         let struct_info = match udt_kind.as_ref() {
             UDTKind::Struct(t) => t,
-            _ => unreachable!(),
+            kind => unreachable!("{:?}", kind),
         };
 
         let field_info = match struct_info.fields.get(&field_name.symbol()) {
