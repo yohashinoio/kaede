@@ -2036,7 +2036,7 @@ fn generic_function_with_single_parameter() -> anyhow::Result<()> {
 
 #[test]
 fn generic_function_with_multiple_parameters() -> anyhow::Result<()> {
-    let program = r#"fn add_or_mul<T1, T2, SwitchT>(n1: T1, n2: T2, switcher: SwitchT): T {
+    let program = r#"fn add_or_mul<T1, T2, SwitchT>(n1: T1, n2: T2, switcher: SwitchT): T1 {
         return if switcher {
             n1 + n2
         } else {
