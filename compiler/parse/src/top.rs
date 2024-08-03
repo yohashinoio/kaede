@@ -51,6 +51,8 @@ impl Parser {
 
         self.consume_semi()?;
 
+        self.generic_param_names.clear();
+
         Ok(TopLevel { kind, vis, span })
     }
 
@@ -82,6 +84,10 @@ impl Parser {
         }
 
         let finish = self.consume(&TokenKind::Gt)?.finish;
+
+        names.iter().for_each(|name| {
+            self.generic_param_names.push(name.symbol());
+        });
 
         Ok(GenericParams {
             names,
@@ -175,7 +181,7 @@ impl Parser {
     fn func(&mut self) -> ParseResult<Fn> {
         let decl = self.fn_decl()?;
 
-        let body = self.block()?;
+        let body = Rc::new(self.block()?);
 
         let span = Span::new(decl.span.start, body.span.finish);
 

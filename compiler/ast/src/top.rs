@@ -1,7 +1,7 @@
 use std::{collections::VecDeque, rc::Rc};
 
 use kaede_span::Span;
-use kaede_symbol::Ident;
+use kaede_symbol::{Ident, Symbol};
 use kaede_type::{Mutability, Ty};
 
 use crate::{expr::StringLiteral, stmt::Block};
@@ -55,7 +55,7 @@ pub struct Struct {
     pub span: Span,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Param {
     pub name: Ident,
     pub mutability: Mutability,
@@ -63,7 +63,7 @@ pub struct Param {
 }
 
 /// Deque because sometimes it is necessary to insert self (C++ style: this) at the front
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Params {
     pub v: VecDeque<Param>,
     pub span: Span,
@@ -83,7 +83,7 @@ pub struct FnDecl {
 #[derive(Debug)]
 pub struct Fn {
     pub decl: FnDecl,
-    pub body: Block,
+    pub body: Rc<Block>,
     pub span: Span,
 }
 
@@ -130,6 +130,12 @@ pub struct TopLevel {
 }
 
 #[derive(Debug)]
+pub struct GenericFnInstance {
+    pub mangled_name: Symbol,
+    pub fn_: Fn,
+}
+
+#[derive(Debug)]
 pub enum TopLevelKind {
     Fn(Fn),
     Struct(Struct),
@@ -137,4 +143,7 @@ pub enum TopLevelKind {
     Impl(Impl),
     Enum(Enum),
     Extern(Extern),
+
+    // Internal use
+    GenericFnInstance(GenericFnInstance),
 }

@@ -23,7 +23,7 @@ pub fn create_inferred_tuple(element_len: usize) -> TyKind {
 
 pub fn wrap_in_ref(ty: Rc<Ty>, mutability: Mutability) -> Ty {
     Ty {
-        kind: TyKind::Reference(RefrenceType { refee_ty: ty }).into(),
+        kind: TyKind::Reference(ReferenceType { refee_ty: ty }).into(),
         mutability,
     }
 }
@@ -82,6 +82,10 @@ impl Ty {
         }
 
         false
+    }
+
+    pub fn is_generic(&self) -> bool {
+        matches!(self.kind.as_ref(), TyKind::Generic(_))
     }
 }
 
@@ -157,7 +161,9 @@ pub enum TyKind {
 
     UserDefined(UserDefinedType),
 
-    Reference(RefrenceType),
+    Generic(GenericType),
+
+    Reference(ReferenceType),
 
     Pointer(Rc<Ty> /* Pointee type */),
 
@@ -179,6 +185,8 @@ impl std::fmt::Display for TyKind {
             Self::Fundamental(fty) => write!(f, "{}", fty.kind),
 
             Self::UserDefined(udt) => write!(f, "{}", udt.name.symbol().as_str()),
+
+            Self::Generic(gty) => write!(f, "{}", gty.name.as_str()),
 
             Self::Reference(refee) => write!(f, "&{}", refee.refee_ty.kind),
 
@@ -210,6 +218,7 @@ impl TyKind {
         match &self {
             Self::Fundamental(fty) => fty.is_signed(),
             Self::UserDefined(_) => todo!(),
+            Self::Generic(_) => todo!(),
             Self::Reference(ty) => ty.refee_ty.kind.is_signed(),
 
             Self::Pointer(_) => panic!("Cannot get sign information of pointer type!"),
@@ -225,6 +234,7 @@ impl TyKind {
         match &self {
             Self::Fundamental(fty) => fty.is_int_or_bool(),
             Self::UserDefined(_) => todo!(),
+            Self::Generic(_) => todo!(),
             Self::Reference(ty) => ty.refee_ty.kind.is_int_or_bool(),
 
             Self::Array(_)
@@ -318,18 +328,18 @@ impl PartialEq for UserDefinedType {
 impl Eq for UserDefinedType {}
 
 #[derive(Debug, Eq, Clone)]
-pub struct RefrenceType {
+pub struct ReferenceType {
     pub refee_ty: Rc<Ty>,
 }
 
-impl PartialEq for RefrenceType {
+impl PartialEq for ReferenceType {
     // No mutability comparisons
     fn eq(&self, other: &Self) -> bool {
         *self.refee_ty.kind == *other.refee_ty.kind
     }
 }
 
-impl RefrenceType {
+impl ReferenceType {
     pub fn new(refee_ty: Rc<Ty>) -> Self {
         Self { refee_ty }
     }
@@ -345,3 +355,16 @@ impl RefrenceType {
         }
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct GenericType {
+    pub name: Ident,
+}
+
+impl PartialEq for GenericType {
+    fn eq(&self, other: &Self) -> bool {
+        self.name.symbol() == other.name.symbol()
+    }
+}
+
+impl Eq for GenericType {}

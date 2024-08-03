@@ -6,9 +6,11 @@ use std::{
 
 use crate::{
     error::CodegenError,
+    generic::{def_generic_args, undef_generic_args},
     mangle::{mangle_name, mangle_udt_name},
     stmt::{build_block, build_normal_let, build_statement},
-    tcx::{EnumInfo, EnumVariantInfo, ReturnType, UDTKind, VariableTable},
+    tcx::{EnumInfo, EnumVariantInfo, GenericKind, ReturnType, UDTKind, VariableTable},
+    top::build_top_level,
     value::{has_signed, Value},
     CompileUnitCtx,
 };
@@ -24,13 +26,31 @@ use kaede_ast::{
         LogicalNot, Loop, Match, MatchArm, MatchArmList, Return, StructLiteral, TupleLiteral,
     },
     stmt::{Block, Stmt, StmtKind},
+    top::{Fn, FnDecl, GenericFnInstance, TopLevel, TopLevelKind, Visibility},
 };
 use kaede_span::Span;
 use kaede_symbol::{Ident, Symbol};
 use kaede_type::{
     is_same_type, make_fundamental_type, wrap_in_ref, FundamentalType, FundamentalTypeKind,
-    Mutability, RefrenceType, Ty, TyKind, UserDefinedType,
+    GenericArgs, Mutability, ReferenceType, Ty, TyKind, UserDefinedType,
 };
+
+pub fn mangle_generic_fn_name(
+    cucx: &mut CompileUnitCtx,
+    name: Symbol,
+    generic_args: &GenericArgs,
+) -> Symbol {
+    let prefix = mangle_name(cucx, name);
+
+    let mut suffix = String::new();
+
+    generic_args.types.iter().for_each(|arg| {
+        suffix.push('.');
+        suffix.push_str(arg.kind.to_string().as_str());
+    });
+
+    Symbol::from(format!("{}{}", prefix.as_str(), suffix))
+}
 
 struct EnumUnpack<'ctx> {
     /// A::B(x)
@@ -536,7 +556,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         &mut self,
         node: &Match,
         target: &Value<'ctx>,
-        refty: &RefrenceType,
+        refty: &ReferenceType,
     ) -> anyhow::Result<Value<'ctx>> {
         let refee_ty = &refty.refee_ty;
 
@@ -1114,7 +1134,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         Ok(Value::new(
             mallocd.into(),
             Ty {
-                kind: TyKind::Reference(RefrenceType {
+                kind: TyKind::Reference(ReferenceType {
                     refee_ty: array_ty.clone(),
                 })
                 .into(),
@@ -1990,6 +2010,101 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         build_tuple_indexing(self.cucx, left_value, index as u32, tuple_ty, right.span)
     }
 
+    /// Returns the name of the function generated.
+    fn define_generic_fn_instance(
+        &mut self,
+        name: Symbol,
+        ast_vis: &(Fn, Visibility),
+        args: &VecDeque<(Value<'ctx>, Span)>,
+        span: Span,
+    ) -> anyhow::Result<Symbol> {
+        let ast = &ast_vis.0;
+
+        assert!(ast.decl.generic_params.is_some());
+
+        let generic_params = ast.decl.generic_params.as_ref().unwrap();
+
+        if generic_params.names.len() != args.len() {
+            todo!("Error");
+        }
+
+        let generic_args = GenericArgs {
+            types: args.iter().map(|a| a.0.get_type()).collect(),
+            span,
+        };
+
+        let mangled_name = mangle_generic_fn_name(self.cucx, name, &generic_args);
+
+        // Skip if the function is already defined.
+        if self
+            .cucx
+            .module
+            .get_function(mangled_name.as_str())
+            .is_some()
+        {
+            return Ok(mangled_name);
+        }
+
+        let generic_fn_decl_ast = FnDecl {
+            name: ast.decl.name.clone(),
+            self_: ast.decl.self_.clone(),
+
+            // Pass None to create a generic function instance.
+            generic_params: None,
+
+            params: ast.decl.params.clone(),
+            return_ty: ast.decl.return_ty.clone(),
+            span,
+        };
+
+        let generic_fn_ast = Fn {
+            decl: generic_fn_decl_ast,
+            body: ast.body.clone(),
+            span,
+        };
+
+        let generic_fn_instance = GenericFnInstance {
+            mangled_name,
+            fn_: generic_fn_ast,
+        };
+
+        def_generic_args(self.cucx, generic_params, &generic_args)?;
+
+        let prev = self.cucx.builder.get_insert_block().unwrap();
+
+        build_top_level(
+            self.cucx,
+            TopLevel {
+                kind: TopLevelKind::GenericFnInstance(generic_fn_instance),
+                vis: ast_vis.1,
+                span,
+            },
+        )?;
+
+        self.cucx.builder.position_at_end(prev);
+
+        undef_generic_args(self.cucx, generic_params);
+
+        Ok(mangled_name)
+    }
+
+    fn build_call_generic_fn(
+        &mut self,
+        name: Symbol,
+        args: VecDeque<(Value<'ctx>, Span)>,
+        span: Span,
+        generic_info: &GenericKind,
+    ) -> anyhow::Result<Value<'ctx>> {
+        let fn_ast_vis = match generic_info {
+            GenericKind::Func(ast) => ast,
+            _ => unreachable!(),
+        };
+
+        let mangled_name = self.define_generic_fn_instance(name, fn_ast_vis, &args, span)?;
+
+        self.build_call_fn(mangled_name, args, span)
+    }
+
     fn call_fn(&mut self, node: &FnCall) -> anyhow::Result<Value<'ctx>> {
         let args = {
             let mut args = VecDeque::new();
@@ -2000,6 +2115,19 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
             args
         };
+
+        let generic_info = self
+            .cucx
+            .tcx
+            .get_generic_info(mangle_name(self.cucx, node.name.symbol()).into());
+        if generic_info.is_some() {
+            return self.build_call_generic_fn(
+                node.name.symbol(),
+                args,
+                node.span,
+                generic_info.as_ref().unwrap(),
+            );
+        }
 
         self.build_call_fn(node.name.symbol(), args, node.span)
     }
@@ -2060,7 +2188,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
     }
 
     fn verify_var_args(
-        &self,
+        &mut self,
         args: &VecDeque<(Value<'ctx>, Span)>,
         params: &[Rc<Ty>],
     ) -> anyhow::Result<()> {
@@ -2072,7 +2200,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
     }
 
     fn verify_args(
-        &self,
+        &mut self,
         args: &VecDeque<(Value<'ctx>, Span)>,
         params: &[Rc<Ty>],
     ) -> anyhow::Result<()> {
@@ -2083,13 +2211,20 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         Ok(())
     }
 
-    fn verify_arg(&self, arg: &(Value<'ctx>, Span), param: &Rc<Ty>) -> anyhow::Result<()> {
+    fn verify_arg(&mut self, arg: &(Value<'ctx>, Span), param: &Rc<Ty>) -> anyhow::Result<()> {
+        let mismatched_err = Err(CodegenError::MismatchedTypes {
+            types: (param.kind.to_string(), arg.0.get_type().kind.to_string()),
+            span: arg.1,
+        }
+        .into());
+
+        // If the parameter is generic, skip the type checking.
+        if param.is_generic() {
+            return Ok(());
+        }
+
         if !is_same_type(&arg.0.get_type(), param) {
-            return Err(CodegenError::MismatchedTypes {
-                types: (arg.0.get_type().kind.to_string(), param.kind.to_string()),
-                span: arg.1,
-            }
-            .into());
+            return mismatched_err;
         }
 
         // Check mutability

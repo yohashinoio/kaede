@@ -3,8 +3,8 @@ use std::rc::Rc;
 use kaede_lex::token::TokenKind;
 use kaede_span::Span;
 use kaede_type::{
-    make_fundamental_type, FundamentalTypeKind, GenericArgs, Mutability, RefrenceType, Ty, TyKind,
-    UserDefinedType,
+    make_fundamental_type, FundamentalTypeKind, GenericArgs, GenericType, Mutability,
+    ReferenceType, Ty, TyKind, UserDefinedType,
 };
 
 use crate::{
@@ -14,7 +14,7 @@ use crate::{
 
 fn wrap_in_reference(refee_ty: Ty) -> Ty {
     Ty {
-        kind: TyKind::Reference(RefrenceType {
+        kind: TyKind::Reference(ReferenceType {
             refee_ty: refee_ty.into(),
         })
         .into(),
@@ -93,11 +93,22 @@ impl Parser {
                         None
                     };
 
-                    wrap_in_reference(Ty {
-                        kind: TyKind::UserDefined(UserDefinedType::new(type_ident, generic_args))
+                    if self.generic_param_names.contains(&type_ident.symbol()) {
+                        // Generic types
+                        Ty {
+                            kind: TyKind::Generic(GenericType { name: type_ident }).into(),
+                            mutability: Mutability::Not,
+                        }
+                    } else {
+                        wrap_in_reference(Ty {
+                            kind: TyKind::UserDefined(UserDefinedType::new(
+                                type_ident,
+                                generic_args,
+                            ))
                             .into(),
-                        mutability: Mutability::Not,
-                    })
+                            mutability: Mutability::Not,
+                        })
+                    }
                 }
             },
             type_ident.span(),

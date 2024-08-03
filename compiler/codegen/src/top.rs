@@ -2,8 +2,8 @@ use std::{fs, rc::Rc};
 
 use inkwell::{module::Linkage, types::StructType, values::FunctionValue};
 use kaede_ast::top::{
-    Enum, EnumVariant, Extern, Fn, Impl, Import, Param, Params, Struct, StructField, TopLevel,
-    TopLevelKind,
+    Enum, EnumVariant, Extern, Fn, GenericFnInstance, Impl, Import, Param, Params, Struct,
+    StructField, TopLevel, TopLevelKind, Visibility,
 };
 use kaede_parse::Parser;
 use kaede_symbol::{Ident, Symbol};
@@ -64,11 +64,11 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
     }
 
     /// Generate top-level code
-    fn build(&mut self, node: TopLevel) -> anyhow::Result<()> {
-        match node.kind {
+    fn build(&mut self, tl: TopLevel) -> anyhow::Result<()> {
+        match tl.kind {
             TopLevelKind::Import(node) => self.import_(node)?,
 
-            TopLevelKind::Fn(node) => self.func(node)?,
+            TopLevelKind::Fn(node) => self.func(node, tl.vis)?,
 
             TopLevelKind::Struct(node) => self.struct_(node)?,
 
@@ -77,9 +77,15 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
             TopLevelKind::Enum(node) => self.enum_(node),
 
             TopLevelKind::Extern(node) => self.extern_(node)?,
+
+            TopLevelKind::GenericFnInstance(node) => self.generic_fn_instance(node)?,
         }
 
         Ok(())
+    }
+
+    fn generic_fn_instance(&mut self, node: GenericFnInstance) -> anyhow::Result<()> {
+        self.build_fn(node.mangled_name.as_str(), node.fn_)
     }
 
     fn extern_(&mut self, node: Extern) -> anyhow::Result<()> {
@@ -214,7 +220,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         Ok(())
     }
 
-    fn func(&mut self, node: Fn) -> anyhow::Result<()> {
+    fn func(&mut self, node: Fn, vis: Visibility) -> anyhow::Result<()> {
         assert_eq!(node.decl.self_, None);
 
         let mangled_name = if node.decl.name.as_str() == "main" {
@@ -228,7 +234,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         if node.decl.generic_params.is_some() {
             self.cucx
                 .tcx
-                .add_generic(Symbol::from(mangled_name), GenericKind::Func(node));
+                .add_generic(Symbol::from(mangled_name), GenericKind::Func((node, vis)));
 
             // Generic functions are not generated immediately, but are generated when they are used.
             return Ok(());
@@ -475,6 +481,8 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                 TopLevelKind::Enum(_) => todo!(),
 
                 TopLevelKind::Extern(_) => todo!(),
+
+                TopLevelKind::GenericFnInstance(_) => unreachable!(),
             }
         }
 

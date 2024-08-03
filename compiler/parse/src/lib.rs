@@ -13,6 +13,7 @@ use kaede_lex::{
     Lexer,
 };
 use kaede_span::Span;
+use kaede_symbol::Symbol;
 
 pub struct Parser {
     tokens: Peekable<Box<dyn Iterator<Item = Token>>>,
@@ -20,6 +21,8 @@ pub struct Parser {
     end_token: Option<Token>,
 
     in_cond_expr: bool,
+
+    generic_param_names: Vec<Symbol>,
 }
 
 impl Parser {
@@ -31,6 +34,7 @@ impl Parser {
             tokens: tokens.peekable(),
             end_token: None,
             in_cond_expr: false,
+            generic_param_names: Vec::new(),
         }
     }
 

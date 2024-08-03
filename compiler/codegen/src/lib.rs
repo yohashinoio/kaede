@@ -21,7 +21,7 @@ use kaede_common::kaede_dir;
 use kaede_span::Span;
 use kaede_symbol::{Ident, Symbol};
 use kaede_type::{
-    FundamentalType, FundamentalTypeKind, Mutability, RefrenceType, Ty, TyKind, UserDefinedType,
+    FundamentalType, FundamentalTypeKind, Mutability, ReferenceType, Ty, TyKind, UserDefinedType,
 };
 use mangle::mangle_udt_name;
 use tcx::{FunctionInfo, GenericKind, ReturnType, StructInfo, TypeCtx};
@@ -55,23 +55,15 @@ fn get_loaded_pointer<'ctx>(load_instr: &InstructionValue<'ctx>) -> Option<Point
     None
 }
 
-fn replace_generic_types_in_struct_with_actual(
+fn generic_types_to_actual_in_struct(
     cucx: &CompileUnitCtx,
     fields: &[StructField],
 ) -> Vec<StructField> {
     let mut actual = Vec::new();
 
     for field in fields.iter() {
-        let refee_ty = match field.ty.kind.as_ref() {
-            TyKind::Reference(refty) => refty.refee_ty.clone(),
-            _ => {
-                actual.push(field.clone());
-                continue;
-            }
-        };
-
-        let field_ty_name = match refee_ty.kind.as_ref() {
-            TyKind::UserDefined(udt) => udt.name,
+        let field_ty_name = match field.ty.kind.as_ref() {
+            TyKind::Generic(gty) => gty.name,
             _ => {
                 actual.push(field.clone());
                 continue;
@@ -291,7 +283,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
     fn gc_init(&mut self) -> anyhow::Result<()> {
         // Declare GC_malloc in boehm-gc
         let return_ty = Ty {
-            kind: TyKind::Reference(RefrenceType {
+            kind: TyKind::Reference(ReferenceType {
                 refee_ty: Ty {
                     kind: TyKind::Fundamental(FundamentalType {
                         kind: FundamentalTypeKind::I8,
@@ -376,10 +368,12 @@ impl<'ctx> CompileUnitCtx<'ctx> {
                 }
             }
 
-            // Create generic struct type
             def_generic_args(self, ast.generic_params.as_ref().unwrap(), generic_args)?;
+
             let generic_struct_ty = create_struct_type(self, mangled_struct_name, &ast.fields)?;
-            let actual_fields = replace_generic_types_in_struct_with_actual(self, &ast.fields);
+            // To resolve generics types when using this struct.
+            let actual_fields = generic_types_to_actual_in_struct(self, &ast.fields);
+
             undef_generic_args(self, ast.generic_params.as_ref().unwrap());
 
             let fields = actual_fields
@@ -427,6 +421,24 @@ impl<'ctx> CompileUnitCtx<'ctx> {
                     UDTKind::Struct(sty) => sty.ty.into(),
                     UDTKind::Enum(ety) => ety.ty,
                     UDTKind::GenericArg(ty) => self.conv_to_llvm_type(ty)?,
+                }
+            }
+
+            TyKind::Generic(gty) => {
+                let udt_kind = match self.tcx.get_udt(gty.name.symbol()) {
+                    Some(udt) => udt,
+                    None => {
+                        return Err(CodegenError::Undeclared {
+                            name: gty.name.symbol(),
+                            span: gty.name.span(),
+                        }
+                        .into());
+                    }
+                };
+
+                match udt_kind.as_ref() {
+                    UDTKind::GenericArg(ty) => self.conv_to_llvm_type(ty)?,
+                    _ => unreachable!(),
                 }
             }
 

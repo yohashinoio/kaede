@@ -7,7 +7,7 @@ use kaede_ast::stmt::{
 };
 use kaede_span::Span;
 use kaede_symbol::Ident;
-use kaede_type::{create_inferred_tuple, is_same_type, Mutability, RefrenceType, Ty, TyKind};
+use kaede_type::{create_inferred_tuple, is_same_type, Mutability, ReferenceType, Ty, TyKind};
 
 use crate::expr::build_tuple_indexing;
 use crate::value::Value;
@@ -48,7 +48,7 @@ pub fn change_mutability_dup(ty: Rc<Ty>, mutability: Mutability) -> Rc<Ty> {
             mutability,
         };
 
-        var_ty.kind = TyKind::Reference(RefrenceType {
+        var_ty.kind = TyKind::Reference(ReferenceType {
             refee_ty: new_refee_ty.into(),
         })
         .into();

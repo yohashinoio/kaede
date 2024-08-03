@@ -91,7 +91,7 @@ pub type UDTTable<'ctx> = HashMap<Symbol, Rc<UDTKind<'ctx>>>;
 #[derive(Debug)]
 pub enum GenericKind {
     Struct(Struct),
-    Func(Fn),
+    Func((Fn, Visibility)),
 }
 
 pub type GenericTable<'ctx> = HashMap<Symbol, Rc<GenericKind>>;
