@@ -4,7 +4,7 @@ use inkwell::{
     types::{BasicTypeEnum, StructType},
     values::{FunctionValue, PointerValue},
 };
-use kaede_ast::top::{Struct, StructField, Visibility};
+use kaede_ast::top::{Fn, Struct, StructField, Visibility};
 use kaede_symbol::{Ident, Symbol};
 use kaede_type::Ty;
 
@@ -91,6 +91,7 @@ pub type UDTTable<'ctx> = HashMap<Symbol, Rc<UDTKind<'ctx>>>;
 #[derive(Debug)]
 pub enum GenericKind {
     Struct(Struct),
+    Func(Fn),
 }
 
 pub type GenericTable<'ctx> = HashMap<Symbol, Rc<GenericKind>>;

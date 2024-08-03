@@ -365,40 +365,40 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         let info = self.tcx.get_generic_info(udt.name.symbol()).unwrap();
         let generic_args = udt.generic_args.as_ref().unwrap();
 
-        match info.as_ref() {
-            GenericKind::Struct(ast) => {
-                let mangled_struct_name = mangle_udt_name(self, udt);
+        if let GenericKind::Struct(ast) = info.as_ref() {
+            let mangled_struct_name = mangle_udt_name(self, udt);
 
-                // Check if it is cached
-                if let Some(udt_kind) = self.tcx.get_udt(mangled_struct_name) {
-                    match udt_kind.as_ref() {
-                        UDTKind::Struct(info) => return Ok(info.ty),
-                        _ => unreachable!(),
-                    }
+            // Check if it is cached
+            if let Some(udt_kind) = self.tcx.get_udt(mangled_struct_name) {
+                match udt_kind.as_ref() {
+                    UDTKind::Struct(info) => return Ok(info.ty),
+                    _ => unreachable!(),
                 }
-
-                // Create generic struct type
-                def_generic_args(self, ast.generic_params.as_ref().unwrap(), generic_args)?;
-                let generic_struct_ty = create_struct_type(self, mangled_struct_name, &ast.fields)?;
-                let actual_fields = replace_generic_types_in_struct_with_actual(self, &ast.fields);
-                undef_generic_args(self, ast.generic_params.as_ref().unwrap());
-
-                let fields = actual_fields
-                    .iter()
-                    .map(|field| (field.name.symbol(), field.clone()))
-                    .collect();
-
-                self.tcx.add_udt(
-                    mangled_struct_name,
-                    UDTKind::Struct(StructInfo {
-                        ty: generic_struct_ty,
-                        fields,
-                    }),
-                );
-
-                Ok(generic_struct_ty)
             }
+
+            // Create generic struct type
+            def_generic_args(self, ast.generic_params.as_ref().unwrap(), generic_args)?;
+            let generic_struct_ty = create_struct_type(self, mangled_struct_name, &ast.fields)?;
+            let actual_fields = replace_generic_types_in_struct_with_actual(self, &ast.fields);
+            undef_generic_args(self, ast.generic_params.as_ref().unwrap());
+
+            let fields = actual_fields
+                .iter()
+                .map(|field| (field.name.symbol(), field.clone()))
+                .collect();
+
+            self.tcx.add_udt(
+                mangled_struct_name,
+                UDTKind::Struct(StructInfo {
+                    ty: generic_struct_ty,
+                    fields,
+                }),
+            );
+
+            return Ok(generic_struct_ty);
         }
+
+        unreachable!()
     }
 
     fn conv_to_llvm_type(&mut self, ty: &Ty) -> anyhow::Result<BasicTypeEnum<'ctx>> {

@@ -217,13 +217,24 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
     fn func(&mut self, node: Fn) -> anyhow::Result<()> {
         assert_eq!(node.decl.self_, None);
 
-        // Suppress mangling of main function
-        if node.decl.name.as_str() == "main" {
-            self.build_fn("kdmain", node)
+        let mangled_name = if node.decl.name.as_str() == "main" {
+            // Suppress mangling of main function
+            String::from("kdmain")
         } else {
-            let mangled_name = mangle_name(self.cucx, node.decl.name.symbol());
-            self.build_fn(&mangled_name, node)
+            mangle_name(self.cucx, node.decl.name.symbol())
+        };
+
+        // For generic
+        if node.decl.generic_params.is_some() {
+            self.cucx
+                .tcx
+                .add_generic(Symbol::from(mangled_name), GenericKind::Func(node));
+
+            // Generic functions are not generated immediately, but are generated when they are used.
+            return Ok(());
         }
+
+        self.build_fn(&mangled_name, node)
     }
 
     fn mangle_method(&mut self, impl_for_ty: &Ty, node: &Fn) -> String {
@@ -495,12 +506,13 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
     }
 
     fn struct_(&mut self, node: Struct) -> anyhow::Result<()> {
+        // For generic
         if node.generic_params.is_some() {
-            // Generic
             self.cucx
                 .tcx
                 .add_generic(node.name.symbol(), GenericKind::Struct(node));
 
+            // Generic structs are not created immediately, but are created when they are used.
             return Ok(());
         }
 
