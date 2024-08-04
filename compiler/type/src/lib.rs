@@ -270,7 +270,7 @@ impl FundamentalType {
 
             Bool => context.bool_type().as_basic_type_enum(),
             Str => {
-                let str_ty = context.i8_type().ptr_type(AddressSpace::default());
+                let str_ty = context.ptr_type(AddressSpace::default());
                 let len_ty = context.i64_type();
                 // { *i8, i64 }
                 context

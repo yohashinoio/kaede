@@ -105,7 +105,7 @@ pub fn build_normal_let(
         };
 
         // Initialization
-        cucx.builder.build_store(alloca, init.get_value());
+        cucx.builder.build_store(alloca, init.get_value())?;
 
         return Ok(());
     }
@@ -175,7 +175,7 @@ impl<'a, 'ctx> StmtBuilder<'a, 'ctx> {
             AssignKind::Simple => self
                 .cucx
                 .builder
-                .build_store(ptr_to_left, right.get_value()),
+                .build_store(ptr_to_left, right.get_value())?,
         };
 
         Ok(())

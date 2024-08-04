@@ -7,7 +7,6 @@ use inkwell::{
     builder::Builder,
     context::Context,
     module::{Linkage, Module},
-    passes::{PassManager, PassManagerBuilder},
     targets::{CodeModel, InitializationConfig, RelocMode, Target, TargetData, TargetMachine},
     types::{AnyType, BasicType, BasicTypeEnum, FunctionType, StructType},
     values::{BasicValueEnum, FunctionValue, InstructionValue, PointerValue},
@@ -101,12 +100,11 @@ pub fn codegen_compile_unit<'ctx>(
     cgcx: &'ctx CodegenCtx<'ctx>,
     file_path: PathBuf,
     cu: CompileUnit,
-    opt_level: OptimizationLevel,
     no_autoload: bool,
 ) -> anyhow::Result<Module<'ctx>> {
     let cucx = CompileUnitCtx::new(cgcx, file_path)?;
 
-    cucx.codegen(cu.top_levels, opt_level, no_autoload)
+    cucx.codegen(cu.top_levels, no_autoload)
 }
 
 /// Do **not** create this struct multiple times!
@@ -229,7 +227,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             None => builder.position_at_end(entry),
         }
 
-        Ok(builder.build_alloca(self.conv_to_llvm_type(ty)?, name))
+        Ok(builder.build_alloca(self.conv_to_llvm_type(ty)?, name)?)
     }
 
     // If return_ty is `None`, treat as void
@@ -324,7 +322,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
 
         let addr = self
             .builder
-            .build_call(gc_mallocd, &[size], "")
+            .build_call(gc_mallocd, &[size], "")?
             .try_as_basic_value()
             .left()
             .unwrap();
@@ -442,15 +440,9 @@ impl<'ctx> CompileUnitCtx<'ctx> {
                 }
             }
 
-            TyKind::Reference(rty) => self
-                .conv_to_llvm_type(&rty.refee_ty)?
-                .ptr_type(AddressSpace::default())
-                .into(),
+            TyKind::Reference(_) => self.context().ptr_type(AddressSpace::default()).into(),
 
-            TyKind::Pointer(pointee_ty) => self
-                .conv_to_llvm_type(pointee_ty)?
-                .ptr_type(AddressSpace::default())
-                .into(),
+            TyKind::Pointer(_) => self.context().ptr_type(AddressSpace::default()).into(),
 
             TyKind::Array((elem_ty, size)) => {
                 self.conv_to_llvm_type(elem_ty)?.array_type(*size).into()
@@ -468,16 +460,6 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             TyKind::Never => panic!("Cannot get LLVM type of never type!"),
             TyKind::Inferred => panic!("Cannot get LLVM type of inferred type!"),
         })
-    }
-
-    fn opt_module(&self, opt_level: OptimizationLevel) {
-        let pm_builder = PassManagerBuilder::create();
-        pm_builder.set_optimization_level(opt_level);
-
-        let pm = PassManager::create(());
-        pm_builder.populate_module_pass_manager(&pm);
-
-        pm.run_on(&self.module);
     }
 
     fn verify_module(&self) -> anyhow::Result<()> {
@@ -517,10 +499,10 @@ impl<'ctx> CompileUnitCtx<'ctx> {
     }
 
     /// If there was no user-defined main in the module, do nothing
-    fn build_main_fn(&mut self) {
+    fn build_main_fn(&mut self) -> anyhow::Result<()> {
         let main_internal = match self.module.get_function("kdmain") {
             Some(fn_v) => fn_v,
-            None => return,
+            None => return Ok(()),
         };
 
         let main =
@@ -531,18 +513,21 @@ impl<'ctx> CompileUnitCtx<'ctx> {
 
         let exit_status = self
             .builder
-            .build_call(main_internal, &[], "")
+            .build_call(main_internal, &[], "")?
             .try_as_basic_value()
             .left()
             .unwrap();
 
-        self.builder.build_return(Some(&exit_status));
+        self.builder.build_return(Some(&exit_status))?;
+
+        Ok(())
     }
 
+    // This function doesn't optimize modules.
+    // Please execute 'opt' command to optimize the module.
     fn codegen(
         mut self,
         top_levels: Vec<TopLevel>,
-        opt_level: OptimizationLevel,
         no_autoload: bool,
     ) -> anyhow::Result<Module<'ctx>> {
         self.gc_init()?;
@@ -555,11 +540,9 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             build_top_level(&mut self, top)?;
         }
 
-        self.build_main_fn();
+        self.build_main_fn()?;
 
         self.verify_module()?;
-
-        self.opt_module(opt_level);
 
         Ok(self.module)
     }

@@ -394,7 +394,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
 
         if fn_value.get_type().get_return_type().is_none() && self.cucx.no_terminator() {
             // If return type is void and there is no termination, insert return
-            self.cucx.builder.build_return(None);
+            self.cucx.builder.build_return(None)?;
         }
 
         Ok(())
@@ -411,11 +411,14 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
 
         for (idx, (name, param_ty)) in params.into_iter().enumerate() {
             let llvm_param_ty = self.cucx.conv_to_llvm_type(&param_ty)?;
-            let alloca = self.cucx.builder.build_alloca(llvm_param_ty, name.as_str());
+            let alloca = self
+                .cucx
+                .builder
+                .build_alloca(llvm_param_ty, name.as_str())?;
 
             self.cucx
                 .builder
-                .build_store(alloca, fn_value.get_nth_param(idx as u32).unwrap());
+                .build_store(alloca, fn_value.get_nth_param(idx as u32).unwrap())?;
 
             var_table.add(name.symbol(), (alloca, param_ty));
         }

@@ -74,7 +74,7 @@ fn emit_bitcode_to_tempfile(module: &Module) -> anyhow::Result<TempPath> {
     Ok(temppath)
 }
 
-fn emit_object_file_to_tempfile(ir_path: &Path) -> anyhow::Result<TempPath> {
+fn emit_object_file_to_tempfile(bitcode_path: &Path) -> anyhow::Result<TempPath> {
     let tempfile = NamedTempFile::new()?;
 
     let temppath = tempfile.into_temp_path();
@@ -85,7 +85,7 @@ fn emit_object_file_to_tempfile(ir_path: &Path) -> anyhow::Result<TempPath> {
             "-relocation-model=pic", // Set relocation model
             "-o",
             temppath.to_str().unwrap(),
-            ir_path.to_str().unwrap(),
+            bitcode_path.to_str().unwrap(),
         ])
         .status()?;
 
@@ -117,7 +117,6 @@ fn emit_exe_file(obj_path: &Path, output_file_path: &Path) -> anyhow::Result<()>
 fn compile<'ctx>(
     cgcx: &'ctx CodegenCtx<'_>,
     unit_infos: Vec<CompileUnitInfo>,
-    opt_level: OptimizationLevel,
     no_autoload: bool,
 ) -> anyhow::Result<Module<'ctx>> {
     let mut compiled_modules = Vec::new();
@@ -125,7 +124,7 @@ fn compile<'ctx>(
     for unit_info in unit_infos {
         let ast = Parser::new(&unit_info.program).run()?;
 
-        let module = codegen_compile_unit(cgcx, unit_info.file_path, ast, opt_level, no_autoload)?;
+        let module = codegen_compile_unit(cgcx, unit_info.file_path, ast, no_autoload)?;
 
         compiled_modules.push(module);
     }
@@ -142,6 +141,38 @@ fn compile<'ctx>(
     Ok(module)
 }
 
+fn optimize_with_opt(level: OptimizationLevel, ir_path: &Path) -> anyhow::Result<TempPath> {
+    let tempfile = NamedTempFile::new()?;
+
+    let temppath = tempfile.into_temp_path();
+
+    let status = Command::new("opt")
+        .args([
+            &format!("-O{}", level as u32),
+            "-o",
+            temppath.to_str().unwrap(),
+            ir_path.to_str().unwrap(),
+        ])
+        .status()?;
+
+    if !status.success() {
+        anyhow::bail!("Failed to optimize using 'opt'")
+    }
+
+    Ok(temppath)
+}
+
+fn emit_optimized_object_file_to_tempfile(
+    opt_level: OptimizationLevel,
+    module: &Module,
+) -> anyhow::Result<TempPath> {
+    let ir_path = emit_bitcode_to_tempfile(&module)?;
+
+    let optimized_bitcode_path = optimize_with_opt(opt_level, &ir_path)?;
+
+    Ok(emit_object_file_to_tempfile(&optimized_bitcode_path)?)
+}
+
 fn compile_and_output_obj(
     unit_infos: Vec<CompileUnitInfo>,
     opt_level: OptimizationLevel,
@@ -152,17 +183,14 @@ fn compile_and_output_obj(
     let context = Context::create();
     let cgcx = CodegenCtx::new(&context)?;
 
-    let module = compile(&cgcx, unit_infos, opt_level, no_autoload)?;
+    let module = compile(&cgcx, unit_infos, no_autoload)?;
 
     // Emit
     if display_llvm_ir {
         // Print llvm ir to stdout
         print!("{}", module.to_string());
     } else {
-        // Emit executable file
-        let ir_path = emit_bitcode_to_tempfile(&module)?;
-
-        let obj_path = emit_object_file_to_tempfile(&ir_path)?;
+        let obj_path = emit_optimized_object_file_to_tempfile(opt_level, &module)?;
 
         fs::rename(obj_path, output_file_path)?;
     }
@@ -180,7 +208,7 @@ fn compile_and_link(
     let context = Context::create();
     let cgcx = CodegenCtx::new(&context)?;
 
-    let module = compile(&cgcx, unit_infos, opt_level, no_autoload)?;
+    let module = compile(&cgcx, unit_infos, no_autoload)?;
 
     if module.get_function("main").is_none() {
         return Err(CodegenError::MainNotFound.into());
@@ -191,10 +219,7 @@ fn compile_and_link(
         // Print llvm ir to stdout
         print!("{}", module.to_string());
     } else {
-        // Emit executable file
-        let ir_path = emit_bitcode_to_tempfile(&module)?;
-
-        let obj_path = emit_object_file_to_tempfile(&ir_path)?;
+        let obj_path = emit_optimized_object_file_to_tempfile(opt_level, &module)?;
 
         emit_exe_file(&obj_path, output_file_path)?;
     }

@@ -12,33 +12,36 @@ use kaede_parse::Parser;
 
 use super::*;
 
-fn jit_compile(module: &Module) -> i32 {
+fn jit_compile(module: &Module) -> anyhow::Result<i32> {
     let kaede_gc_lib_path = format!("{}/lib/libkgc.so", kaede_dir());
     let kaede_std_lib_path = format!("{}/lib/libkd.so", kaede_dir());
 
+    let kaede_gc_lib_path = Path::new(&kaede_gc_lib_path);
+    let kaede_std_lib_path = Path::new(&kaede_std_lib_path);
+
     // Load bdw-gc (boehm-gc)
-    if Path::new(&kaede_gc_lib_path).exists() {
-        load_library_permanently(&kaede_gc_lib_path);
+    if kaede_gc_lib_path.exists() {
+        load_library_permanently(&kaede_gc_lib_path)?;
     } else {
-        panic!("{} not found!", kaede_gc_lib_path);
+        panic!("{} not found!", kaede_gc_lib_path.to_str().unwrap());
     }
 
     // Load standard libarary
-    if Path::new(&kaede_std_lib_path).exists() {
-        load_library_permanently(&kaede_std_lib_path);
+    if kaede_std_lib_path.exists() {
+        load_library_permanently(&kaede_std_lib_path)?;
     } else {
-        panic!("{} not found!", kaede_std_lib_path);
+        panic!("{} not found!", kaede_std_lib_path.to_str().unwrap());
     }
 
     let ee = module
         .create_jit_execution_engine(OptimizationLevel::None)
         .unwrap();
 
-    unsafe {
+    Ok(unsafe {
         ee.get_function::<unsafe extern "C" fn() -> i32>("main")
             .unwrap()
             .call()
-    }
+    })
 }
 
 /// Return exit status
@@ -50,12 +53,11 @@ fn exec(program: &str) -> Result<i32, CodegenError> {
         &cgcx,
         PathBuf::from("test"),
         Parser::new(program).run().unwrap(),
-        OptimizationLevel::None,
         false,
     )
     .map_err(|e| e.downcast::<CodegenError>().unwrap())?;
 
-    Ok(jit_compile(&module))
+    Ok(jit_compile(&module).unwrap())
 }
 
 #[test]

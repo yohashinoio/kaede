@@ -157,7 +157,7 @@ pub fn build_tuple_indexing<'ctx>(
                 cucx.context().i32_type().const_int(index as u64, false),
             ],
             "",
-        )
+        )?
     };
 
     let elem_ty = match tuple_ty.kind.as_ref() {
@@ -203,7 +203,7 @@ pub fn build_tuple_indexing<'ctx>(
     let llvm_elem_ty = cucx.conv_to_llvm_type(&elem_ty)?;
 
     Ok(Value::new(
-        cucx.builder.build_load(llvm_elem_ty, gep, ""),
+        cucx.builder.build_load(llvm_elem_ty, gep, "")?,
         Ty {
             kind: elem_ty.kind.clone(),
             mutability: tuple_ty.mutability,
@@ -229,10 +229,10 @@ pub fn create_gc_struct<'ctx>(
                     cucx.context().i32_type().const_int(index as u64, false),
                 ],
                 "",
-            )
+            )?
         };
 
-        cucx.builder.build_store(gep, *init);
+        cucx.builder.build_store(gep, *init)?;
     }
 
     Ok(mallocd)
@@ -468,7 +468,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             self.build_int_equal(
                 target.get_value().into_int_value(),
                 arm_value.get_value().into_int_value(),
-            )
+            )?
         };
 
         let then = Block {
@@ -599,7 +599,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         arms: &MatchArmList,
         span: Span,
     ) -> anyhow::Result<Value<'ctx>> {
-        let target_offset = self.load_enum_variant_offset_from_value(target);
+        let target_offset = self.load_enum_variant_offset_from_value(target)?;
 
         let mut valued_if = self
             .conv_match_arms_on_enum_to_if(
@@ -648,7 +648,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                         .context()
                         .i32_type()
                         .const_int(pattern_variant_info.offset as u64, false),
-                ),
+                )?,
                 param_name,
                 pattern_variant_info,
             )
@@ -700,22 +700,25 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         }))
     }
 
-    fn load_enum_variant_offset_from_value(&self, value: &Value<'ctx>) -> Value<'ctx> {
+    fn load_enum_variant_offset_from_value(
+        &self,
+        value: &Value<'ctx>,
+    ) -> anyhow::Result<Value<'ctx>> {
         let gep = unsafe {
             self.cucx.builder.build_in_bounds_gep(
                 self.cucx.context().i32_type(),
                 value.get_value().into_pointer_value(),
                 &[self.cucx.context().i32_type().const_zero()],
                 "",
-            )
+            )?
         };
 
-        Value::new(
+        Ok(Value::new(
             self.cucx
                 .builder
-                .build_load(self.cucx.context().i32_type(), gep, ""),
+                .build_load(self.cucx.context().i32_type(), gep, "")?,
             make_fundamental_type(FundamentalTypeKind::I32, Mutability::Not).into(),
-        )
+        ))
     }
 
     fn derive_variant_from_enum_variant_pattern<'pat, 'e>(
@@ -761,7 +764,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
     fn break_(&self, node: &Break) -> anyhow::Result<Value<'ctx>> {
         match self.cucx.loop_break_bb_stk.last() {
             Some(bb) => {
-                self.cucx.builder.build_unconditional_branch(*bb);
+                self.cucx.builder.build_unconditional_branch(*bb)?;
                 Ok(Value::new_never())
             }
 
@@ -773,10 +776,10 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         match &node.val {
             Some(val) => {
                 let value = build_expression(self.cucx, val)?;
-                self.cucx.builder.build_return(Some(&value.get_value()))
+                self.cucx.builder.build_return(Some(&value.get_value()))?
             }
 
-            None => self.cucx.builder.build_return(None),
+            None => self.cucx.builder.build_return(None)?,
         };
 
         Ok(Value::new_never())
@@ -793,13 +796,13 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         self.cucx.loop_break_bb_stk.push(cont_bb);
 
         // Build body block
-        self.cucx.builder.build_unconditional_branch(body_bb);
+        self.cucx.builder.build_unconditional_branch(body_bb)?;
         self.cucx.builder.position_at_end(body_bb);
         build_block(self.cucx, &node.body)?;
 
         // Loop!
         if self.cucx.no_terminator() {
-            self.cucx.builder.build_unconditional_branch(body_bb);
+            self.cucx.builder.build_unconditional_branch(body_bb)?;
         }
 
         self.cucx.builder.position_at_end(cont_bb);
@@ -864,7 +867,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             node.cond.get_value().into_int_value(),
             zero_const,
             "ifcond",
-        );
+        )?;
 
         let then_bb = self.cucx.context().append_basic_block(parent, "then");
         let else_bb = self.cucx.context().append_basic_block(parent, "else");
@@ -872,7 +875,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
         self.cucx
             .builder
-            .build_conditional_branch(cond, then_bb, else_bb);
+            .build_conditional_branch(cond, then_bb, else_bb)?;
 
         // Build then block
         self.cucx.builder.position_at_end(then_bb);
@@ -887,7 +890,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
         // Since there can be no more than one terminator per block
         if self.cucx.no_terminator() {
-            self.cucx.builder.build_unconditional_branch(cont_bb);
+            self.cucx.builder.build_unconditional_branch(cont_bb)?;
         }
 
         let then_bb = self.cucx.builder.get_insert_block().unwrap();
@@ -908,7 +911,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                     Value::new_unit()
                 } else if unreachable_else {
                     // Build unreachable
-                    self.cucx.builder.build_unreachable();
+                    self.cucx.builder.build_unreachable()?;
                     Value::new_never()
                 } else {
                     return Err(CodegenError::IfMustHaveElseUsedAsExpr { span }.into());
@@ -920,7 +923,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
         // Since there can be no more than one terminator per block
         if self.cucx.no_terminator() {
-            self.cucx.builder.build_unconditional_branch(cont_bb);
+            self.cucx.builder.build_unconditional_branch(cont_bb)?;
         }
 
         self.cucx.builder.position_at_end(cont_bb);
@@ -951,7 +954,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         };
 
         let llvm_phi_ty = self.cucx.conv_to_llvm_type(&phi_ty)?;
-        let phi = self.cucx.builder.build_phi(llvm_phi_ty, "iftmp");
+        let phi = self.cucx.builder.build_phi(llvm_phi_ty, "iftmp")?;
 
         phi.add_incoming(&[
             (&then_val.get_value(), then_bb),
@@ -967,17 +970,11 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             _ => self.cucx.conv_to_llvm_type(&enum_unpack.variant_ty),
         }?;
 
-        let bitcast = self.cucx.builder.build_bitcast(
+        let bitcast = self.cucx.builder.build_bit_cast(
             enum_unpack.enum_value.get_value(),
-            self.cucx
-                .context()
-                .struct_type(
-                    &[self.cucx.context().i32_type().into(), variant_ty_llvm],
-                    true,
-                )
-                .ptr_type(AddressSpace::default()),
+            self.cucx.context().ptr_type(AddressSpace::default()),
             "",
-        );
+        )?;
 
         let gep = unsafe {
             self.cucx.builder.build_in_bounds_gep(
@@ -988,11 +985,11 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                     self.cucx.context().i32_type().const_int(1_u64, false),
                 ],
                 "",
-            )
+            )?
         };
 
         let variant_value = Value::new(
-            self.cucx.builder.build_load(variant_ty_llvm, gep, ""),
+            self.cucx.builder.build_load(variant_ty_llvm, gep, "")?,
             enum_unpack.variant_ty.clone(),
         );
 
@@ -1125,10 +1122,10 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                         self.cucx.context().i32_type().const_int(idx as u64, false),
                     ],
                     "",
-                )
+                )?
             };
 
-            self.cucx.builder.build_store(gep, elem.get_value());
+            self.cucx.builder.build_store(gep, elem.get_value())?;
         }
 
         Ok(Value::new(
@@ -1176,13 +1173,13 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                     index.get_value().into_int_value(),
                 ],
                 "",
-            )
+            )?
         };
 
         Ok(Value::new(
             self.cucx
                 .builder
-                .build_load(array_llvm_ty.get_element_type(), gep, ""),
+                .build_load(array_llvm_ty.get_element_type(), gep, "")?,
             Ty {
                 kind: elem_ty.kind.clone(),
                 mutability: array_ref_ty.mutability,
@@ -1208,7 +1205,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                     operand.get_value().into_int_value(),
                     zero.into_int_value(),
                     "",
-                )
+                )?
                 .into(),
             Rc::new(make_fundamental_type(
                 FundamentalTypeKind::Bool,
@@ -1232,7 +1229,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
     }
 
     fn string_literal(&mut self, s: &str) -> anyhow::Result<Value<'ctx>> {
-        let global_s = self.cucx.builder.build_global_string_ptr(s, "str");
+        let global_s = self.cucx.builder.build_global_string_ptr(s, "str")?;
 
         let str_ty = Rc::new(make_fundamental_type(
             FundamentalTypeKind::Str,
@@ -1266,7 +1263,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         let llvm_ty = self.cucx.conv_to_llvm_type(&ty)?;
 
         Ok(Value::new(
-            self.cucx.builder.build_load(llvm_ty, ptr, ""),
+            self.cucx.builder.build_load(llvm_ty, ptr, "")?,
             ty.clone(),
         ))
     }
@@ -1328,7 +1325,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                     cast_llvm_ty.into_int_type(),
                     cast_ty.kind.is_signed(),
                     "",
-                )
+                )?
                 .as_basic_value_enum(),
             cast_ty,
         ))
@@ -1348,7 +1345,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                     value.get_value().into_pointer_value(),
                     cast_llvm_ty.into_pointer_type(),
                     "",
-                )
+                )?
                 .as_basic_value_enum(),
             cast_ty,
         ))
@@ -1469,65 +1466,69 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         ))
     }
 
-    fn logical_or(&self, b1: IntValue<'ctx>, b2: IntValue<'ctx>) -> Value<'ctx> {
+    fn logical_or(&self, b1: IntValue<'ctx>, b2: IntValue<'ctx>) -> anyhow::Result<Value<'ctx>> {
         let bool_type = self.cucx.context().bool_type();
 
-        let result = self.cucx.builder.build_or(b1, b2, "");
+        let result = self.cucx.builder.build_or(b1, b2, "")?;
 
         let zero = bool_type.const_zero();
-        let cmp = self
-            .cucx
-            .builder
-            .build_int_compare(inkwell::IntPredicate::EQ, result, zero, "");
-        let result = self
-            .cucx
-            .builder
-            .build_select(cmp, zero, bool_type.const_all_ones(), "");
-
-        Value::new(
-            result,
-            Rc::new(make_fundamental_type(
-                FundamentalTypeKind::Bool,
-                Mutability::Not,
-            )),
-        )
-    }
-
-    fn logical_and(&self, b1: IntValue<'ctx>, b2: IntValue<'ctx>) -> Value<'ctx> {
-        let bool_type = self.cucx.context().bool_type();
-
-        let result = self.cucx.builder.build_and(b1, b2, "");
-
-        let zero = bool_type.const_zero();
-        let cmp = self
-            .cucx
-            .builder
-            .build_int_compare(inkwell::IntPredicate::EQ, result, zero, "");
-        let result = self
-            .cucx
-            .builder
-            .build_select(cmp, zero, bool_type.const_all_ones(), "");
-
-        Value::new(
-            result,
-            Rc::new(make_fundamental_type(
-                FundamentalTypeKind::Bool,
-                Mutability::Not,
-            )),
-        )
-    }
-
-    fn build_int_equal(&self, left: IntValue<'ctx>, right: IntValue<'ctx>) -> Value<'ctx> {
-        Value::new(
+        let cmp =
             self.cucx
                 .builder
-                .build_int_compare(IntPredicate::EQ, left, right, "")
+                .build_int_compare(inkwell::IntPredicate::EQ, result, zero, "")?;
+        let result = self
+            .cucx
+            .builder
+            .build_select(cmp, zero, bool_type.const_all_ones(), "")?;
+
+        Ok(Value::new(
+            result,
+            Rc::new(make_fundamental_type(
+                FundamentalTypeKind::Bool,
+                Mutability::Not,
+            )),
+        ))
+    }
+
+    fn logical_and(&self, b1: IntValue<'ctx>, b2: IntValue<'ctx>) -> anyhow::Result<Value<'ctx>> {
+        let bool_type = self.cucx.context().bool_type();
+
+        let result = self.cucx.builder.build_and(b1, b2, "")?;
+
+        let zero = bool_type.const_zero();
+        let cmp =
+            self.cucx
+                .builder
+                .build_int_compare(inkwell::IntPredicate::EQ, result, zero, "")?;
+        let result = self
+            .cucx
+            .builder
+            .build_select(cmp, zero, bool_type.const_all_ones(), "")?;
+
+        Ok(Value::new(
+            result,
+            Rc::new(make_fundamental_type(
+                FundamentalTypeKind::Bool,
+                Mutability::Not,
+            )),
+        ))
+    }
+
+    fn build_int_equal(
+        &self,
+        left: IntValue<'ctx>,
+        right: IntValue<'ctx>,
+    ) -> anyhow::Result<Value<'ctx>> {
+        Ok(Value::new(
+            self.cucx
+                .builder
+                .build_int_compare(IntPredicate::EQ, left, right, "")?
                 .into(),
             Rc::new(make_fundamental_type(
                 FundamentalTypeKind::Bool,
                 Mutability::Not,
             )),
-        )
+        ))
     }
 
     fn binary_arithmetic_op(&mut self, node: &Binary) -> anyhow::Result<Value<'ctx>> {
@@ -1548,14 +1549,14 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         let right_int = right_value.into_int_value();
 
         Ok(match node.kind {
-            LogicalOr => self.logical_or(left_int, right_int),
+            LogicalOr => self.logical_or(left_int, right_int)?,
 
-            LogicalAnd => self.logical_and(left_int, right_int),
+            LogicalAnd => self.logical_and(left_int, right_int)?,
 
             Add => Value::new(
                 self.cucx
                     .builder
-                    .build_int_add(left_int, right_int, "")
+                    .build_int_add(left_int, right_int, "")?
                     .into(),
                 left.get_type(),
             ),
@@ -1563,7 +1564,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             Sub => Value::new(
                 self.cucx
                     .builder
-                    .build_int_sub(left_int, right_int, "")
+                    .build_int_sub(left_int, right_int, "")?
                     .into(),
                 left.get_type(),
             ),
@@ -1571,7 +1572,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             Mul => Value::new(
                 self.cucx
                     .builder
-                    .build_int_mul(left_int, right_int, "")
+                    .build_int_mul(left_int, right_int, "")?
                     .into(),
                 left.get_type(),
             ),
@@ -1581,7 +1582,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                     Value::new(
                         self.cucx
                             .builder
-                            .build_int_signed_rem(left_int, right_int, "")
+                            .build_int_signed_rem(left_int, right_int, "")?
                             .into(),
                         left.get_type(),
                     )
@@ -1589,7 +1590,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                     Value::new(
                         self.cucx
                             .builder
-                            .build_int_unsigned_rem(left_int, right_int, "")
+                            .build_int_unsigned_rem(left_int, right_int, "")?
                             .into(),
                         left.get_type(),
                     )
@@ -1601,7 +1602,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                     Value::new(
                         self.cucx
                             .builder
-                            .build_int_signed_div(left_int, right_int, "")
+                            .build_int_signed_div(left_int, right_int, "")?
                             .into(),
                         left.get_type(),
                     )
@@ -1609,19 +1610,19 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                     Value::new(
                         self.cucx
                             .builder
-                            .build_int_unsigned_div(left_int, right_int, "")
+                            .build_int_unsigned_div(left_int, right_int, "")?
                             .into(),
                         left.get_type(),
                     )
                 }
             }
 
-            Eq => self.build_int_equal(left_int, right_int),
+            Eq => self.build_int_equal(left_int, right_int)?,
 
             Ne => Value::new(
                 self.cucx
                     .builder
-                    .build_int_compare(IntPredicate::NE, left_int, right_int, "")
+                    .build_int_compare(IntPredicate::NE, left_int, right_int, "")?
                     .into(),
                 Rc::new(make_fundamental_type(
                     FundamentalTypeKind::Bool,
@@ -1634,7 +1635,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                     Value::new(
                         self.cucx
                             .builder
-                            .build_int_compare(IntPredicate::SLT, left_int, right_int, "")
+                            .build_int_compare(IntPredicate::SLT, left_int, right_int, "")?
                             .into(),
                         Rc::new(make_fundamental_type(
                             FundamentalTypeKind::Bool,
@@ -1645,7 +1646,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                     Value::new(
                         self.cucx
                             .builder
-                            .build_int_compare(IntPredicate::ULT, left_int, right_int, "")
+                            .build_int_compare(IntPredicate::ULT, left_int, right_int, "")?
                             .into(),
                         Rc::new(make_fundamental_type(
                             FundamentalTypeKind::Bool,
@@ -1660,7 +1661,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                     Value::new(
                         self.cucx
                             .builder
-                            .build_int_compare(IntPredicate::SLE, left_int, right_int, "")
+                            .build_int_compare(IntPredicate::SLE, left_int, right_int, "")?
                             .into(),
                         Rc::new(make_fundamental_type(
                             FundamentalTypeKind::Bool,
@@ -1671,7 +1672,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                     Value::new(
                         self.cucx
                             .builder
-                            .build_int_compare(IntPredicate::ULE, left_int, right_int, "")
+                            .build_int_compare(IntPredicate::ULE, left_int, right_int, "")?
                             .into(),
                         Rc::new(make_fundamental_type(
                             FundamentalTypeKind::Bool,
@@ -1686,7 +1687,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                     Value::new(
                         self.cucx
                             .builder
-                            .build_int_compare(IntPredicate::SGT, left_int, right_int, "")
+                            .build_int_compare(IntPredicate::SGT, left_int, right_int, "")?
                             .into(),
                         Rc::new(make_fundamental_type(
                             FundamentalTypeKind::Bool,
@@ -1697,7 +1698,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                     Value::new(
                         self.cucx
                             .builder
-                            .build_int_compare(IntPredicate::UGT, left_int, right_int, "")
+                            .build_int_compare(IntPredicate::UGT, left_int, right_int, "")?
                             .into(),
                         Rc::new(make_fundamental_type(
                             FundamentalTypeKind::Bool,
@@ -1712,7 +1713,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                     Value::new(
                         self.cucx
                             .builder
-                            .build_int_compare(IntPredicate::SGE, left_int, right_int, "")
+                            .build_int_compare(IntPredicate::SGE, left_int, right_int, "")?
                             .into(),
                         Rc::new(make_fundamental_type(
                             FundamentalTypeKind::Bool,
@@ -1723,7 +1724,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                     Value::new(
                         self.cucx
                             .builder
-                            .build_int_compare(IntPredicate::UGE, left_int, right_int, "")
+                            .build_int_compare(IntPredicate::UGE, left_int, right_int, "")?
                             .into(),
                         Rc::new(make_fundamental_type(
                             FundamentalTypeKind::Bool,
@@ -1933,13 +1934,13 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                     self.cucx.context().i32_type().const_int(offset, false),
                 ],
                 "",
-            )
+            )?
         };
 
         let llvm_field_ty = self.cucx.conv_to_llvm_type(&field_info.ty)?;
 
         Ok(Value::new(
-            self.cucx.builder.build_load(llvm_field_ty, gep, ""),
+            self.cucx.builder.build_load(llvm_field_ty, gep, "")?,
             Ty {
                 kind: field_info.ty.kind.clone(),
                 mutability: struct_ty.mutability,
@@ -2178,7 +2179,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                     .collect::<Vec<_>>()
                     .as_slice(),
                 "",
-            )
+            )?
             .try_as_basic_value()
             .left();
 
