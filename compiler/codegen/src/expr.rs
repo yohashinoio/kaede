@@ -1147,14 +1147,33 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
         let array_ref_ty = array_ref.get_type();
 
-        let (array_ty, elem_ty) = match array_ref_ty.kind.as_ref() {
-            TyKind::Reference(rty) => match rty.refee_ty.kind.as_ref() {
-                TyKind::Array((elem_ty, _)) => (rty.refee_ty.clone(), elem_ty),
+        let (array_ty, elem_ty) = {
+            match array_ref_ty.kind.as_ref() {
+                TyKind::Reference(rty) => {
+                    if let TyKind::Array((elem_ty, _)) = rty.refee_ty.kind.as_ref() {
+                        (rty.refee_ty.clone(), elem_ty.clone())
+                    } else {
+                        todo!("Error");
+                    }
+                }
 
-                _ => todo!("ERROR"),
-            },
+                TyKind::Generic(gty) => {
+                    match self.cucx.tcx.get_udt(gty.name.symbol()).unwrap().as_ref() {
+                        UDTKind::GenericArg(actual) => match actual.kind.as_ref() {
+                            TyKind::Reference(rty) => match rty.refee_ty.kind.as_ref() {
+                                TyKind::Array((elem_ty, _)) => {
+                                    (rty.refee_ty.clone(), elem_ty.clone())
+                                }
+                                _ => todo!("Error"),
+                            },
+                            _ => todo!("Error"),
+                        },
+                        _ => todo!("Error"),
+                    }
+                }
 
-            _ => unreachable!(),
+                _ => unreachable!(),
+            }
         };
 
         let array_llvm_ty = self.cucx.conv_to_llvm_type(&array_ty)?.into_array_type();
@@ -2081,7 +2100,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
         def_generic_args(self.cucx, generic_params, &generic_args)?;
 
-        let prev = self.cucx.builder.get_insert_block().unwrap();
+        let bb_backup = self.cucx.builder.get_insert_block().unwrap();
 
         build_top_level(
             self.cucx,
@@ -2092,7 +2111,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             },
         )?;
 
-        self.cucx.builder.position_at_end(prev);
+        self.cucx.builder.position_at_end(bb_backup);
 
         undef_generic_args(self.cucx, generic_params);
 
