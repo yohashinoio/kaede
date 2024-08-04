@@ -141,17 +141,38 @@ fn compile<'ctx>(
     Ok(module)
 }
 
-fn optimize_with_opt(level: OptimizationLevel, ir_path: &Path) -> anyhow::Result<TempPath> {
+fn display_optimized_llvm_ir(opt_level: OptimizationLevel, module: &Module) -> anyhow::Result<()> {
+    let bitcode_path = emit_bitcode_to_tempfile(module)?;
+
+    let status = Command::new("opt")
+        .args([
+            "-S",
+            &format!("-O{}", opt_level as u32),
+            bitcode_path.to_str().unwrap(),
+        ])
+        .status()?;
+
+    if !status.success() {
+        anyhow::bail!("Failed to optimize using 'opt'")
+    }
+
+    Ok(())
+}
+
+fn optimize_with_opt(
+    opt_level: OptimizationLevel,
+    bitcode_path: &Path,
+) -> anyhow::Result<TempPath> {
     let tempfile = NamedTempFile::new()?;
 
     let temppath = tempfile.into_temp_path();
 
     let status = Command::new("opt")
         .args([
-            &format!("-O{}", level as u32),
+            &format!("-O{}", opt_level as u32),
             "-o",
             temppath.to_str().unwrap(),
-            ir_path.to_str().unwrap(),
+            bitcode_path.to_str().unwrap(),
         ])
         .status()?;
 
@@ -166,9 +187,9 @@ fn emit_optimized_object_file_to_tempfile(
     opt_level: OptimizationLevel,
     module: &Module,
 ) -> anyhow::Result<TempPath> {
-    let ir_path = emit_bitcode_to_tempfile(&module)?;
+    let bitcode_path = emit_bitcode_to_tempfile(&module)?;
 
-    let optimized_bitcode_path = optimize_with_opt(opt_level, &ir_path)?;
+    let optimized_bitcode_path = optimize_with_opt(opt_level, &bitcode_path)?;
 
     Ok(emit_object_file_to_tempfile(&optimized_bitcode_path)?)
 }
@@ -187,8 +208,7 @@ fn compile_and_output_obj(
 
     // Emit
     if display_llvm_ir {
-        // Print llvm ir to stdout
-        print!("{}", module.to_string());
+        display_optimized_llvm_ir(opt_level, &module)?;
     } else {
         let obj_path = emit_optimized_object_file_to_tempfile(opt_level, &module)?;
 
@@ -216,8 +236,7 @@ fn compile_and_link(
 
     // Emit
     if display_llvm_ir {
-        // Print llvm ir to stdout
-        print!("{}", module.to_string());
+        display_optimized_llvm_ir(opt_level, &module)?;
     } else {
         let obj_path = emit_optimized_object_file_to_tempfile(opt_level, &module)?;
 
