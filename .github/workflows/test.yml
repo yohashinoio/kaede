@@ -17,7 +17,7 @@ jobs:
         with:
           path: |
             ./llvm/
-          key: ${{ runner.os }}-llvm-15.0
+          key: ${{ runner.os }}-llvm-17.0
 
       - name: Restore cached rust
         id: cache-rust-restore
@@ -38,9 +38,9 @@ jobs:
         run: sudo apt install -y valgrind
 
       - name: Install llvm
-        uses: KyleMayes/install-llvm-action@v1
+        uses: KyleMayes/install-llvm-action@v2
         with:
-          version: "15.0"
+          version: "17.0"
           cached: ${{ steps.cache-llvm-restore.outputs.cache-hit }}
 
       - name: Save llvm
