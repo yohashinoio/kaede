@@ -5,10 +5,10 @@
 
 ## Install dependencies with homebrew
 
-### LLVM 15
+### LLVM 17
 
 ```bash
-$ brew install llvm@15
+$ brew install llvm@17
 ```
 
 ### Environment Variable Configuration
