@@ -13,14 +13,15 @@ use inkwell::{
     AddressSpace, OptimizationLevel,
 };
 use kaede_ast::{
-    top::{Import, StructField, TopLevel, TopLevelKind, Visibility},
+    top::{GenericParams, Import, StructField, TopLevel, TopLevelKind, Visibility},
     CompileUnit,
 };
 use kaede_common::kaede_dir;
 use kaede_span::Span;
 use kaede_symbol::{Ident, Symbol};
 use kaede_type::{
-    FundamentalType, FundamentalTypeKind, Mutability, ReferenceType, Ty, TyKind, UserDefinedType,
+    FundamentalType, FundamentalTypeKind, GenericArgs, Mutability, ReferenceType, Ty, TyKind,
+    UserDefinedType,
 };
 use mangle::mangle_udt_name;
 use tcx::{FunctionInfo, GenericKind, ReturnType, StructInfo, TypeCtx};
@@ -157,6 +158,10 @@ impl<'ctx> CodegenCtx<'ctx> {
     }
 }
 
+enum LazyDefinedFn {
+    GenericFn((TopLevel, GenericParams, GenericArgs)),
+}
+
 pub struct CompileUnitCtx<'ctx> {
     cgcx: &'ctx CodegenCtx<'ctx>,
     tcx: TypeCtx<'ctx>,
@@ -177,6 +182,9 @@ pub struct CompileUnitCtx<'ctx> {
     loop_break_bb_stk: Vec<BasicBlock<'ctx>>,
 
     is_ifmatch_stmt: bool,
+
+    // The elements of this array will begin to be generated sequentially after the module's code generation is finished.
+    lazy_define_fns: Vec<LazyDefinedFn>,
 }
 
 impl<'ctx> CompileUnitCtx<'ctx> {
@@ -201,6 +209,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             imported_modules: HashSet::new(),
             loop_break_bb_stk: Vec::new(),
             is_ifmatch_stmt: false,
+            lazy_define_fns: Vec::new(),
         })
     }
 
@@ -523,6 +532,20 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         Ok(())
     }
 
+    fn handle_lazy_define_fns(&mut self) {
+        let lazy_fns: Vec<_> = self.lazy_define_fns.drain(..).collect();
+
+        for lazy in lazy_fns {
+            match lazy {
+                LazyDefinedFn::GenericFn((top, generic_params, generic_args)) => {
+                    def_generic_args(self, &generic_params, &generic_args).unwrap();
+                    build_top_level(self, top).unwrap();
+                    undef_generic_args(self, &generic_params);
+                }
+            }
+        }
+    }
+
     // This function doesn't optimize modules.
     // Please execute 'opt' command to optimize the module.
     fn codegen(
@@ -541,6 +564,8 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         }
 
         self.build_main_fn()?;
+
+        self.handle_lazy_define_fns();
 
         self.verify_module()?;
 

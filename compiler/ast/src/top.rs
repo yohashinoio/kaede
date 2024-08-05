@@ -33,7 +33,7 @@ impl From<bool> for Visibility {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GenericParams {
     pub names: Vec<Ident>,
     pub span: Span,

@@ -356,6 +356,11 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
             .map(|e| (e.name, change_mutability_dup(e.ty, e.mutability)))
             .collect::<Vec<_>>();
 
+        if let Some(fn_value) = self.cucx.module.get_function(mangled_name) {
+            // If the function is already declared, don't declare it again.
+            return Ok((fn_value, params));
+        }
+
         let fn_value = self.cucx.declare_fn(
             mangled_name,
             params.iter().map(|e| e.1.clone()).collect(),
