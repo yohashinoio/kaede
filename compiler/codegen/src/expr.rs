@@ -8,14 +8,14 @@ use crate::{
     error::CodegenError,
     generic::{def_generic_args, undef_generic_args},
     mangle::{mangle_name, mangle_udt_name},
-    stmt::{build_block, build_normal_let, build_statement},
+    stmt::{build_block, build_normal_let, build_statement, change_mutability_dup},
     tcx::{EnumInfo, EnumVariantInfo, GenericKind, ReturnType, UDTKind, VariableTable},
-    top::build_top_level,
     value::{has_signed, Value},
-    CompileUnitCtx,
+    CompileUnitCtx, LazyDefinedFn,
 };
 
 use inkwell::{
+    module::Linkage,
     types::BasicTypeEnum,
     values::{BasicValue, BasicValueEnum, IntValue, PointerValue},
     AddressSpace, IntPredicate,
@@ -2098,22 +2098,34 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             fn_: generic_fn_ast,
         };
 
-        def_generic_args(self.cucx, generic_params, &generic_args)?;
+        let top = TopLevel {
+            kind: TopLevelKind::GenericFnInstance(generic_fn_instance),
+            vis: ast_vis.1,
+            span,
+        };
 
-        let bb_backup = self.cucx.builder.get_insert_block().unwrap();
-
-        build_top_level(
-            self.cucx,
-            TopLevel {
-                kind: TopLevelKind::GenericFnInstance(generic_fn_instance),
-                vis: ast_vis.1,
-                span,
-            },
+        // Only declare the function, not define it.
+        // If this function is defined now, for some reason we get an error when verifying modules.
+        def_generic_args(self.cucx, generic_params, &generic_args).unwrap();
+        self.cucx.declare_fn(
+            mangled_name.as_str(),
+            ast.decl
+                .params
+                .v
+                .iter()
+                .map(|e| change_mutability_dup(e.ty.clone(), e.mutability))
+                .collect::<Vec<_>>(),
+            ast.decl.return_ty.clone().into(),
+            Some(Linkage::External),
+            false,
         )?;
-
-        self.cucx.builder.position_at_end(bb_backup);
-
         undef_generic_args(self.cucx, generic_params);
+
+        self.cucx.lazy_define_fns.push(LazyDefinedFn::GenericFn((
+            top,
+            generic_params.clone(),
+            generic_args,
+        )));
 
         Ok(mangled_name)
     }
