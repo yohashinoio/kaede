@@ -19,12 +19,12 @@ def install_bdwgc(third_party_dir):
 
     def build_bdwgc():
         subprocess.run(["cmake", "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_INSTALL_PREFIX='%s'" %
-                       install_dir, "-S", bdwgc_dir, "-B", bdwgc_build_dir])
-        subprocess.run(["cmake", "--build", bdwgc_build_dir, "-j"])
+                       install_dir, "-S", bdwgc_dir, "-B", bdwgc_build_dir]).check_returncode()
+        subprocess.run(["cmake", "--build", bdwgc_build_dir, "-j"]).check_returncode()
 
     def install_bdwgc():
         build_bdwgc()
-        subprocess.run(["cmake", "--install", bdwgc_build_dir])
+        subprocess.run(["cmake", "--install", bdwgc_build_dir]).check_returncode()
 
     install_bdwgc()
 
@@ -59,11 +59,11 @@ def install_standard_library(kaede_lib_dir):
     t1 = tempfile.NamedTemporaryFile()
     t2 = tempfile.NamedTemporaryFile()
     subprocess.run(["cargo", "run", "--release", "--", "--no-autoload",
-                   "-c", "-o", t1.name, *autoload_files])
+                   "-c", "-o", t1.name, *autoload_files]).check_returncode()
     subprocess.run(["cargo", "run", "--release", "--",
-                   "-c", "-o", t2.name, *lib_files])
+                   "-c", "-o", t2.name, *lib_files]).check_returncode()
     subprocess.run(["gcc", "-shared", "-fPIC", "-o",
-                   os.path.join(kaede_lib_dir, "libkd.so"), t1.name, t2.name])
+                   os.path.join(kaede_lib_dir, "libkd.so"), t1.name, t2.name]).check_returncode()
 
     print("Done!")
 

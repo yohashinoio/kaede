@@ -44,7 +44,7 @@ def install_compiler():
     print("Installing compiler...")
 
     os.environ["KAEDE_DIR"] = kaede_dir
-    subprocess.run(["cargo", "build", "--release"])
+    subprocess.run(["cargo", "build", "--release"]).check_returncode()
     # Move builded binary
     shutil.move("target/release/kaede", os.path.join(kaede_dir, "bin"))
 
