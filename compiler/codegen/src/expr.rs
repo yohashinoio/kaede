@@ -1035,7 +1035,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         let struct_ty = Ty {
             kind: TyKind::UserDefined(node.struct_ty.clone()).into(),
             mutability: Mutability::Not,
-            external_module_name: struct_info.external_module_name.clone(),
+            external_module_name: struct_info.external_module_name,
         };
 
         let struct_llvm_ty = self.cucx.conv_to_llvm_type(&struct_ty)?;
@@ -2098,8 +2098,8 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         }
 
         let generic_fn_decl_ast = FnDecl {
-            name: ast.decl.name.clone(),
-            self_: ast.decl.self_.clone(),
+            name: ast.decl.name,
+            self_: ast.decl.self_,
 
             // Pass None to create a generic function instance.
             generic_params: None,
@@ -2184,12 +2184,13 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             .cucx
             .tcx
             .get_generic_info(mangle_name(self.cucx, node.name.symbol()).into());
-        if generic_info.is_some() {
+
+        if let Some(unwraped) = generic_info {
             return self.build_call_generic_fn(
                 node.name.symbol(),
                 args,
                 node.span,
-                generic_info.as_ref().unwrap(),
+                unwraped.as_ref(),
             );
         }
 

@@ -187,11 +187,11 @@ fn emit_optimized_object_file_to_tempfile(
     opt_level: OptimizationLevel,
     module: &Module,
 ) -> anyhow::Result<TempPath> {
-    let bitcode_path = emit_bitcode_to_tempfile(&module)?;
+    let bitcode_path = emit_bitcode_to_tempfile(module)?;
 
     let optimized_bitcode_path = optimize_with_opt(opt_level, &bitcode_path)?;
 
-    Ok(emit_object_file_to_tempfile(&optimized_bitcode_path)?)
+    emit_object_file_to_tempfile(&optimized_bitcode_path)
 }
 
 fn compile_and_output_obj(
