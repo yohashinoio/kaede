@@ -510,6 +510,9 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                 }
 
                 TopLevelKind::Struct(struct_) => {
+                    if top_level.vis.is_private() {
+                        continue;
+                    }
                     self.import_struct(struct_, import_module_name.to_owned().into())?;
                 }
 
