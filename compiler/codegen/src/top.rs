@@ -605,7 +605,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
 
         let mangled_name = mangle_name(self.cucx, node.name.symbol()).into();
 
-        let ty = create_struct_type(self.cucx, Symbol::from(mangled_name), &node.fields)?;
+        let ty = create_struct_type(self.cucx, mangled_name, &node.fields)?;
 
         let fields = node
             .fields
