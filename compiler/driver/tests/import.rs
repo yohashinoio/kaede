@@ -83,7 +83,7 @@ fn import_struct_methods() -> anyhow::Result<()> {
 
     let module1 = tempdir.child("m1.kd");
     module1.write_str(
-        r#"struct Apple {
+        r#"pub struct Apple {
             size: i32,
         }
         impl Apple {
@@ -99,7 +99,7 @@ fn import_struct_methods() -> anyhow::Result<()> {
 
     let module2 = tempdir.child("m2.kd");
     module2.write_str(
-        r#"struct Ichigo {
+        r#"pub struct Ichigo {
             size: i32,
         }
         impl Ichigo {
