@@ -19,6 +19,7 @@ fn wrap_in_reference(refee_ty: Ty) -> Ty {
         })
         .into(),
         mutability: Mutability::Not,
+        external_module_name: None,
     }
 }
 
@@ -98,6 +99,7 @@ impl Parser {
                         Ty {
                             kind: TyKind::Generic(GenericType { name: type_ident }).into(),
                             mutability: Mutability::Not,
+                            external_module_name: None,
                         }
                     } else {
                         wrap_in_reference(Ty {
@@ -107,6 +109,7 @@ impl Parser {
                             ))
                             .into(),
                             mutability: Mutability::Not,
+                            external_module_name: None,
                         })
                     }
                 }
@@ -128,6 +131,7 @@ impl Parser {
             Ty {
                 kind: TyKind::Pointer(Rc::new(ty)).into(),
                 mutability: Mutability::Not,
+                external_module_name: None,
             },
             Span::new(start, span.finish),
         ))
@@ -175,6 +179,7 @@ impl Parser {
             wrap_in_reference(Ty {
                 kind: TyKind::Array((element_ty.into(), size)).into(),
                 mutability: Mutability::Not,
+                external_module_name: None,
             }),
             Span::new(start, finish),
         ))
@@ -197,6 +202,7 @@ impl Parser {
                     wrap_in_reference(Ty {
                         kind: TyKind::Tuple(field_types).into(),
                         mutability: Mutability::Not,
+                        external_module_name: None,
                     }),
                     Span::new(start, span.finish),
                 ));

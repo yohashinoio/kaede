@@ -46,6 +46,7 @@ pub fn change_mutability_dup(ty: Rc<Ty>, mutability: Mutability) -> Rc<Ty> {
         let new_refee_ty = Ty {
             kind: rty.refee_ty.kind.clone(),
             mutability,
+            external_module_name: ty.external_module_name,
         };
 
         var_ty.kind = TyKind::Reference(ReferenceType {

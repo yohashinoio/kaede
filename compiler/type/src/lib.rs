@@ -6,7 +6,7 @@ use inkwell::{
     AddressSpace,
 };
 use kaede_span::Span;
-use kaede_symbol::Ident;
+use kaede_symbol::{Ident, Symbol};
 
 pub fn create_inferred_tuple(element_len: usize) -> TyKind {
     TyKind::Tuple({
@@ -15,6 +15,7 @@ pub fn create_inferred_tuple(element_len: usize) -> TyKind {
             v.push(Rc::new(Ty {
                 kind: Rc::new(TyKind::Inferred),
                 mutability: Mutability::Not,
+                external_module_name: None,
             }))
         });
         v
@@ -23,6 +24,7 @@ pub fn create_inferred_tuple(element_len: usize) -> TyKind {
 
 pub fn wrap_in_ref(ty: Rc<Ty>, mutability: Mutability) -> Ty {
     Ty {
+        external_module_name: ty.external_module_name,
         kind: TyKind::Reference(ReferenceType { refee_ty: ty }).into(),
         mutability,
     }
@@ -46,6 +48,7 @@ pub fn is_same_type(t1: &Ty, t2: &Ty) -> bool {
 pub struct Ty {
     pub kind: Rc<TyKind>,
     pub mutability: Mutability,
+    pub external_module_name: Option<Symbol>,
 }
 
 impl Ty {
@@ -53,6 +56,7 @@ impl Ty {
         Self {
             kind: TyKind::Inferred.into(),
             mutability,
+            external_module_name: None,
         }
     }
 
@@ -63,6 +67,7 @@ impl Ty {
             })
             .into(),
             mutability,
+            external_module_name: None,
         }
     }
 
@@ -152,6 +157,7 @@ pub fn make_fundamental_type(kind: FundamentalTypeKind, mutability: Mutability) 
     Ty {
         kind: TyKind::Fundamental(FundamentalType { kind }).into(),
         mutability,
+        external_module_name: None,
     }
 }
 

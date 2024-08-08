@@ -29,6 +29,7 @@ impl<'ctx> Value<'ctx> {
                 Ty {
                     kind: TyKind::Never.into(),
                     mutability: Mutability::Not,
+                    external_module_name: None,
                 }
                 .into(),
             ),
@@ -42,6 +43,7 @@ impl<'ctx> Value<'ctx> {
                 Ty {
                     kind: TyKind::Unit.into(),
                     mutability: Mutability::Not,
+                    external_module_name: None,
                 }
                 .into(),
             ),

@@ -61,6 +61,7 @@ pub type FunctionTable<'ctx> = HashMap<FunctionValue<'ctx>, Rc<FunctionInfo>>;
 pub struct StructInfo<'ctx> {
     pub ty: StructType<'ctx>,
     pub fields: HashMap<Symbol, StructField>,
+    pub external_module_name: Option<Symbol>,
 }
 
 #[derive(Debug)]
@@ -105,6 +106,10 @@ pub struct TypeCtx<'ctx> {
 }
 
 impl<'ctx> TypeCtx<'ctx> {
+    pub fn dump_udt_table(&self) {
+        eprintln!("{:?}", self.udt_table);
+    }
+
     pub fn lookup_variable(&self, ident: &Ident) -> anyhow::Result<&Variable<'ctx>> {
         for variable_table in &self.variable_table_stack {
             if let Some(var) = variable_table.lookup(ident.symbol()) {

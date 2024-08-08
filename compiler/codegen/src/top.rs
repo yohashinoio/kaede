@@ -11,7 +11,9 @@ use kaede_type::{Mutability, Ty, TyKind};
 
 use crate::{
     error::CodegenError,
-    mangle::{mangle_external_name, mangle_method, mangle_name, mangle_static_method},
+    mangle::{
+        mangle_external_name, mangle_method, mangle_name, mangle_static_method, ModuleLocation,
+    },
     stmt::{build_block, change_mutability_dup},
     tcx::{EnumInfo, EnumVariantInfo, GenericKind, ReturnType, StructInfo, UDTKind, VariableTable},
     CompileUnitCtx,
@@ -243,7 +245,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         self.build_fn(&mangled_name, node)
     }
 
-    fn mangle_method(&mut self, impl_for_ty: &Ty, node: &Fn) -> String {
+    fn mangle_method(&mut self, impl_for_ty: &Ty, node: &Fn, loc: ModuleLocation) -> String {
         let impl_for_ty_s = match impl_for_ty.kind.as_ref() {
             TyKind::Reference(refty) => refty.refee_ty.kind.to_string(),
             _ => impl_for_ty.kind.to_string(),
@@ -255,6 +257,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                     self.cucx,
                     Symbol::from(impl_for_ty_s),
                     node.decl.name.symbol(),
+                    loc,
                 );
             };
 
@@ -262,6 +265,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                 self.cucx,
                 Symbol::from(impl_for_ty_s),
                 node.decl.name.symbol(),
+                loc,
             )
         } else {
             // Builtin types
@@ -281,7 +285,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
     ///
     /// If kind is `Normal`, it becomes a static method (said in C++ style)
     fn define_method(&mut self, impl_for_ty: Rc<Ty>, node: Fn) -> anyhow::Result<()> {
-        let mangled_name = self.mangle_method(&impl_for_ty, &node);
+        let mangled_name = self.mangle_method(&impl_for_ty, &node, ModuleLocation::Internal);
         self.define_method_internal(&mangled_name, impl_for_ty, node)
     }
 
@@ -312,7 +316,19 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         mangled_name: &str,
         impl_for_ty: Rc<Ty>,
         mut node: Fn,
+        external_module_name: Option<Symbol>,
     ) -> anyhow::Result<()> {
+        let return_ty = if node.decl.return_ty.is_some() {
+            Some(Ty {
+                kind: node.decl.return_ty.as_ref().unwrap().kind.clone(),
+                mutability: node.decl.return_ty.unwrap().mutability,
+                // We have to modify this field as this is imported method.
+                external_module_name,
+            })
+        } else {
+            None
+        };
+
         match node.decl.self_ {
             Some(mutability) => {
                 // Method
@@ -320,7 +336,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                 self.declare_fn(
                     mangled_name,
                     node.decl.params,
-                    node.decl.return_ty.into(),
+                    return_ty.into(),
                     Linkage::External,
                     false,
                 )?;
@@ -331,7 +347,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                 self.declare_fn(
                     mangled_name,
                     node.decl.params,
-                    node.decl.return_ty.into(),
+                    return_ty.into(),
                     Linkage::External,
                     false,
                 )?;
@@ -466,23 +482,36 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                         continue;
                     }
 
+                    let return_ty = if func.decl.return_ty.is_some() {
+                        Some(Ty {
+                            kind: func.decl.return_ty.as_ref().unwrap().kind.clone(),
+                            mutability: func.decl.return_ty.unwrap().mutability,
+                            // We have to modify this field as this is imported function.
+                            external_module_name: Some(import_module_name.to_owned().into()),
+                        })
+                    } else {
+                        None
+                    };
+
                     self.declare_fn(
                         &mangle_external_name(
                             import_module_name.to_owned().into(),
                             func.decl.name.symbol(),
                         ),
                         func.decl.params,
-                        func.decl.return_ty.into(),
+                        return_ty.into(),
                         Linkage::External,
                         false,
                     )?;
                 }
 
                 TopLevelKind::Impl(impl_) => {
-                    self.import_impl(impl_)?;
+                    self.import_impl(impl_, import_module_name.to_owned().into())?;
                 }
 
-                TopLevelKind::Struct(_) => todo!(),
+                TopLevelKind::Struct(struct_) => {
+                    self.import_struct(struct_, import_module_name.to_owned().into())?;
+                }
 
                 TopLevelKind::Import(_) => todo!(),
 
@@ -499,7 +528,35 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         Ok(())
     }
 
-    fn import_impl(&mut self, impl_: Impl) -> anyhow::Result<()> {
+    fn import_struct(&mut self, struct_: Struct, import_module_name: Symbol) -> anyhow::Result<()> {
+        let ty = create_struct_type(
+            self.cucx,
+            Symbol::from(mangle_external_name(
+                import_module_name,
+                struct_.name.symbol(),
+            )),
+            &struct_.fields,
+        )?;
+
+        let fields = struct_
+            .fields
+            .into_iter()
+            .map(|field| (field.name.symbol(), field))
+            .collect();
+
+        self.cucx.tcx.add_udt(
+            struct_.name.symbol(),
+            UDTKind::Struct(StructInfo {
+                ty,
+                fields,
+                external_module_name: Some(import_module_name),
+            }),
+        );
+
+        Ok(())
+    }
+
+    fn import_impl(&mut self, impl_: Impl, import_module_name: Symbol) -> anyhow::Result<()> {
         let impl_for_ty = Rc::new(impl_.ty);
 
         for item in impl_.items {
@@ -509,9 +566,18 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                         continue;
                     }
 
-                    let mangled_name = self.mangle_method(&impl_for_ty, &func);
+                    let mangled_name = self.mangle_method(
+                        &impl_for_ty,
+                        &func,
+                        ModuleLocation::External(import_module_name),
+                    );
 
-                    self.declare_method(&mangled_name, impl_for_ty.clone(), func)?;
+                    self.declare_method(
+                        &mangled_name,
+                        impl_for_ty.clone(),
+                        func,
+                        Some(import_module_name),
+                    )?;
                 }
 
                 _ => todo!(),
@@ -546,7 +612,11 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
 
         self.cucx.tcx.add_udt(
             node.name.symbol(),
-            UDTKind::Struct(StructInfo { ty, fields }),
+            UDTKind::Struct(StructInfo {
+                ty,
+                fields,
+                external_module_name: None,
+            }),
         );
 
         Ok(())

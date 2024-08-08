@@ -23,7 +23,7 @@ use kaede_type::{
     FundamentalType, FundamentalTypeKind, GenericArgs, Mutability, ReferenceType, Ty, TyKind,
     UserDefinedType,
 };
-use mangle::mangle_udt_name;
+use mangle::{mangle_udt_name, ModuleLocation};
 use tcx::{FunctionInfo, GenericKind, ReturnType, StructInfo, TypeCtx};
 use top::{build_top_level, create_struct_type};
 
@@ -297,11 +297,13 @@ impl<'ctx> CompileUnitCtx<'ctx> {
                     })
                     .into(),
                     mutability: Mutability::Mut,
+                    external_module_name: None,
                 }
                 .into(),
             })
             .into(),
             mutability: Mutability::Mut,
+            external_module_name: None,
         }
         .into();
 
@@ -311,6 +313,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             })
             .into(),
             mutability: Mutability::Not,
+            external_module_name: None,
         }
         .into()];
 
@@ -365,7 +368,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         let generic_args = udt.generic_args.as_ref().unwrap();
 
         if let GenericKind::Struct(ast) = info.as_ref() {
-            let mangled_struct_name = mangle_udt_name(self, udt);
+            let mangled_struct_name = mangle_udt_name(self, udt, ModuleLocation::Internal);
 
             // Check if it is cached
             if let Some(udt_kind) = self.tcx.get_udt(mangled_struct_name) {
@@ -393,6 +396,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
                 UDTKind::Struct(StructInfo {
                     ty: generic_struct_ty,
                     fields,
+                    external_module_name: None,
                 }),
             );
 
