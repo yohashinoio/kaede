@@ -6,10 +6,15 @@ use predicates::prelude::*;
 use std::{ffi::OsString, path::Path, process::Command};
 
 fn test(expect: i32, file_paths: &[&Path]) -> anyhow::Result<()> {
-    let args = file_paths
+    let exe = assert_fs::NamedTempFile::new("a.out")?;
+
+    let mut args = file_paths
         .into_iter()
         .map(|p| p.as_os_str().to_os_string())
         .collect::<Vec<OsString>>();
+
+    args.push(OsString::from("-o"));
+    args.push(exe.path().as_os_str().to_os_string());
 
     let compile_output = Command::cargo_bin(env!("CARGO_BIN_EXE_kaede"))?
         .args(args)
@@ -19,7 +24,9 @@ fn test(expect: i32, file_paths: &[&Path]) -> anyhow::Result<()> {
     let llvm_ir = assert_fs::NamedTempFile::new("ir")?;
     llvm_ir.write_binary(&compile_output.get_output().stdout)?;
 
-    Command::new("./a.out").assert().code(predicate::eq(expect));
+    Command::new(format!("{}", exe.path().to_str().unwrap()))
+        .assert()
+        .code(predicate::eq(expect));
 
     Ok(())
 }
