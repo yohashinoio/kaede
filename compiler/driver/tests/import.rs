@@ -126,3 +126,30 @@ fn import_struct_methods() -> anyhow::Result<()> {
 
     test(58, &[module1.path(), module2.path(), main.path()])
 }
+
+#[test]
+fn import_struct_methods_with_name_conflict() -> anyhow::Result<()> {
+    let tempdir = assert_fs::TempDir::new()?;
+
+    let module = tempdir.child("m1.kd");
+    module.write_str(
+        r#"pub struct Apple {
+            size: i32,
+        }"#,
+    )?;
+
+    let main = tempdir.child("main.kd");
+    main.write_str(
+        r#"import m1
+        struct Apple {
+            size: i32,
+        }
+        fn main(): i32 {
+            let apple1 = m1.Apple { size: 48 };
+            let apple2 = Apple { size: 10 }
+            return apple1.size + apple2.size
+        }"#,
+    )?;
+
+    test(58, &[module.path(), main.path()])
+}
