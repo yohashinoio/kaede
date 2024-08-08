@@ -87,7 +87,7 @@ pub enum UdtKind<'ctx> {
 }
 
 /// User defined type table
-pub type UdtTable<'ctx> = HashMap<Symbol, Rc<UdtKind<'ctx>>>;
+pub type UdtTable<'ctx> = HashMap<Symbol /* Mangled */, Rc<UdtKind<'ctx>>>;
 
 #[derive(Debug)]
 pub enum GenericKind {

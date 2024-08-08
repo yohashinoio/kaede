@@ -417,7 +417,19 @@ impl<'ctx> CompileUnitCtx<'ctx> {
                     return self.create_generic_struct_type(udt).map(|ty| ty.into());
                 }
 
-                let udt_kind = match self.tcx.get_udt(udt.name.symbol()) {
+                let mangled_name = mangle_udt_name(
+                    self,
+                    udt,
+                    // Determine whether the type is imported or not.
+                    match ty.external_module_name {
+                        Some(external_module_name) => {
+                            ModuleLocation::External(external_module_name)
+                        }
+                        None => ModuleLocation::Internal,
+                    },
+                );
+
+                let udt_kind = match self.tcx.get_udt(mangled_name) {
                     Some(udt) => udt,
                     None => {
                         return Err(CodegenError::Undeclared {

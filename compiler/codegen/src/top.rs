@@ -548,7 +548,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
             .collect();
 
         self.cucx.tcx.add_udt(
-            struct_.name.symbol(),
+            mangle_external_name(import_module_name, struct_.name.symbol()).into(),
             UdtKind::Struct(StructInfo {
                 ty,
                 fields,
@@ -601,11 +601,9 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
             return Ok(());
         }
 
-        let ty = create_struct_type(
-            self.cucx,
-            Symbol::from(mangle_name(self.cucx, node.name.symbol())),
-            &node.fields,
-        )?;
+        let mangled_name = mangle_name(self.cucx, node.name.symbol()).into();
+
+        let ty = create_struct_type(self.cucx, Symbol::from(mangled_name), &node.fields)?;
 
         let fields = node
             .fields
@@ -614,7 +612,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
             .collect();
 
         self.cucx.tcx.add_udt(
-            node.name.symbol(),
+            mangled_name,
             UdtKind::Struct(StructInfo {
                 ty,
                 fields,

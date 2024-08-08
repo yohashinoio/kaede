@@ -77,6 +77,12 @@ pub fn mangle_udt_name(
                 .join("_")
         ))
     } else {
-        udt.name.symbol()
+        match loc {
+            ModuleLocation::Internal => mangle_name(cucx, udt.name.symbol()),
+            ModuleLocation::External(external_module_name) => {
+                mangle_external_name(external_module_name, udt.name.symbol())
+            }
+        }
+        .into()
     }
 }
