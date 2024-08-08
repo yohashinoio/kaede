@@ -9,7 +9,7 @@ use crate::{
     generic::{def_generic_args, undef_generic_args},
     mangle::{mangle_external_name, mangle_name, mangle_udt_name, ModuleLocation},
     stmt::{build_block, build_normal_let, build_statement, change_mutability_dup},
-    tcx::{EnumInfo, EnumVariantInfo, GenericKind, ReturnType, UDTKind, VariableTable},
+    tcx::{EnumInfo, EnumVariantInfo, GenericKind, ReturnType, UdtKind, VariableTable},
     value::{has_signed, Value},
     CompileUnitCtx, LazyDefinedFn,
 };
@@ -579,7 +579,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         };
 
         let enum_info = match udt_kind.as_ref() {
-            UDTKind::Enum(enum_info) => enum_info,
+            UdtKind::Enum(enum_info) => enum_info,
             _ => {
                 return Err(CodegenError::Undeclared {
                     name: udt.name.symbol(),
@@ -1021,7 +1021,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         };
 
         let struct_info = match udt_kind.as_ref() {
-            UDTKind::Struct(info) => info,
+            UdtKind::Struct(info) => info,
 
             _ => {
                 return Err(CodegenError::Undeclared {
@@ -1163,7 +1163,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
                 TyKind::Generic(gty) => {
                     match self.cucx.tcx.get_udt(gty.name.symbol()).unwrap().as_ref() {
-                        UDTKind::GenericArg(actual) => match actual.kind.as_ref() {
+                        UdtKind::GenericArg(actual) => match actual.kind.as_ref() {
                             TyKind::Reference(rty) => match rty.refee_ty.kind.as_ref() {
                                 TyKind::Array((elem_ty, _)) => {
                                     (rty.refee_ty.clone(), elem_ty.clone())
@@ -1448,7 +1448,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         };
 
         let enum_info = match udt_kind.as_ref() {
-            UDTKind::Enum(enum_info) => enum_info,
+            UdtKind::Enum(enum_info) => enum_info,
             _ => {
                 return Err(CodegenError::Undeclared {
                     name: enum_name.symbol(),
@@ -1808,7 +1808,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         if let TyKind::Generic(gty) = left_ty.kind.as_ref() {
             let udt = self.cucx.tcx.get_udt(gty.name.symbol());
 
-            if let UDTKind::GenericArg(actual) = udt.as_ref().unwrap().as_ref() {
+            if let UdtKind::GenericArg(actual) = udt.as_ref().unwrap().as_ref() {
                 // GenericArg(type) -> type
                 let left = Value::new(left.get_value(), actual.clone());
                 return self.struct_access_or_tuple_indexing(&left, node.lhs.span, &node.rhs);
@@ -1942,7 +1942,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         let udt_kind = self.cucx.tcx.get_udt(mangled_struct_name).unwrap();
 
         let struct_info = match udt_kind.as_ref() {
-            UDTKind::Struct(t) => t,
+            UdtKind::Struct(t) => t,
             kind => unreachable!("{:?}", kind),
         };
 

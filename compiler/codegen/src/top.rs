@@ -15,7 +15,7 @@ use crate::{
         mangle_external_name, mangle_method, mangle_name, mangle_static_method, ModuleLocation,
     },
     stmt::{build_block, change_mutability_dup},
-    tcx::{EnumInfo, EnumVariantInfo, GenericKind, ReturnType, StructInfo, UDTKind, VariableTable},
+    tcx::{EnumInfo, EnumVariantInfo, GenericKind, ReturnType, StructInfo, UdtKind, VariableTable},
     CompileUnitCtx,
 };
 
@@ -165,7 +165,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
 
                 self.cucx.tcx.add_udt(
                     node.name.symbol(),
-                    UDTKind::Enum(EnumInfo {
+                    UdtKind::Enum(EnumInfo {
                         name: node.name,
                         ty: ty.into(),
                         variants: items,
@@ -180,7 +180,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
 
                 self.cucx.tcx.add_udt(
                     node.name.symbol(),
-                    UDTKind::Enum(EnumInfo {
+                    UdtKind::Enum(EnumInfo {
                         name: node.name,
                         ty: ty.into(),
                         variants: items,
@@ -549,7 +549,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
 
         self.cucx.tcx.add_udt(
             struct_.name.symbol(),
-            UDTKind::Struct(StructInfo {
+            UdtKind::Struct(StructInfo {
                 ty,
                 fields,
                 external_module_name: Some(import_module_name),
@@ -615,7 +615,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
 
         self.cucx.tcx.add_udt(
             node.name.symbol(),
-            UDTKind::Struct(StructInfo {
+            UdtKind::Struct(StructInfo {
                 ty,
                 fields,
                 external_module_name: None,

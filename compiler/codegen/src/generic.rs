@@ -1,7 +1,7 @@
 use kaede_ast::top::GenericParams;
 use kaede_type::GenericArgs;
 
-use crate::{tcx::UDTKind, CompileUnitCtx};
+use crate::{tcx::UdtKind, CompileUnitCtx};
 
 pub fn def_generic_args(
     cucx: &mut CompileUnitCtx<'_>,
@@ -13,7 +13,7 @@ pub fn def_generic_args(
     for idx in 0..args.types.len() {
         cucx.tcx.add_udt(
             params.names[idx].symbol(),
-            UDTKind::GenericArg(args.types[idx].clone()),
+            UdtKind::GenericArg(args.types[idx].clone()),
         );
     }
 

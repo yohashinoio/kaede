@@ -80,14 +80,14 @@ pub struct EnumInfo<'ctx> {
 }
 
 #[derive(Debug)]
-pub enum UDTKind<'ctx> {
+pub enum UdtKind<'ctx> {
     Struct(StructInfo<'ctx>),
     Enum(EnumInfo<'ctx>),
     GenericArg(Rc<Ty>),
 }
 
 /// User defined type table
-pub type UDTTable<'ctx> = HashMap<Symbol, Rc<UDTKind<'ctx>>>;
+pub type UdtTable<'ctx> = HashMap<Symbol, Rc<UdtKind<'ctx>>>;
 
 #[derive(Debug)]
 pub enum GenericKind {
@@ -101,7 +101,7 @@ pub type GenericTable<'ctx> = HashMap<Symbol, Rc<GenericKind>>;
 pub struct TypeCtx<'ctx> {
     variable_table_stack: Vec<VariableTable<'ctx>>,
     fn_table: FunctionTable<'ctx>,
-    udt_table: UDTTable<'ctx>,
+    udt_table: UdtTable<'ctx>,
     generic_table: GenericTable<'ctx>,
 }
 
@@ -147,11 +147,11 @@ impl<'ctx> TypeCtx<'ctx> {
         self.fn_table.get(&fn_value).cloned()
     }
 
-    pub fn add_udt(&mut self, name: Symbol, kind: UDTKind<'ctx>) {
+    pub fn add_udt(&mut self, name: Symbol, kind: UdtKind<'ctx>) {
         assert!(self.udt_table.insert(name, kind.into()).is_none());
     }
 
-    pub fn get_udt(&self, name: Symbol) -> Option<Rc<UDTKind<'ctx>>> {
+    pub fn get_udt(&self, name: Symbol) -> Option<Rc<UdtKind<'ctx>>> {
         self.udt_table.get(&name).cloned()
     }
 

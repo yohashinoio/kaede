@@ -27,7 +27,7 @@ use mangle::{mangle_udt_name, ModuleLocation};
 use tcx::{FunctionInfo, GenericKind, ReturnType, StructInfo, TypeCtx};
 use top::{build_top_level, create_struct_type};
 
-use crate::tcx::UDTKind;
+use crate::tcx::UdtKind;
 
 pub mod error;
 mod expr;
@@ -79,7 +79,7 @@ fn generic_types_to_actual_in_struct(
         };
 
         match udt_kind.as_ref() {
-            UDTKind::GenericArg(ty) => {
+            UdtKind::GenericArg(ty) => {
                 // Replace with actual type
                 actual.push(StructField {
                     ty: ty.clone(),
@@ -373,7 +373,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             // Check if it is cached
             if let Some(udt_kind) = self.tcx.get_udt(mangled_struct_name) {
                 match udt_kind.as_ref() {
-                    UDTKind::Struct(info) => return Ok(info.ty),
+                    UdtKind::Struct(info) => return Ok(info.ty),
                     _ => unreachable!(),
                 }
             }
@@ -393,7 +393,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
 
             self.tcx.add_udt(
                 mangled_struct_name,
-                UDTKind::Struct(StructInfo {
+                UdtKind::Struct(StructInfo {
                     ty: generic_struct_ty,
                     fields,
                     external_module_name: None,
@@ -429,9 +429,9 @@ impl<'ctx> CompileUnitCtx<'ctx> {
                 };
 
                 match udt_kind.as_ref() {
-                    UDTKind::Struct(sty) => sty.ty.into(),
-                    UDTKind::Enum(ety) => ety.ty,
-                    UDTKind::GenericArg(ty) => self.conv_to_llvm_type(ty)?,
+                    UdtKind::Struct(sty) => sty.ty.into(),
+                    UdtKind::Enum(ety) => ety.ty,
+                    UdtKind::GenericArg(ty) => self.conv_to_llvm_type(ty)?,
                 }
             }
 
@@ -448,7 +448,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
                 };
 
                 match udt_kind.as_ref() {
-                    UDTKind::GenericArg(ty) => self.conv_to_llvm_type(ty)?,
+                    UdtKind::GenericArg(ty) => self.conv_to_llvm_type(ty)?,
                     _ => unreachable!(),
                 }
             }
