@@ -567,7 +567,9 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             _ => unimplemented!(),
         };
 
-        let udt_kind = match self.cucx.tcx.get_udt(udt.name.symbol()) {
+        let mangled_name = mangle_udt_name(self.cucx, udt, ModuleLocation::Internal);
+
+        let udt_kind = match self.cucx.tcx.get_udt(mangled_name) {
             Some(udt) => udt,
             None => {
                 return Err(CodegenError::Undeclared {
@@ -1447,7 +1449,16 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         variant_name: &Ident,
         value: Option<&Expr>,
     ) -> anyhow::Result<Value<'ctx>> {
-        let udt_kind = match self.cucx.tcx.get_udt(enum_name.symbol()) {
+        let mangled_name = mangle_udt_name(
+            self.cucx,
+            &UserDefinedType {
+                name: *enum_name,
+                generic_args: None,
+            },
+            ModuleLocation::Internal,
+        );
+
+        let udt_kind = match self.cucx.tcx.get_udt(mangled_name) {
             Some(udt) => udt,
             None => {
                 return Err(CodegenError::Undeclared {

@@ -144,6 +144,8 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
             })
             .collect();
 
+        let mangled_name = mangle_name(self.cucx, node.name.symbol()).into();
+
         // If there is an item with a specified type
         // Specified: { i32, [i8; LARGEST_TYPE_SIZE_IN_BYTES] }
         // Not specified: { i32 }
@@ -164,7 +166,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                 );
 
                 self.cucx.tcx.add_udt(
-                    node.name.symbol(),
+                    mangled_name,
                     UdtKind::Enum(EnumInfo {
                         name: node.name,
                         ty: ty.into(),
@@ -179,7 +181,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                 ty.set_body(&[self.cucx.context().i32_type().into()], true);
 
                 self.cucx.tcx.add_udt(
-                    node.name.symbol(),
+                    mangled_name,
                     UdtKind::Enum(EnumInfo {
                         name: node.name,
                         ty: ty.into(),
