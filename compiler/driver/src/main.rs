@@ -304,6 +304,7 @@ fn main() -> anyhow::Result<()> {
         ) {
             // If backtrace is enabled, it is also displayed
             eprintln!("{}: {:?}", "Error".bright_red(), err);
+            std::process::exit(1);
         }
     } else {
         // Emit exe files
@@ -316,6 +317,7 @@ fn main() -> anyhow::Result<()> {
         ) {
             // If backtrace is enabled, it is also displayed
             eprintln!("{}: {:?}", "Error".bright_red(), err);
+            std::process::exit(1);
         }
     }
 
