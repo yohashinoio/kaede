@@ -67,7 +67,7 @@ pub struct StructInfo<'ctx> {
 #[derive(Debug)]
 pub struct EnumVariantInfo {
     pub name: Ident,
-    pub vis: Visibility,
+    pub _vis: Visibility,
     pub offset: u32,
     pub ty: Option<Rc<Ty>>,
 }

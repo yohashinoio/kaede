@@ -136,7 +136,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                     e.name.symbol(),
                     EnumVariantInfo {
                         name: e.name,
-                        vis: e.vis,
+                        _vis: e.vis,
                         offset: e.offset,
                         ty: e.ty.map(Rc::new),
                     },
