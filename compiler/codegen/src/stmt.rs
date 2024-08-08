@@ -78,7 +78,7 @@ pub fn build_normal_let(
 
         let alloca = if specified_ty.kind.is_inferred() {
             // No type information was available, so infer from an initializer
-            let alloca = cucx.create_entry_block_alloca(name.as_str(), &var_ty)?;
+            let alloca = cucx.create_entry_block_alloca(name.as_str(), &var_ty, span)?;
 
             cucx.tcx.add_variable(name.symbol(), (alloca, var_ty));
 
@@ -98,7 +98,7 @@ pub fn build_normal_let(
                 .into());
             }
 
-            let alloca = cucx.create_entry_block_alloca(name.as_str(), &var_ty)?;
+            let alloca = cucx.create_entry_block_alloca(name.as_str(), &var_ty, span)?;
 
             cucx.tcx.add_variable(name.symbol(), (alloca, var_ty));
 

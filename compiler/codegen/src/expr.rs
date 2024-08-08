@@ -23,7 +23,8 @@ use inkwell::{
 use kaede_ast::{
     expr::{
         Args, ArrayLiteral, Binary, BinaryKind, Break, Else, Expr, ExprKind, FnCall, If, Indexing,
-        LogicalNot, Loop, Match, MatchArm, MatchArmList, Return, StructLiteral, TupleLiteral,
+        LogicalNot, Loop, Match, MatchArm, MatchArmList, Return, StringLiteral, StructLiteral,
+        TupleLiteral,
     },
     stmt::{Block, Stmt, StmtKind},
     top::{Fn, FnDecl, GenericFnInstance, TopLevel, TopLevelKind, Visibility},
@@ -146,7 +147,7 @@ pub fn build_tuple_indexing<'ctx>(
     tuple_ty: &Rc<Ty>,
     span: Span,
 ) -> anyhow::Result<Value<'ctx>> {
-    let llvm_tuple_ty = cucx.conv_to_llvm_type(tuple_ty)?;
+    let llvm_tuple_ty = cucx.conv_to_llvm_type(tuple_ty, span)?;
 
     let gep = unsafe {
         cucx.builder.build_in_bounds_gep(
@@ -201,7 +202,7 @@ pub fn build_tuple_indexing<'ctx>(
         kind => unreachable!("{:?}", kind),
     };
 
-    let llvm_elem_ty = cucx.conv_to_llvm_type(&elem_ty)?;
+    let llvm_elem_ty = cucx.conv_to_llvm_type(&elem_ty, span)?;
 
     Ok(Value::new(
         cucx.builder.build_load(llvm_elem_ty, gep, "")?,
@@ -259,7 +260,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                 Rc::new(int.get_type()),
             ),
 
-            ExprKind::StringLiteral(s) => self.string_literal(s.syb.as_str())?,
+            ExprKind::StringLiteral(node) => self.string_literal(node)?,
 
             ExprKind::StructLiteral(node) => self.struct_literal(node)?,
 
@@ -957,7 +958,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             then_val.get_type()
         };
 
-        let llvm_phi_ty = self.cucx.conv_to_llvm_type(&phi_ty)?;
+        let llvm_phi_ty = self.cucx.conv_to_llvm_type(&phi_ty, span)?;
         let phi = self.cucx.builder.build_phi(llvm_phi_ty, "iftmp")?;
 
         phi.add_incoming(&[
@@ -970,8 +971,12 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
     fn build_enum_unpack(&mut self, enum_unpack: &EnumUnpack) -> anyhow::Result<()> {
         let variant_ty_llvm = match enum_unpack.variant_ty.kind.as_ref() {
-            TyKind::Reference(refty) => self.cucx.conv_to_llvm_type(&refty.refee_ty),
-            _ => self.cucx.conv_to_llvm_type(&enum_unpack.variant_ty),
+            TyKind::Reference(refty) => self
+                .cucx
+                .conv_to_llvm_type(&refty.refee_ty, enum_unpack.span),
+            _ => self
+                .cucx
+                .conv_to_llvm_type(&enum_unpack.variant_ty, enum_unpack.span),
         }?;
 
         let bitcast = self.cucx.builder.build_bit_cast(
@@ -1020,7 +1025,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         };
 
         // If this is a generic type, the type is generated here.
-        let struct_llvm_ty = self.cucx.conv_to_llvm_type(&struct_ty)?;
+        let struct_llvm_ty = self.cucx.conv_to_llvm_type(&struct_ty, node.span)?;
 
         let udt_kind = match self.cucx.tcx.get_udt(mangled_name) {
             Some(udt) => udt.clone(),
@@ -1091,7 +1096,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             external_module_name: None,
         };
 
-        let tuple_llvm_ty = self.cucx.conv_to_llvm_type(&tuple_ty)?;
+        let tuple_llvm_ty = self.cucx.conv_to_llvm_type(&tuple_ty, node.span)?;
 
         Ok(Value::new(
             create_gc_struct(
@@ -1124,7 +1129,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             external_module_name: None,
         });
 
-        let array_llvm_ty = self.cucx.conv_to_llvm_type(&array_ty)?;
+        let array_llvm_ty = self.cucx.conv_to_llvm_type(&array_ty, node.span)?;
 
         let mallocd = self.cucx.gc_malloc(array_llvm_ty)?;
 
@@ -1193,7 +1198,10 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             }
         };
 
-        let array_llvm_ty = self.cucx.conv_to_llvm_type(&array_ty)?.into_array_type();
+        let array_llvm_ty = self
+            .cucx
+            .conv_to_llvm_type(&array_ty, node.span)?
+            .into_array_type();
 
         let ptr_to_array = array_ref.get_value().into_pointer_value();
 
@@ -1230,7 +1238,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
         let zero = self
             .cucx
-            .conv_to_llvm_type(&operand.get_type())?
+            .conv_to_llvm_type(&operand.get_type(), node.span)?
             .const_zero();
 
         // Compared to zero, it would be equivalent to 'logical not'
@@ -1265,15 +1273,18 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         )
     }
 
-    fn string_literal(&mut self, s: &str) -> anyhow::Result<Value<'ctx>> {
-        let global_s = self.cucx.builder.build_global_string_ptr(s, "str")?;
+    fn string_literal(&mut self, node: &StringLiteral) -> anyhow::Result<Value<'ctx>> {
+        let global_s = self
+            .cucx
+            .builder
+            .build_global_string_ptr(node.syb.as_str(), "str")?;
 
         let str_ty = Rc::new(make_fundamental_type(
             FundamentalTypeKind::Str,
             Mutability::Not,
         ));
 
-        let str_llvm_ty = self.cucx.conv_to_llvm_type(&str_ty).unwrap();
+        let str_llvm_ty = self.cucx.conv_to_llvm_type(&str_ty, node.span).unwrap();
 
         let p = create_gc_struct(
             self.cucx,
@@ -1283,7 +1294,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                 self.cucx
                     .context()
                     .i64_type()
-                    .const_int(s.len() as u64, false)
+                    .const_int(node.syb.as_str().len() as u64, false)
                     .into(),
             ],
         )?;
@@ -1297,7 +1308,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
     fn ident_expr(&mut self, ident: &Ident) -> anyhow::Result<Value<'ctx>> {
         let (ptr, ty) = self.cucx.tcx.lookup_variable(ident)?.clone();
 
-        let llvm_ty = self.cucx.conv_to_llvm_type(&ty)?;
+        let llvm_ty = self.cucx.conv_to_llvm_type(&ty, ident.span())?;
 
         Ok(Value::new(
             self.cucx.builder.build_load(llvm_ty, ptr, "")?,
@@ -1330,7 +1341,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         let value = build_expression(self.cucx, &node.lhs)?;
 
         if value.get_type().kind.is_int_or_bool() && cast_ty.kind.is_int_or_bool() {
-            self.build_int_cast(value, cast_ty.clone())
+            self.build_int_cast(value, cast_ty.clone(), node.lhs.span)
         } else if matches!(
             value.get_type().kind.as_ref(),
             TyKind::Reference(_) | TyKind::Pointer(_)
@@ -1338,7 +1349,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             cast_ty.kind.as_ref(),
             TyKind::Reference(_) | TyKind::Pointer(_)
         ) {
-            self.build_ptr_cast(value, cast_ty.clone())
+            self.build_ptr_cast(value, cast_ty.clone(), node.lhs.span)
         } else {
             todo!("Error");
         }
@@ -1348,11 +1359,12 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         &mut self,
         value: Value<'ctx>,
         cast_ty: Rc<Ty>,
+        span: Span,
     ) -> anyhow::Result<Value<'ctx>> {
         assert!(value.get_type().kind.is_int_or_bool());
         assert!(cast_ty.kind.is_int_or_bool());
 
-        let cast_llvm_ty = self.cucx.conv_to_llvm_type(&cast_ty)?;
+        let cast_llvm_ty = self.cucx.conv_to_llvm_type(&cast_ty, span)?;
 
         Ok(Value::new(
             self.cucx
@@ -1372,8 +1384,9 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         &mut self,
         value: Value<'ctx>,
         cast_ty: Rc<Ty>,
+        span: Span,
     ) -> anyhow::Result<Value<'ctx>> {
-        let cast_llvm_ty = self.cucx.conv_to_llvm_type(&cast_ty)?;
+        let cast_llvm_ty = self.cucx.conv_to_llvm_type(&cast_ty, span)?;
 
         Ok(Value::new(
             self.cucx
@@ -1493,7 +1506,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             external_module_name: None,
         };
 
-        let enum_llvm_ty = self.cucx.conv_to_llvm_type(&enum_ty)?;
+        let enum_llvm_ty = self.cucx.conv_to_llvm_type(&enum_ty, enum_name.span())?;
 
         let offset_in_llvm = self
             .cucx
@@ -1903,7 +1916,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         };
 
         match refee_ty.kind.as_ref() {
-            TyKind::UserDefined(_) => self.struct_access(left, right, refee_ty),
+            TyKind::UserDefined(_) => self.struct_access(left, right, refee_ty, left_span),
 
             TyKind::Tuple(_) => self.tuple_indexing(left, right, refee_ty),
 
@@ -1917,6 +1930,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         left: &Value<'ctx>,
         right: &Expr,
         struct_ty: &Rc<Ty>,
+        left_span: Span,
     ) -> anyhow::Result<Value<'ctx>> {
         let (udt, mangled_struct_name) = if let TyKind::UserDefined(udt) = struct_ty.kind.as_ref() {
             (
@@ -1942,6 +1956,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                 mangled_struct_name,
                 struct_ty,
                 field_name,
+                left_span,
             ),
 
             // Method
@@ -1958,8 +1973,9 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         mangled_struct_name: Symbol,
         struct_ty: &Rc<Ty>,
         field_name: &Ident,
+        span: Span,
     ) -> anyhow::Result<Value<'ctx>> {
-        let llvm_struct_ty = self.cucx.conv_to_llvm_type(struct_ty)?;
+        let llvm_struct_ty = self.cucx.conv_to_llvm_type(struct_ty, span)?;
 
         let udt_kind = self.cucx.tcx.get_udt(mangled_struct_name).unwrap();
 
@@ -1994,7 +2010,9 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             )?
         };
 
-        let llvm_field_ty = self.cucx.conv_to_llvm_type(&field_info.ty)?;
+        let llvm_field_ty = self
+            .cucx
+            .conv_to_llvm_type(&field_info.ty, field_name.span())?;
 
         Ok(Value::new(
             self.cucx.builder.build_load(llvm_field_ty, gep, "")?,
@@ -2162,6 +2180,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             ast.decl.return_ty.clone().into(),
             Some(Linkage::External),
             false,
+            span,
         )?;
         undef_generic_args(self.cucx, generic_params);
 

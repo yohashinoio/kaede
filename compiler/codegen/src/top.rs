@@ -6,6 +6,7 @@ use kaede_ast::top::{
     StructField, TopLevel, TopLevelKind, Visibility,
 };
 use kaede_parse::Parser;
+use kaede_span::Span;
 use kaede_symbol::{Ident, Symbol};
 use kaede_type::{Mutability, Ty, TyKind};
 
@@ -30,7 +31,7 @@ pub fn create_struct_type<'ctx>(
 ) -> anyhow::Result<StructType<'ctx>> {
     let mut field_tys = Vec::new();
     for field in fields.iter() {
-        field_tys.push(cucx.conv_to_llvm_type(&field.ty)?);
+        field_tys.push(cucx.conv_to_llvm_type(&field.ty, field.name.span())?);
     }
 
     let ty = cucx.context().opaque_struct_type(mangled_name.as_str());
@@ -87,7 +88,8 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
     }
 
     fn generic_fn_instance(&mut self, node: GenericFnInstance) -> anyhow::Result<()> {
-        self.build_fn(node.mangled_name.as_str(), node.fn_)
+        let span = node.fn_.span;
+        self.build_fn(node.mangled_name.as_str(), node.fn_, span)
     }
 
     fn extern_(&mut self, node: Extern) -> anyhow::Result<()> {
@@ -106,6 +108,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                         node.fn_decl.return_ty.into(),
                         Linkage::External,
                         is_var_args,
+                        node.span,
                     )
                     .unwrap();
                 }
@@ -199,7 +202,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
 
         for item in enum_items.iter() {
             if let Some(ty) = &item.ty {
-                let llvm_ty = self.cucx.conv_to_llvm_type(ty).unwrap();
+                let llvm_ty = self.cucx.conv_to_llvm_type(ty, item.name.span()).unwrap();
                 let size = self.cucx.get_size_in_bits(&llvm_ty);
                 largest = std::cmp::max(size, largest);
             }
@@ -232,19 +235,21 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
             String::from("kdmain")
         } else {
             mangle_name(self.cucx, node.decl.name.symbol())
-        };
+        }
+        .into();
 
         // For generic
         if node.decl.generic_params.is_some() {
             self.cucx
                 .tcx
-                .add_generic(Symbol::from(mangled_name), GenericKind::Func((node, vis)));
+                .add_generic(mangled_name, GenericKind::Func((node, vis)));
 
             // Generic functions are not generated immediately, but are generated when they are used.
             return Ok(());
         }
 
-        self.build_fn(&mangled_name, node)
+        let span = node.span;
+        self.build_fn(mangled_name.as_str(), node, span)
     }
 
     fn mangle_method(&mut self, impl_for_ty: &Ty, node: &Fn, loc: ModuleLocation) -> String {
@@ -297,16 +302,18 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         impl_for_ty: Rc<Ty>,
         mut node: Fn,
     ) -> anyhow::Result<()> {
+        let span = node.span;
+
         match node.decl.self_ {
             Some(mutability) => {
                 // Method
                 push_self_to_front(&mut node.decl.params, impl_for_ty, mutability);
-                self.build_fn(mangled_name, node)?;
+                self.build_fn(mangled_name, node, span)?;
             }
 
             None => {
                 // Static method
-                self.build_fn(mangled_name, node)?;
+                self.build_fn(mangled_name, node, span)?;
             }
         }
 
@@ -341,6 +348,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                     return_ty.into(),
                     Linkage::External,
                     false,
+                    node.span,
                 )?;
             }
 
@@ -352,6 +360,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                     return_ty.into(),
                     Linkage::External,
                     false,
+                    node.span,
                 )?;
             }
         }
@@ -367,6 +376,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         return_ty: ReturnType,
         linkage: Linkage,
         is_var_args: bool,
+        span: Span,
     ) -> anyhow::Result<FnValueParamsPair<'ctx>> {
         let params = params
             .v
@@ -385,18 +395,20 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
             return_ty,
             Some(linkage),
             is_var_args,
+            span,
         )?;
 
         Ok((fn_value, params))
     }
 
-    fn build_fn(&mut self, mangled_name: &str, node: Fn) -> anyhow::Result<()> {
+    fn build_fn(&mut self, mangled_name: &str, node: Fn, span: Span) -> anyhow::Result<()> {
         let fn_value_and_params = self.declare_fn(
             mangled_name,
             node.decl.params,
             node.decl.return_ty.into(),
             Linkage::External,
             false,
+            span,
         )?;
 
         let fn_value = fn_value_and_params.0;
@@ -433,7 +445,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         assert_eq!(fn_value.count_params(), params.len() as u32);
 
         for (idx, (name, param_ty)) in params.into_iter().enumerate() {
-            let llvm_param_ty = self.cucx.conv_to_llvm_type(&param_ty)?;
+            let llvm_param_ty = self.cucx.conv_to_llvm_type(&param_ty, name.span())?;
             let alloca = self
                 .cucx
                 .builder
@@ -504,6 +516,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                         return_ty.into(),
                         Linkage::External,
                         false,
+                        func.span,
                     )?;
                 }
 

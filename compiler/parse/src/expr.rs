@@ -568,11 +568,14 @@ impl Parser {
 
         let finish = self.consume(&TokenKind::CloseBrace)?.finish;
 
+        let span = Span::new(struct_ty.name.span().start, finish);
+
         Ok(Expr {
-            span: Span::new(struct_ty.name.span().start, finish),
+            span,
             kind: ExprKind::StructLiteral(StructLiteral {
                 struct_ty,
                 values: inits,
+                span,
             }),
         })
     }

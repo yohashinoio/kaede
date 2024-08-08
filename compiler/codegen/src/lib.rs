@@ -226,6 +226,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         &mut self,
         name: &str,
         ty: &Ty,
+        span: Span,
     ) -> anyhow::Result<PointerValue<'ctx>> {
         let builder = self.context().create_builder();
 
@@ -236,7 +237,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             None => builder.position_at_end(entry),
         }
 
-        Ok(builder.build_alloca(self.conv_to_llvm_type(ty)?, name)?)
+        Ok(builder.build_alloca(self.conv_to_llvm_type(ty, span)?, name)?)
     }
 
     // If return_ty is `None`, treat as void
@@ -245,15 +246,16 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         params: &[Rc<Ty>],
         return_ty: &ReturnType,
         is_var_args: bool,
+        span: Span,
     ) -> anyhow::Result<FunctionType<'ctx>> {
         let mut param_types = Vec::new();
         for param in params {
-            param_types.push(self.conv_to_llvm_type(param)?.into());
+            param_types.push(self.conv_to_llvm_type(param, span)?.into());
         }
 
         Ok(match return_ty {
             ReturnType::Type(ty) => self
-                .conv_to_llvm_type(ty)?
+                .conv_to_llvm_type(ty, span)?
                 .fn_type(param_types.as_slice(), is_var_args),
 
             ReturnType::Void => self
@@ -270,8 +272,9 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         return_type: ReturnType,
         linkage: Option<Linkage>,
         is_var_args: bool,
+        span: Span,
     ) -> anyhow::Result<FunctionValue<'ctx>> {
-        let fn_type = self.create_fn_type(&param_types, &return_type, is_var_args)?;
+        let fn_type = self.create_fn_type(&param_types, &return_type, is_var_args, span)?;
 
         let fn_value = self.module.add_function(name, fn_type, linkage);
 
@@ -323,6 +326,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             ReturnType::Type(return_ty),
             None,
             false,
+            Span::dummy(),
         )
         .map(|_| ())
     }
@@ -406,7 +410,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         unreachable!()
     }
 
-    fn conv_to_llvm_type(&mut self, ty: &Ty) -> anyhow::Result<BasicTypeEnum<'ctx>> {
+    fn conv_to_llvm_type(&mut self, ty: &Ty, span: Span) -> anyhow::Result<BasicTypeEnum<'ctx>> {
         let context = self.context();
 
         Ok(match ty.kind.as_ref() {
@@ -434,7 +438,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
                     None => {
                         return Err(CodegenError::Undeclared {
                             name: udt.name.symbol(),
-                            span: udt.name.span(),
+                            span,
                         }
                         .into());
                     }
@@ -443,7 +447,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
                 match udt_kind.as_ref() {
                     UdtKind::Struct(sty) => sty.ty.into(),
                     UdtKind::Enum(ety) => ety.ty,
-                    UdtKind::GenericArg(ty) => self.conv_to_llvm_type(ty)?,
+                    UdtKind::GenericArg(ty) => self.conv_to_llvm_type(ty, span)?,
                 }
             }
 
@@ -453,14 +457,14 @@ impl<'ctx> CompileUnitCtx<'ctx> {
                     None => {
                         return Err(CodegenError::Undeclared {
                             name: gty.name.symbol(),
-                            span: gty.name.span(),
+                            span,
                         }
                         .into());
                     }
                 };
 
                 match udt_kind.as_ref() {
-                    UdtKind::GenericArg(ty) => self.conv_to_llvm_type(ty)?,
+                    UdtKind::GenericArg(ty) => self.conv_to_llvm_type(ty, span)?,
                     _ => unreachable!(),
                 }
             }
@@ -469,14 +473,15 @@ impl<'ctx> CompileUnitCtx<'ctx> {
 
             TyKind::Pointer(_) => self.context().ptr_type(AddressSpace::default()).into(),
 
-            TyKind::Array((elem_ty, size)) => {
-                self.conv_to_llvm_type(elem_ty)?.array_type(*size).into()
-            }
+            TyKind::Array((elem_ty, size)) => self
+                .conv_to_llvm_type(elem_ty, span)?
+                .array_type(*size)
+                .into(),
 
             TyKind::Tuple(types) => {
                 let mut llvm_types = Vec::new();
                 for ty in types {
-                    llvm_types.push(self.conv_to_llvm_type(ty)?);
+                    llvm_types.push(self.conv_to_llvm_type(ty, span)?);
                 }
                 context.struct_type(llvm_types.as_slice(), true).into()
             }
