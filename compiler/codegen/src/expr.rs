@@ -1008,7 +1008,19 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
     }
 
     fn struct_literal(&mut self, node: &StructLiteral) -> anyhow::Result<Value<'ctx>> {
-        let udt_kind = match self.cucx.tcx.get_udt(node.struct_ty.name.symbol()) {
+        let mangled_name = mangle_udt_name(self.cucx, &node.struct_ty, ModuleLocation::Internal);
+
+        let struct_ty = Ty {
+            kind: TyKind::UserDefined(node.struct_ty.clone()).into(),
+            mutability: Mutability::Not,
+            // Temporary
+            external_module_name: None,
+        };
+
+        // If this is a generic type, the type is generated here.
+        let struct_llvm_ty = self.cucx.conv_to_llvm_type(&struct_ty)?;
+
+        let udt_kind = match self.cucx.tcx.get_udt(mangled_name) {
             Some(udt) => udt.clone(),
 
             None => {
@@ -1033,12 +1045,11 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         };
 
         let struct_ty = Ty {
-            kind: TyKind::UserDefined(node.struct_ty.clone()).into(),
-            mutability: Mutability::Not,
+            kind: struct_ty.kind.clone(),
+            mutability: struct_ty.mutability,
+            // Actual
             external_module_name: struct_info.external_module_name,
         };
-
-        let struct_llvm_ty = self.cucx.conv_to_llvm_type(&struct_ty)?;
 
         let mut values = Vec::new();
 
