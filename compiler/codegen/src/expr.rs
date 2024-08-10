@@ -140,6 +140,25 @@ pub fn build_expression<'ctx>(
     builder.build(node)
 }
 
+pub fn build_str_indexing<'ctx>(
+    cucx: &mut CompileUnitCtx<'ctx>,
+    tuple: PointerValue<'ctx>,
+    index: u32,
+    tuple_ty: &Rc<Ty>,
+    span: Span,
+) -> anyhow::Result<Value<'ctx>> {
+    build_tuple_indexing_internal(
+        cucx,
+        tuple,
+        tuple_ty,
+        index,
+        // Str isn't wrapped in a pointer (Not generated from GC).
+        // So, number of indexes is 1.
+        &[cucx.context().i32_type().const_int(index as u64, false)],
+        span,
+    )
+}
+
 pub fn build_tuple_indexing<'ctx>(
     cucx: &mut CompileUnitCtx<'ctx>,
     tuple: PointerValue<'ctx>,
@@ -147,18 +166,34 @@ pub fn build_tuple_indexing<'ctx>(
     tuple_ty: &Rc<Ty>,
     span: Span,
 ) -> anyhow::Result<Value<'ctx>> {
+    build_tuple_indexing_internal(
+        cucx,
+        tuple,
+        tuple_ty,
+        index,
+        // Tuple is wrapped in a pointer (Generated from GC).
+        // So, number of indexes is 2.
+        &[
+            cucx.context().i32_type().const_zero(),
+            cucx.context().i32_type().const_int(index as u64, false),
+        ],
+        span,
+    )
+}
+
+pub fn build_tuple_indexing_internal<'ctx>(
+    cucx: &mut CompileUnitCtx<'ctx>,
+    tuple: PointerValue<'ctx>,
+    tuple_ty: &Rc<Ty>,
+    index: u32,
+    ordered_indexes: &[IntValue<'ctx>], // Foo[0].F => [0, Foo's offset]
+    span: Span,
+) -> anyhow::Result<Value<'ctx>> {
     let llvm_tuple_ty = cucx.conv_to_llvm_type(tuple_ty, span)?;
 
     let gep = unsafe {
-        cucx.builder.build_in_bounds_gep(
-            llvm_tuple_ty,
-            tuple,
-            &[
-                cucx.context().i32_type().const_zero(),
-                cucx.context().i32_type().const_int(index as u64, false),
-            ],
-            "",
-        )?
+        cucx.builder
+            .build_in_bounds_gep(llvm_tuple_ty, tuple, ordered_indexes, "")?
     };
 
     let elem_ty = match tuple_ty.kind.as_ref() {
@@ -2082,8 +2117,17 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                 self.build_call_fn(method_name.into(), args, node.span, None)
             }
 
-            _ => self.tuple_indexing(left, right, str_ty),
+            _ => self.str_indexing(left, right, str_ty),
         }
+    }
+
+    fn str_indexing(
+        &mut self,
+        left: &Value<'ctx>,
+        right: &Expr,
+        str_ty: &Rc<Ty>,
+    ) -> anyhow::Result<Value<'ctx>> {
+        self.tuple_indexing_internal(left, right, str_ty, true)
     }
 
     fn tuple_indexing(
@@ -2092,6 +2136,16 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         right: &Expr,
         tuple_ty: &Rc<Ty>,
     ) -> anyhow::Result<Value<'ctx>> {
+        self.tuple_indexing_internal(left, right, tuple_ty, false)
+    }
+
+    fn tuple_indexing_internal(
+        &mut self,
+        left: &Value<'ctx>,
+        right: &Expr,
+        tuple_ty: &Rc<Ty>,
+        is_str: bool,
+    ) -> anyhow::Result<Value<'ctx>> {
         let index = match &right.kind {
             ExprKind::Int(i) => i.as_u64(),
             _ => return Err(CodegenError::TupleRequireAccessByIndex { span: right.span }.into()),
@@ -2099,7 +2153,11 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
         let left_value = left.get_value().into_pointer_value();
 
-        build_tuple_indexing(self.cucx, left_value, index as u32, tuple_ty, right.span)
+        if is_str {
+            build_str_indexing(self.cucx, left_value, index as u32, tuple_ty, right.span)
+        } else {
+            build_tuple_indexing(self.cucx, left_value, index as u32, tuple_ty, right.span)
+        }
     }
 
     /// Returns the name of the function generated.
