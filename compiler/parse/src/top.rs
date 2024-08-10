@@ -5,7 +5,7 @@ use kaede_ast::top::{
     StructField, TopLevel, TopLevelKind, Visibility,
 };
 use kaede_lex::token::TokenKind;
-use kaede_span::{Location, Span};
+use kaede_span::Location;
 
 use crate::{error::ParseResult, Parser};
 
@@ -64,7 +64,7 @@ impl Parser {
         let fn_decl = self.fn_decl()?;
 
         Ok(Extern {
-            span: Span::new(start, fn_decl.span.finish),
+            span: self.new_span(start, fn_decl.span.finish),
             lang_linkage,
             fn_decl,
         })
@@ -91,7 +91,7 @@ impl Parser {
 
         Ok(GenericParams {
             names,
-            span: Span::new(start, finish),
+            span: self.new_span(start, finish),
         })
     }
 
@@ -109,7 +109,7 @@ impl Parser {
                 return Ok(Impl {
                     ty,
                     items,
-                    span: Span::new(start, span.finish),
+                    span: self.new_span(start, span.finish),
                 });
             }
 
@@ -122,7 +122,7 @@ impl Parser {
 
         let module_path = self.ident()?;
 
-        let span = Span::new(start, module_path.span().finish);
+        let span = self.new_span(start, module_path.span().finish);
 
         Ok(Import { module_path, span })
     }
@@ -174,7 +174,7 @@ impl Parser {
             generic_params,
             params,
             return_ty,
-            span: Span::new(start, finish),
+            span: self.new_span(start, finish),
         })
     }
 
@@ -183,7 +183,7 @@ impl Parser {
 
         let body = Rc::new(self.block()?);
 
-        let span = Span::new(decl.span.start, body.span.finish);
+        let span = self.new_span(decl.span.start, body.span.finish);
 
         Ok(Fn { decl, body, span })
     }
@@ -194,7 +194,7 @@ impl Parser {
         if let Ok(span) = self.consume(&TokenKind::CloseParen) {
             return Ok(Params {
                 v: params,
-                span: Span::new(span_start, span.finish),
+                span: self.new_span(span_start, span.finish),
                 is_var_args: false,
             });
         }
@@ -204,7 +204,7 @@ impl Parser {
                 let finish = self.consume(&TokenKind::CloseParen)?.finish;
                 break Ok(Params {
                     v: params,
-                    span: Span::new(span_start, finish),
+                    span: self.new_span(span_start, finish),
                     is_var_args: true,
                 });
             }
@@ -215,7 +215,7 @@ impl Parser {
                 let finish = self.consume(&TokenKind::CloseParen)?.finish;
                 break Ok(Params {
                     v: params,
-                    span: Span::new(span_start, finish),
+                    span: self.new_span(span_start, finish),
                     is_var_args: false,
                 });
             }
@@ -260,7 +260,7 @@ impl Parser {
         Ok(Enum {
             name,
             variants,
-            span: Span::new(start, finish),
+            span: self.new_span(start, finish),
         })
     }
 
@@ -318,7 +318,7 @@ impl Parser {
 
         let finish = self.consume(&TokenKind::CloseBrace)?.finish;
 
-        let span = Span::new(start, finish);
+        let span = self.new_span(start, finish);
 
         Ok(Struct {
             name,

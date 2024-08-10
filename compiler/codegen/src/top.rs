@@ -1,4 +1,4 @@
-use std::{fs, rc::Rc};
+use std::{fs, path::PathBuf, rc::Rc};
 
 use inkwell::{module::Linkage, types::StructType, values::FunctionValue};
 use kaede_ast::top::{
@@ -471,6 +471,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         let path = self
             .cucx
             .file_path
+            .path()
             .parent()
             .unwrap()
             .join(import_module_name)
@@ -485,9 +486,12 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         }
 
         // TODO: Optimize
-        let psd_module = Parser::new(&fs::read_to_string(&path).unwrap())
-            .run()
-            .unwrap();
+        let psd_module = Parser::new(
+            &fs::read_to_string(&path).unwrap(),
+            PathBuf::from(module_path.as_str()).into(),
+        )
+        .run()
+        .unwrap();
 
         for top_level in psd_module.top_levels {
             match top_level.kind {

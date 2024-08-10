@@ -440,6 +440,10 @@ dependencies = [
 [[package]]
 name = "kaede_span"
 version = "0.1.0"
+dependencies = [
+ "once_cell",
+ "slab",
+]
 
 [[package]]
 name = "kaede_symbol"

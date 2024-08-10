@@ -3,7 +3,7 @@
 //!
 //! I tried testing using AOT compilation, but single-threaded JIT compilation was faster
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use inkwell::{
     context::Context, module::Module, support::load_library_permanently, OptimizationLevel,
@@ -49,10 +49,12 @@ fn exec(program: &str) -> Result<i32, CodegenError> {
     let context = Context::create();
     let cgcx = CodegenCtx::new(&context).map_err(|e| e.downcast::<CodegenError>().unwrap())?;
 
+    let file = PathBuf::from("test").into();
+
     let module = codegen_compile_unit(
         &cgcx,
-        PathBuf::from("test"),
-        Parser::new(program).run().unwrap(),
+        file,
+        Parser::new(program, file).run().unwrap(),
         false,
     )
     .map_err(|e| e.downcast::<CodegenError>().unwrap())?;

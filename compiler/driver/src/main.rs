@@ -122,9 +122,11 @@ fn compile<'ctx>(
     let mut compiled_modules = Vec::new();
 
     for unit_info in unit_infos {
-        let ast = Parser::new(&unit_info.program).run()?;
+        let file = unit_info.file_path.into();
 
-        let module = codegen_compile_unit(cgcx, unit_info.file_path, ast, no_autoload)?;
+        let ast = Parser::new(&unit_info.program, file).run()?;
+
+        let module = codegen_compile_unit(cgcx, file, ast, no_autoload)?;
 
         compiled_modules.push(module);
     }

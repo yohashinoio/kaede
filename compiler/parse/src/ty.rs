@@ -41,7 +41,7 @@ impl Parser {
 
         Ok(GenericArgs {
             types,
-            span: Span::new(start, finish),
+            span: self.new_span(start, finish),
         })
     }
 
@@ -133,7 +133,7 @@ impl Parser {
                 mutability: Mutability::Not,
                 external_module_name: None,
             },
-            Span::new(start, span.finish),
+            self.new_span(start, span.finish),
         ))
     }
 
@@ -181,7 +181,7 @@ impl Parser {
                 mutability: Mutability::Not,
                 external_module_name: None,
             }),
-            Span::new(start, finish),
+            self.new_span(start, finish),
         ))
     }
 
@@ -204,7 +204,7 @@ impl Parser {
                         mutability: Mutability::Not,
                         external_module_name: None,
                     }),
-                    Span::new(start, span.finish),
+                    self.new_span(start, span.finish),
                 ));
             }
 

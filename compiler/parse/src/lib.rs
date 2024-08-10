@@ -12,10 +12,12 @@ use kaede_lex::{
     token::{Token, TokenKind},
     Lexer,
 };
-use kaede_span::Span;
+use kaede_span::{file::FilePath, Location, Span};
 use kaede_symbol::Symbol;
 
 pub struct Parser {
+    file: FilePath,
+
     tokens: Peekable<Box<dyn Iterator<Item = Token>>>,
 
     end_token: Option<Token>,
@@ -26,15 +28,16 @@ pub struct Parser {
 }
 
 impl Parser {
-    pub fn new(source: &str) -> Self {
+    pub fn new(source: &str, file: FilePath) -> Self {
         let tokens: Box<dyn Iterator<Item = Token>> =
-            Box::new(Lexer::new(source).run().into_iter());
+            Box::new(Lexer::new(source, file).run().into_iter());
 
         Self {
             tokens: tokens.peekable(),
             end_token: None,
             in_cond_expr: false,
             generic_param_names: Vec::new(),
+            file,
         }
     }
 
@@ -158,5 +161,9 @@ impl Parser {
         }
 
         false
+    }
+
+    fn new_span(&self, start: Location, finish: Location) -> Span {
+        Span::new(start, finish, self.file)
     }
 }

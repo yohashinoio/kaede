@@ -1,3 +1,7 @@
+use file::FilePath;
+
+pub mod file;
+
 /// Record the start location with the `start` method,
 /// then increase the location with `increase*` methods
 ///
@@ -7,13 +11,16 @@ pub struct SpanBuilder {
     current: Location,
 
     start: Option<Location>,
+
+    file: FilePath,
 }
 
 impl SpanBuilder {
-    pub fn new() -> Self {
+    pub fn new(file: FilePath) -> Self {
         Self {
             current: Location::new(),
             start: None,
+            file,
         }
     }
 
@@ -33,13 +40,7 @@ impl SpanBuilder {
     pub fn build(&self) -> Span {
         assert!(self.start.is_some());
 
-        Span::new(self.start.unwrap(), self.current)
-    }
-}
-
-impl Default for SpanBuilder {
-    fn default() -> Self {
-        Self::new()
+        Span::new(self.start.unwrap(), self.current, self.file)
     }
 }
 
@@ -47,17 +48,23 @@ impl Default for SpanBuilder {
 pub struct Span {
     pub start: Location,
     pub finish: Location,
+    pub file: FilePath,
 }
 
 impl Span {
-    pub fn new(start: Location, finish: Location) -> Self {
-        Self { start, finish }
+    pub fn new(start: Location, finish: Location, file: FilePath) -> Self {
+        Self {
+            start,
+            finish,
+            file,
+        }
     }
 
     pub fn dummy() -> Self {
         Self {
             start: Location::dummy(),
             finish: Location::dummy(),
+            file: FilePath::dummy(),
         }
     }
 }

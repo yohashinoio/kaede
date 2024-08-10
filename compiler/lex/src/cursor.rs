@@ -1,6 +1,6 @@
 use std::str::Chars;
 
-use kaede_span::SpanBuilder;
+use kaede_span::{file::FilePath, SpanBuilder};
 
 pub const EOF_CHAR: char = '\0';
 
@@ -10,10 +10,10 @@ pub struct Cursor<'a> {
 }
 
 impl<'a> Cursor<'a> {
-    pub fn new(input: &'a str) -> Self {
+    pub fn new(input: &'a str, file: FilePath) -> Self {
         Self {
             chars: input.chars(),
-            span_builder: SpanBuilder::new(),
+            span_builder: SpanBuilder::new(file),
         }
     }
 

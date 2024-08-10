@@ -6,7 +6,7 @@ use kaede_ast::expr::{
     TupleLiteral,
 };
 use kaede_lex::token::TokenKind;
-use kaede_span::{Location, Span};
+use kaede_span::Location;
 use kaede_symbol::{Ident, Symbol};
 use kaede_type::{TyKind, UserDefinedType};
 
@@ -27,7 +27,7 @@ impl Parser {
             if self.consume_b(&TokenKind::LogicalOr) {
                 let right = self.logical_and()?;
                 node = Expr {
-                    span: Span::new(node.span.start, right.span.finish),
+                    span: self.new_span(node.span.start, right.span.finish),
                     kind: ExprKind::Binary(Binary::new(
                         node.into(),
                         BinaryKind::LogicalOr,
@@ -47,7 +47,7 @@ impl Parser {
             if self.consume_b(&TokenKind::LogicalAnd) {
                 let right = self.eq_or_ne()?;
                 node = Expr {
-                    span: Span::new(node.span.start, right.span.finish),
+                    span: self.new_span(node.span.start, right.span.finish),
                     kind: ExprKind::Binary(Binary::new(
                         node.into(),
                         BinaryKind::LogicalAnd,
@@ -67,13 +67,13 @@ impl Parser {
             if self.consume_b(&TokenKind::DoubleEq) {
                 let right = self.lt_gt_le_ge()?;
                 node = Expr {
-                    span: Span::new(node.span.start, right.span.finish),
+                    span: self.new_span(node.span.start, right.span.finish),
                     kind: ExprKind::Binary(Binary::new(node.into(), BinaryKind::Eq, right.into())),
                 };
             } else if self.consume_b(&TokenKind::Ne) {
                 let right = self.lt_gt_le_ge()?;
                 node = Expr {
-                    span: Span::new(node.span.start, right.span.finish),
+                    span: self.new_span(node.span.start, right.span.finish),
                     kind: ExprKind::Binary(Binary::new(node.into(), BinaryKind::Ne, right.into())),
                 };
             } else {
@@ -89,25 +89,25 @@ impl Parser {
             if self.consume_b(&TokenKind::Lt) {
                 let right = self.add_or_sub()?;
                 node = Expr {
-                    span: Span::new(node.span.start, right.span.finish),
+                    span: self.new_span(node.span.start, right.span.finish),
                     kind: ExprKind::Binary(Binary::new(node.into(), BinaryKind::Lt, right.into())),
                 };
             } else if self.consume_b(&TokenKind::Le) {
                 let right = self.add_or_sub()?;
                 node = Expr {
-                    span: Span::new(node.span.start, right.span.finish),
+                    span: self.new_span(node.span.start, right.span.finish),
                     kind: ExprKind::Binary(Binary::new(node.into(), BinaryKind::Le, right.into())),
                 };
             } else if self.consume_b(&TokenKind::Gt) {
                 let right = self.add_or_sub()?;
                 node = Expr {
-                    span: Span::new(node.span.start, right.span.finish),
+                    span: self.new_span(node.span.start, right.span.finish),
                     kind: ExprKind::Binary(Binary::new(node.into(), BinaryKind::Gt, right.into())),
                 };
             } else if self.consume_b(&TokenKind::Ge) {
                 let right = self.add_or_sub()?;
                 node = Expr {
-                    span: Span::new(node.span.start, right.span.finish),
+                    span: self.new_span(node.span.start, right.span.finish),
                     kind: ExprKind::Binary(Binary::new(node.into(), BinaryKind::Ge, right.into())),
                 };
             } else {
@@ -123,13 +123,13 @@ impl Parser {
             if self.consume_b(&TokenKind::Plus) {
                 let right = self.mul_or_div_or_rem()?;
                 node = Expr {
-                    span: Span::new(node.span.start, right.span.finish),
+                    span: self.new_span(node.span.start, right.span.finish),
                     kind: ExprKind::Binary(Binary::new(node.into(), BinaryKind::Add, right.into())),
                 };
             } else if self.consume_b(&TokenKind::Minus) {
                 let right = self.mul_or_div_or_rem()?;
                 node = Expr {
-                    span: Span::new(node.span.start, right.span.finish),
+                    span: self.new_span(node.span.start, right.span.finish),
                     kind: ExprKind::Binary(Binary::new(node.into(), BinaryKind::Sub, right.into())),
                 };
             } else {
@@ -145,19 +145,19 @@ impl Parser {
             if self.consume_b(&TokenKind::Asterisk) {
                 let right = self.unary()?;
                 node = Expr {
-                    span: Span::new(node.span.start, right.span.finish),
+                    span: self.new_span(node.span.start, right.span.finish),
                     kind: ExprKind::Binary(Binary::new(node.into(), BinaryKind::Mul, right.into())),
                 };
             } else if self.consume_b(&TokenKind::Slash) {
                 let right = self.unary()?;
                 node = Expr {
-                    span: Span::new(node.span.start, right.span.finish),
+                    span: self.new_span(node.span.start, right.span.finish),
                     kind: ExprKind::Binary(Binary::new(node.into(), BinaryKind::Div, right.into())),
                 };
             } else if self.consume_b(&TokenKind::Percent) {
                 let right = self.unary()?;
                 node = Expr {
-                    span: Span::new(node.span.start, right.span.finish),
+                    span: self.new_span(node.span.start, right.span.finish),
                     kind: ExprKind::Binary(Binary::new(node.into(), BinaryKind::Rem, right.into())),
                 };
             } else {
@@ -185,7 +185,7 @@ impl Parser {
             let e = self.cast()?;
 
             return Ok(Expr {
-                span: Span::new(span.start, e.span.finish),
+                span: self.new_span(span.start, e.span.finish),
                 kind: ExprKind::Binary(Binary::new(zero, BinaryKind::Sub, e.into())),
             });
         }
@@ -193,7 +193,7 @@ impl Parser {
         // Logical not
         if let Ok(span) = self.consume(&TokenKind::LogicalNot) {
             let operand = self.cast()?;
-            let span = Span::new(span.start, operand.span.finish);
+            let span = self.new_span(span.start, operand.span.finish);
 
             return Ok(Expr {
                 kind: ExprKind::LogicalNot(LogicalNot {
@@ -214,7 +214,7 @@ impl Parser {
             if self.consume_b(&TokenKind::As) {
                 let right = self.access()?;
                 node = Expr {
-                    span: Span::new(node.span.start, right.span.finish),
+                    span: self.new_span(node.span.start, right.span.finish),
                     kind: ExprKind::Binary(Binary::new(
                         node.into(),
                         BinaryKind::Cast,
@@ -235,7 +235,7 @@ impl Parser {
             if self.consume_b(&TokenKind::Dot) {
                 let right = self.indexing()?;
                 node = Expr {
-                    span: Span::new(node.span.start, right.span.finish),
+                    span: self.new_span(node.span.start, right.span.finish),
                     kind: ExprKind::Binary(Binary::new(
                         node.into(),
                         BinaryKind::Access,
@@ -256,7 +256,7 @@ impl Parser {
             if self.consume_b(&TokenKind::OpenBracket) {
                 let index = self.expr()?;
                 let finish = self.consume(&TokenKind::CloseBracket)?.finish;
-                let span = Span::new(node.span.start, finish);
+                let span = self.new_span(node.span.start, finish);
                 node = Expr {
                     span,
                     kind: ExprKind::Indexing(Indexing {
@@ -279,7 +279,7 @@ impl Parser {
             if self.consume_b(&TokenKind::DoubleColon) {
                 let right = self.primary()?;
                 node = Expr {
-                    span: Span::new(node.span.start, right.span.finish),
+                    span: self.new_span(node.span.start, right.span.finish),
                     kind: ExprKind::Binary(Binary::new(
                         node.into(),
                         BinaryKind::ScopeResolution,
@@ -452,7 +452,7 @@ impl Parser {
 
         let finish = self.consume(&TokenKind::CloseBrace)?.finish;
 
-        let span = Span::new(start, finish);
+        let span = self.new_span(start, finish);
 
         Ok(Expr {
             span,
@@ -502,7 +502,7 @@ impl Parser {
 
         let finish = self.consume(&TokenKind::CloseParen).unwrap().finish;
 
-        let span = Span::new(start, finish);
+        let span = self.new_span(start, finish);
 
         Ok(Expr {
             kind: ExprKind::TupleLiteral(TupleLiteral { elements, span }),
@@ -517,7 +517,7 @@ impl Parser {
 
         let finish = self.consume(&TokenKind::CloseBracket).unwrap().finish;
 
-        let span = Span::new(start, finish);
+        let span = self.new_span(start, finish);
 
         Ok(Expr {
             kind: ExprKind::ArrayLiteral(ArrayLiteral { elements, span }),
@@ -568,7 +568,7 @@ impl Parser {
 
         let finish = self.consume(&TokenKind::CloseBrace)?.finish;
 
-        let span = Span::new(struct_ty.name.span().start, finish);
+        let span = self.new_span(struct_ty.name.span().start, finish);
 
         Ok(Expr {
             span,
@@ -607,7 +607,7 @@ impl Parser {
         let args = self.fn_call_args()?;
 
         let start = name.span().start;
-        let span = Span::new(start, args.1.finish);
+        let span = self.new_span(start, args.1.finish);
 
         Ok(Expr {
             kind: ExprKind::FnCall(FnCall { name, args, span }),
@@ -623,7 +623,7 @@ impl Parser {
 
         if let Ok(span) = self.consume(&TokenKind::CloseParen) {
             // No arguments
-            return Ok(Args(args, Span::new(start, span.finish)));
+            return Ok(Args(args, self.new_span(start, span.finish)));
         }
 
         loop {
@@ -635,7 +635,7 @@ impl Parser {
         }
 
         let finish = self.consume(&TokenKind::CloseParen)?.finish;
-        Ok(Args(args, Span::new(start, finish)))
+        Ok(Args(args, self.new_span(start, finish)))
     }
 
     pub fn int(&mut self) -> ParseResult<Int> {
@@ -691,7 +691,7 @@ impl Parser {
 
         let body = self.block()?;
 
-        let span = Span::new(start, body.span.finish);
+        let span = self.new_span(start, body.span.finish);
 
         Ok(Expr {
             kind: ExprKind::Loop(Loop { span, body }),
@@ -721,7 +721,7 @@ impl Parser {
             cond: cond.into(),
             then,
             else_,
-            span: Span::new(start, finish),
+            span: self.new_span(start, finish),
         })
     }
 
@@ -750,7 +750,7 @@ impl Parser {
 
         let expr = self.expr()?;
 
-        let span = Span::new(span.start, expr.span.finish);
+        let span = self.new_span(span.start, expr.span.finish);
 
         Ok(Expr {
             kind: ExprKind::Return(Return {

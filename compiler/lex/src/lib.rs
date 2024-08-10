@@ -1,4 +1,5 @@
 use cursor::Cursor;
+use kaede_span::file::FilePath;
 use semi::insert_semi;
 use token::{Token, TokenKind};
 
@@ -11,19 +12,20 @@ mod tests;
 
 pub struct Lexer<'a> {
     source: &'a str,
+    file: FilePath,
 }
 
 impl<'a> Lexer<'a> {
-    pub fn new(source: &'a str) -> Self {
-        Self { source }
+    pub fn new(source: &'a str, file: FilePath) -> Self {
+        Self { source, file }
     }
 
     pub fn run(&self) -> Vec<Token> {
-        insert_semi(self.run_without_insert_semi().into_iter())
+        insert_semi(self.run_without_insert_semi().into_iter(), self.file)
     }
 
     fn run_without_insert_semi(&self) -> Vec<Token> {
-        let mut cursor = Cursor::new(self.source);
+        let mut cursor = Cursor::new(self.source, self.file);
         let mut res = Vec::new();
 
         loop {

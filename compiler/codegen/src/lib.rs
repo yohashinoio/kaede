@@ -1,4 +1,4 @@
-use std::{collections::HashSet, path::PathBuf, rc::Rc};
+use std::{collections::HashSet, rc::Rc};
 
 use error::CodegenError;
 use generic::{def_generic_args, undef_generic_args};
@@ -17,7 +17,7 @@ use kaede_ast::{
     CompileUnit,
 };
 use kaede_common::kaede_dir;
-use kaede_span::Span;
+use kaede_span::{file::FilePath, Span};
 use kaede_symbol::{Ident, Symbol};
 use kaede_type::{
     FundamentalType, FundamentalTypeKind, GenericArgs, Mutability, ReferenceType, Ty, TyKind,
@@ -99,7 +99,7 @@ fn generic_types_to_actual_in_struct(
 
 pub fn codegen_compile_unit<'ctx>(
     cgcx: &'ctx CodegenCtx<'ctx>,
-    file_path: PathBuf,
+    file_path: FilePath,
     cu: CompileUnit,
     no_autoload: bool,
 ) -> anyhow::Result<Module<'ctx>> {
@@ -169,7 +169,7 @@ pub struct CompileUnitCtx<'ctx> {
     module: Module<'ctx>,
     builder: Builder<'ctx>,
 
-    file_path: PathBuf,
+    file_path: FilePath,
 
     module_name: String,
     imported_modules: HashSet<Symbol>,
@@ -188,8 +188,9 @@ pub struct CompileUnitCtx<'ctx> {
 }
 
 impl<'ctx> CompileUnitCtx<'ctx> {
-    pub fn new(cgcx: &'ctx CodegenCtx<'ctx>, file_path: PathBuf) -> anyhow::Result<Self> {
+    pub fn new(cgcx: &'ctx CodegenCtx<'ctx>, file_path: FilePath) -> anyhow::Result<Self> {
         let module_name = file_path
+            .path()
             .file_stem()
             .unwrap()
             .to_owned()
@@ -197,7 +198,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             .unwrap();
 
         let module = cgcx.context.create_module(&module_name);
-        module.set_source_file_name(file_path.to_str().unwrap());
+        module.set_source_file_name(file_path.path().to_str().unwrap());
 
         Ok(Self {
             cgcx,

@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use kaede_span::{Location, Span};
 
 use crate::{
@@ -12,7 +14,14 @@ fn without_span(it: impl Iterator<Item = Token>) -> Vec<TokenKind> {
 }
 
 fn lex_test(program: &str, expect: Vec<TokenKind>) {
-    assert_eq!(without_span(Lexer::new(program).run().into_iter()), expect);
+    assert_eq!(
+        without_span(
+            Lexer::new(program, PathBuf::from("test").into())
+                .run()
+                .into_iter()
+        ),
+        expect
+    );
 }
 
 #[test]
@@ -67,7 +76,9 @@ fn punct() {
 
 #[test]
 fn span() {
-    let mut r = Lexer::new("\n48 + 10;").run().into_iter();
+    let mut r = Lexer::new("\n48 + 10;", PathBuf::from("test").into())
+        .run()
+        .into_iter();
 
     r.next();
 
@@ -78,7 +89,8 @@ fn span() {
         t.span,
         Span::new(
             Location { line: 2, column: 4 },
-            Location { line: 2, column: 5 }
+            Location { line: 2, column: 5 },
+            PathBuf::from("test").into(),
         )
     );
 }
@@ -95,7 +107,9 @@ fn auto_insert_semi() {
 
 #[test]
 fn auto_inserted_semi_span() {
-    let mut r = Lexer::new("return").run().into_iter();
+    let mut r = Lexer::new("return", PathBuf::from("test").into())
+        .run()
+        .into_iter();
 
     r.next();
 
@@ -106,7 +120,8 @@ fn auto_inserted_semi_span() {
         t.span,
         Span::new(
             Location { line: 1, column: 7 },
-            Location { line: 1, column: 8 }
+            Location { line: 1, column: 8 },
+            PathBuf::from("test").into(),
         )
     );
 }

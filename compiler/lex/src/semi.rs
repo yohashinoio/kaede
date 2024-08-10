@@ -1,11 +1,11 @@
-use kaede_span::Span;
+use kaede_span::{file::FilePath, Span};
 
 use crate::token::{Token, TokenKind};
 
 /// The rules are based on the Go language, thank you very much!
 ///
 /// `Newline` token will be removed
-pub fn insert_semi(tokens: impl Iterator<Item = Token>) -> Vec<Token> {
+pub fn insert_semi(tokens: impl Iterator<Item = Token>, file: FilePath) -> Vec<Token> {
     let mut result = Vec::<Token>::new();
 
     for tok in tokens {
@@ -19,7 +19,7 @@ pub fn insert_semi(tokens: impl Iterator<Item = Token>) -> Vec<Token> {
 
                         result.push(Token {
                             kind: TokenKind::Semi,
-                            span: Span::new(start, finish),
+                            span: Span::new(start, finish, file),
                         });
                     }
                 }

@@ -5,7 +5,7 @@ use kaede_ast::{
     stmt::{Assign, AssignKind, Block, Let, LetKind, NormalLet, Stmt, StmtKind, TupleUnpack},
 };
 use kaede_lex::token::TokenKind;
-use kaede_span::{Location, Span};
+use kaede_span::Location;
 use kaede_type::Ty;
 
 use crate::{
@@ -24,7 +24,7 @@ impl Parser {
             if let Ok(span) = self.consume(&TokenKind::CloseBrace) {
                 return Ok(Block {
                     body,
-                    span: Span::new(start, span.finish),
+                    span: self.new_span(start, span.finish),
                 });
             } else if self.check(&TokenKind::Eoi) {
                 return Err(ParseError::ExpectedError {
@@ -55,7 +55,7 @@ impl Parser {
             if let Some(kind) = self.assign_ops() {
                 let rhs = self.expr()?;
 
-                let span = Span::new(expr.span.start, rhs.span.finish);
+                let span = self.new_span(expr.span.start, rhs.span.finish);
 
                 return Ok(Stmt {
                     kind: StmtKind::Assign(Assign {
@@ -107,7 +107,7 @@ impl Parser {
 
             let finish = init.span.finish;
 
-            let span = Span::new(start, finish);
+            let span = self.new_span(start, finish);
 
             return Ok(Let {
                 kind: LetKind::NormalLet(NormalLet {
@@ -132,7 +132,7 @@ impl Parser {
 
         let span = match &init {
             Some(e) => e.span,
-            None => Span::new(start, name.span().finish),
+            None => self.new_span(start, name.span().finish),
         };
 
         Ok(Let {
@@ -176,7 +176,7 @@ impl Parser {
 
         let init = self.expr()?;
 
-        let span = Span::new(*start, init.span.finish);
+        let span = self.new_span(*start, init.span.finish);
 
         Ok(Let {
             kind: LetKind::TupleUnpack(TupleUnpack {
