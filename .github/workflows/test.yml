@@ -11,17 +11,17 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Restore cached llvm
-        id: cache-llvm-restore
-        uses: actions/cache/restore@v4
+      - name: Cache llvm
+        id: cache-llvm
+        uses: actions/cache@v4
         with:
           path: |
-            ./llvm/
+            ${{ runner.temp }}/llvm
           key: ${{ runner.os }}-llvm-17.0
 
-      - name: Restore cached rust
-        id: cache-rust-restore
-        uses: actions/cache/restore@v4
+      - name: Cache rust
+        id: cache-rust
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/
@@ -41,36 +41,20 @@ jobs:
         uses: KyleMayes/install-llvm-action@v2
         # Don't replace to cache-hit == 'false'
         # https://poyo.hatenablog.jp/entry/2024/05/04/094730
-        if: ${{ steps.cache-llvm-restore.outputs.cache-hit != 'true' }}
+        if: ${{ steps.cache-llvm.outputs.cache-hit != 'true' }}
         with:
           version: "17.0"
-          cached: ${{ steps.cache-llvm-restore.outputs.cache-hit }}
-
-      - name: Save llvm
-        id: cache-llvm-save
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            ./llvm/
-          key: ${{ steps.cache-llvm-restore.outputs.cache-primary-key }}
+          cached: ${{ steps.cache-llvm.outputs.cache-hit }}
+          directory: ${{ runner.temp }}/llvm
 
       - name: Install rust
         uses: dtolnay/rust-toolchain@stable
         # Don't replace to cache-hit == 'false'
         # https://poyo.hatenablog.jp/entry/2024/05/04/094730
-        if: ${{ steps.cache-rust-restore.outputs.cache-hit != 'true' }}
+        if: ${{ steps.cache-rust.outputs.cache-hit != 'true' }}
         with:
           toolchain: stable
           components: rustfmt, clippy
-
-      - name: Save rust
-        id: cache-rust-save
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            ~/.cargo/
-            ./target/
-          key: ${{ steps.cache-rust-restore.outputs.cache-primary-key }}
 
       - name: Install kaede
         run: chmod +x install.py && ./install.py
