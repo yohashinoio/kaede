@@ -7,13 +7,13 @@ jobs:
     name: run test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
 
       - name: Restore cached llvm
         id: cache-llvm-restore
-        uses: actions/cache/restore@v3
+        uses: actions/cache/restore@v4
         with:
           path: |
             ./llvm/
@@ -21,7 +21,7 @@ jobs:
 
       - name: Restore cached rust
         id: cache-rust-restore
-        uses: actions/cache/restore@v3
+        uses: actions/cache/restore@v4
         with:
           path: |
             ~/.cargo/
@@ -39,14 +39,16 @@ jobs:
 
       - name: Install llvm
         uses: KyleMayes/install-llvm-action@v2
+        # Don't replace to cache-hit == 'false'
+        # https://poyo.hatenablog.jp/entry/2024/05/04/094730
+        if: ${{ steps.cache-llvm-restore.outputs.cache-hit != 'true' }}
         with:
           version: "17.0"
           cached: ${{ steps.cache-llvm-restore.outputs.cache-hit }}
 
       - name: Save llvm
         id: cache-llvm-save
-        if: steps.cache-llvm-restore.outputs.cache-hit == 'false'
-        uses: actions/cache/save@v3
+        uses: actions/cache/save@v4
         with:
           path: |
             ./llvm/
@@ -54,15 +56,16 @@ jobs:
 
       - name: Install rust
         uses: dtolnay/rust-toolchain@stable
-        if: steps.cache-rust-restore.outputs.cache-hit == 'false'
+        # Don't replace to cache-hit == 'false'
+        # https://poyo.hatenablog.jp/entry/2024/05/04/094730
+        if: ${{ steps.cache-rust-restore.outputs.cache-hit != 'true' }}
         with:
           toolchain: stable
           components: rustfmt, clippy
 
       - name: Save rust
         id: cache-rust-save
-        if: steps.cache-rust-restore.outputs.cache-hit == 'false'
-        uses: actions/cache/save@v3
+        uses: actions/cache/save@v4
         with:
           path: |
             ~/.cargo/
