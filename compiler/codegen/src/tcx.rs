@@ -106,6 +106,7 @@ pub struct TypeCtx<'ctx> {
 }
 
 impl<'ctx> TypeCtx<'ctx> {
+    #[allow(dead_code)]
     pub fn dump_udt_table(&self) {
         eprintln!("{:?}", self.udt_table);
     }
