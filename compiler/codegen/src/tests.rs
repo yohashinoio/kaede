@@ -2303,3 +2303,26 @@ fn cast_str_to_pointer() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn single_variant_enum() -> anyhow::Result<()> {
+    let program = r#"struct C {
+        apple: i32,
+    }
+
+    enum A {
+        B(C),
+    }
+
+    fn main(): i32 {
+        let a = A::B(C { apple: 58 })
+
+        return match a {
+            A::B(c) => c.apple,
+        }
+    }"#;
+
+    assert_eq!(exec(program)?, 58);
+
+    Ok(())
+}
