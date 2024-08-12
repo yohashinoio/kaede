@@ -153,3 +153,91 @@ fn import_struct_methods_with_name_conflict() -> anyhow::Result<()> {
 
     test(58, &[module.path(), main.path()])
 }
+
+#[test]
+fn import_enum() -> anyhow::Result<()> {
+    let tempdir = assert_fs::TempDir::new()?;
+
+    let module = tempdir.child("m.kd");
+    module.write_str(
+        r#"pub struct Apple {
+            size: i32,
+        }
+
+        pub enum Fruit {
+            Apple(Apple),
+            Ichigo(i32),
+        }"#,
+    )?;
+
+    let main = tempdir.child("main.kd");
+    main.write_str(
+        r#"import m
+        fn main(): i32 {
+            let apple = m.Fruit::Apple(m.Apple { size: 48 });
+            let ichigo = m.Fruit::Ichigo(10);
+
+            match apple {
+                m.Fruit::Apple(a) => {
+                    match ichigo {
+                        m.Fruit::Ichigo(i) => {
+                            return a.size + i
+                        },
+                        _ => return 123,
+                    }
+                },
+                _ => return 123,
+            }
+
+            return 256
+        }"#,
+    )?;
+
+    test(58, &[module.path(), main.path()])
+}
+
+#[test]
+fn nested_import() -> anyhow::Result<()> {
+    let tempdir = assert_fs::TempDir::new()?;
+
+    let m1 = tempdir.child("m1.kd");
+    m1.write_str(
+        r#"pub struct Apple {
+            size: i32,
+        }
+
+        pub enum Fruit {
+            Apple(Apple),
+            Ichigo(i32),
+        }"#,
+    )?;
+
+    let m2 = tempdir.child("m2.kd");
+    m2.write_str(
+        r#"import m1
+        pub fn get_value(fruit: m1.Fruit): i32 {
+            return match fruit {
+                m1.Fruit::Apple(a) => return a.size,
+                m1.Fruit::Ichigo(n) => return n,
+            }
+        }
+        pub fn f(): i32 {
+            let fruit = m1.Fruit::Apple(m1.Apple { size: 48 });
+            return get_value(fruit)
+        }
+        pub fn g(): i32 {
+            let fruit = m1.Fruit::Ichigo(10);
+            return get_value(fruit)
+        }"#,
+    )?;
+
+    let main = tempdir.child("main.kd");
+    main.write_str(
+        r#"import m2
+        fn main(): i32 {
+            return m2.f() + m2.g()
+        }"#,
+    )?;
+
+    test(58, &[m1.path(), m2.path(), main.path()])
+}
