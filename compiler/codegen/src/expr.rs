@@ -18,7 +18,7 @@ use inkwell::{
     module::Linkage,
     types::BasicTypeEnum,
     values::{BasicValue, BasicValueEnum, IntValue, PointerValue},
-    AddressSpace, IntPredicate,
+    IntPredicate,
 };
 use kaede_ast::{
     expr::{
@@ -59,6 +59,7 @@ struct EnumUnpack<'ctx> {
     name: Ident,
     /// match x
     ///       ^
+    enum_ty: BasicTypeEnum<'ctx>,
     enum_value: Value<'ctx>,
     variant_ty: Rc<Ty>,
     span: Span,
@@ -639,7 +640,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         arms: &MatchArmList,
         span: Span,
     ) -> anyhow::Result<Value<'ctx>> {
-        let target_offset = self.load_enum_variant_offset_from_value(target)?;
+        let target_offset = self.load_enum_variant_offset_from_value(enum_info.ty, target)?;
 
         let mut valued_if = self
             .conv_match_arms_on_enum_to_if(
@@ -710,6 +711,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             match &pattern_variant_info.ty {
                 Some(ty) => Some(EnumUnpack {
                     name: *param_name,
+                    enum_ty: enum_info.ty,
                     enum_value: target.clone(),
                     variant_ty: ty.clone(),
                     span,
@@ -741,14 +743,18 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
     }
 
     fn load_enum_variant_offset_from_value(
-        &self,
+        &mut self,
+        enum_ty: BasicTypeEnum<'ctx>,
         value: &Value<'ctx>,
     ) -> anyhow::Result<Value<'ctx>> {
         let gep = unsafe {
             self.cucx.builder.build_in_bounds_gep(
-                self.cucx.context().i32_type(),
+                enum_ty,
                 value.get_value().into_pointer_value(),
-                &[self.cucx.context().i32_type().const_zero()],
+                &[
+                    self.cucx.context().i32_type().const_zero(),
+                    self.cucx.context().i32_type().const_zero(),
+                ],
                 "",
             )?
         };
@@ -1005,25 +1011,16 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
     }
 
     fn build_enum_unpack(&mut self, enum_unpack: &EnumUnpack) -> anyhow::Result<()> {
-        let variant_ty_llvm = match enum_unpack.variant_ty.kind.as_ref() {
-            TyKind::Reference(refty) => self
-                .cucx
-                .conv_to_llvm_type(&refty.refee_ty, enum_unpack.span),
-            _ => self
-                .cucx
-                .conv_to_llvm_type(&enum_unpack.variant_ty, enum_unpack.span),
-        }?;
+        let variant_ty_llvm = self
+            .cucx
+            .conv_to_llvm_type(&enum_unpack.variant_ty, enum_unpack.span)?;
 
-        let bitcast = self.cucx.builder.build_bit_cast(
-            enum_unpack.enum_value.get_value(),
-            self.cucx.context().ptr_type(AddressSpace::default()),
-            "",
-        )?;
-
+        // { i32, [N x i8] }
+        //        ^^^^^^^^
         let gep = unsafe {
             self.cucx.builder.build_in_bounds_gep(
-                variant_ty_llvm,
-                bitcast.into_pointer_value(),
+                enum_unpack.enum_ty,
+                enum_unpack.enum_value.get_value().into_pointer_value(),
                 &[
                     self.cucx.context().i32_type().const_zero(),
                     self.cucx.context().i32_type().const_int(1_u64, false),
