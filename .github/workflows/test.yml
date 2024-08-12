@@ -11,14 +11,6 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Cache llvm
-        id: cache-llvm
-        uses: actions/cache@v4
-        with:
-          path: |
-            ./llvm
-          key: ${{ runner.os }}-llvm-17.0
-
       - name: Cache rust
         id: cache-rust
         uses: actions/cache@v4
@@ -39,12 +31,8 @@ jobs:
 
       - name: Install llvm
         uses: KyleMayes/install-llvm-action@v2
-        # Don't replace to cache-hit == 'false'
-        # https://poyo.hatenablog.jp/entry/2024/05/04/094730
-        if: ${{ steps.cache-llvm.outputs.cache-hit != 'true' }}
         with:
           version: "17.0"
-          cached: ${{ steps.cache-llvm.outputs.cache-hit }}
 
       - name: Install rust
         uses: dtolnay/rust-toolchain@stable
