@@ -108,7 +108,9 @@ pub struct TypeCtx<'ctx> {
 impl<'ctx> TypeCtx<'ctx> {
     #[allow(dead_code)]
     pub fn dump_udt_table(&self) {
-        eprintln!("{:?}", self.udt_table);
+        for (name, kind) in &self.udt_table {
+            eprintln!("{}: {:?}", name.as_str(), kind);
+        }
     }
 
     pub fn lookup_variable(&self, ident: &Ident) -> anyhow::Result<&Variable<'ctx>> {
