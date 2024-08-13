@@ -611,7 +611,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             None => {
                 return Err(CodegenError::Undeclared {
                     name: udt.name.symbol(),
-                    span: udt.name.span(),
+                    span: node.span,
                 }
                 .into())
             }
@@ -622,7 +622,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             _ => {
                 return Err(CodegenError::Undeclared {
                     name: udt.name.symbol(),
-                    span: udt.name.span(),
+                    span: node.span,
                 }
                 .into())
             }
