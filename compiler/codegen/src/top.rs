@@ -129,6 +129,17 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
     }
 
     fn enum_(&mut self, node: Enum) {
+        self.add_enum_type(node, None);
+    }
+
+    fn add_enum_type(&mut self, node: Enum, external_module_name: Option<Symbol>) {
+        let mangled_name = Symbol::from(match external_module_name {
+            Some(external_module_name) => {
+                mangle_external_name(external_module_name, node.name.symbol())
+            }
+            None => mangle_name(self.cucx, node.name.symbol()),
+        });
+
         let largest_type_size = self.get_largest_type_size_of_enum(&node.variants);
 
         let items = node
@@ -147,14 +158,15 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
             })
             .collect();
 
-        let mangled_name = mangle_name(self.cucx, node.name.symbol()).into();
-
         // If there is an item with a specified type
         // Specified: { i32, [i8; LARGEST_TYPE_SIZE_IN_BYTES] }
         // Not specified: { i32 }
         match largest_type_size {
             Some(size) => {
-                let ty = self.cucx.context().opaque_struct_type(node.name.as_str());
+                let ty = self
+                    .cucx
+                    .context()
+                    .opaque_struct_type(mangled_name.as_str());
 
                 ty.set_body(
                     &[
@@ -174,12 +186,16 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                         name: node.name,
                         ty: ty.into(),
                         variants: items,
+                        external_module_name,
                     }),
                 );
             }
 
             None => {
-                let ty = self.cucx.context().opaque_struct_type(node.name.as_str());
+                let ty = self
+                    .cucx
+                    .context()
+                    .opaque_struct_type(mangled_name.as_str());
 
                 ty.set_body(&[self.cucx.context().i32_type().into()], true);
 
@@ -189,6 +205,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                         name: node.name,
                         ty: ty.into(),
                         variants: items,
+                        external_module_name,
                     }),
                 );
             }
@@ -494,12 +511,21 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         .unwrap();
 
         for top_level in psd_module.top_levels {
-            match top_level.kind {
-                TopLevelKind::Fn(func) => {
-                    if top_level.vis.is_private() {
-                        continue;
-                    }
+            // Without checking visibility.
+            if let TopLevelKind::Impl(impl_) = top_level.kind {
+                self.import_impl(impl_, import_module_name.to_owned().into())?;
+                continue;
+            }
 
+            // Check visibility.
+            if top_level.vis.is_private() {
+                continue;
+            }
+
+            match top_level.kind {
+                TopLevelKind::Impl(_) => unreachable!(),
+
+                TopLevelKind::Fn(func) => {
                     let return_ty = if func.decl.return_ty.is_some() {
                         Some(Ty {
                             kind: func.decl.return_ty.as_ref().unwrap().kind.clone(),
@@ -524,20 +550,15 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                     )?;
                 }
 
-                TopLevelKind::Impl(impl_) => {
-                    self.import_impl(impl_, import_module_name.to_owned().into())?;
-                }
-
                 TopLevelKind::Struct(struct_) => {
-                    if top_level.vis.is_private() {
-                        continue;
-                    }
                     self.import_struct(struct_, import_module_name.to_owned().into())?;
                 }
 
-                TopLevelKind::Import(_) => todo!(),
+                TopLevelKind::Enum(enum_) => {
+                    self.import_enum(enum_, import_module_name.to_owned().into());
+                }
 
-                TopLevelKind::Enum(_) => todo!(),
+                TopLevelKind::Import(_) => todo!(),
 
                 TopLevelKind::Extern(_) => todo!(),
 
@@ -548,6 +569,10 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         self.cucx.imported_modules.insert(module_path.symbol());
 
         Ok(())
+    }
+
+    fn import_enum(&mut self, node: Enum, import_module_name: Symbol) {
+        self.add_enum_type(node, Some(import_module_name));
     }
 
     fn import_struct(&mut self, struct_: Struct, import_module_name: Symbol) -> anyhow::Result<()> {

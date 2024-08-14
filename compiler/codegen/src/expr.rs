@@ -337,18 +337,37 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
     fn dismantle_enum_variant_pattern<'pat>(
         &self,
         pattern: &'pat Expr,
-    ) -> (&'pat Ident, &'pat Ident, Option<&'pat Args>) {
-        let (enum_name, variant_name_and_param) = match &pattern.kind {
+    ) -> ((Option<Ident>, Ident), &'pat Ident, Option<&'pat Args>) {
+        let (module_name_and_enum_name, variant_name_and_param) = match &pattern.kind {
             ExprKind::Binary(b) => match b.kind {
-                BinaryKind::ScopeResolution => (&b.lhs, &b.rhs),
+                BinaryKind::ScopeResolution => match b.lhs.kind {
+                    ExprKind::Ident(s) => ((None, s), &b.rhs),
+                    _ => unreachable!(),
+                },
+
+                // TODO: Recursive dismantling
+                BinaryKind::Access => {
+                    // Expect external enum variant.
+                    let module_name = match b.lhs.kind {
+                        ExprKind::Ident(s) => s,
+                        _ => unreachable!(),
+                    };
+
+                    match &b.rhs.kind {
+                        ExprKind::Binary(rb) => match rb.kind {
+                            BinaryKind::ScopeResolution => match rb.lhs.kind {
+                                ExprKind::Ident(s) => ((Some(module_name), s), &rb.rhs),
+                                _ => unreachable!(),
+                            },
+                            _ => unreachable!(),
+                        },
+                        _ => unreachable!(),
+                    }
+                }
+
                 _ => unreachable!(),
             },
 
-            _ => unreachable!(),
-        };
-
-        let enum_name = match &enum_name.kind {
-            ExprKind::Ident(s) => s,
             _ => unreachable!(),
         };
 
@@ -358,7 +377,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             _ => unreachable!(),
         };
 
-        (enum_name, variant_name, param)
+        (module_name_and_enum_name, variant_name, param)
     }
 
     fn match_(&mut self, node: &Match) -> anyhow::Result<Value<'ctx>> {
@@ -546,7 +565,14 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         let mut pattern_variant_names = BTreeSet::new();
 
         for arm in arms.non_wildcard_iter() {
-            let (enum_name, variant_name, _) = self.dismantle_enum_variant_pattern(&arm.pattern);
+            let ((module_name, enum_name), variant_name, _) =
+                self.dismantle_enum_variant_pattern(&arm.pattern);
+
+            if let Some(module_name) = module_name {
+                if module_name.symbol() != enum_info.external_module_name.unwrap() {
+                    todo!("Error");
+                }
+            }
 
             if enum_info.name.symbol() != enum_name.symbol() {
                 todo!("Error");
@@ -597,14 +623,19 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         target: &Value<'ctx>,
         refty: &ReferenceType,
     ) -> anyhow::Result<Value<'ctx>> {
-        let refee_ty = &refty.refee_ty;
+        let base_ty_of_ref = refty.get_base_type_of_reference();
 
-        let udt = match refee_ty.kind.as_ref() {
+        let udt = match base_ty_of_ref.kind.as_ref() {
             TyKind::UserDefined(udt) => udt,
             _ => unimplemented!(),
         };
 
-        let mangled_name = mangle_udt_name(self.cucx, udt, ModuleLocation::Internal);
+        let mangled_name = match base_ty_of_ref.external_module_name {
+            Some(module_name) => {
+                mangle_udt_name(self.cucx, udt, ModuleLocation::External(module_name))
+            }
+            None => mangle_udt_name(self.cucx, udt, ModuleLocation::Internal),
+        };
 
         let udt_kind = match self.cucx.tcx.get_udt(mangled_name) {
             Some(udt) => udt,
@@ -772,7 +803,14 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         enum_info: &'e EnumInfo,
         pattern: &'pat Expr,
     ) -> anyhow::Result<(&'e EnumVariantInfo, Option<&'pat Args>)> {
-        let (enum_name, variant_name, param) = self.dismantle_enum_variant_pattern(pattern);
+        let ((module_name, enum_name), variant_name, param) =
+            self.dismantle_enum_variant_pattern(pattern);
+
+        if let Some(module_name) = module_name {
+            if module_name.symbol() != enum_info.external_module_name.unwrap() {
+                todo!("Error");
+            }
+        }
 
         if enum_info.name.symbol() != enum_name.symbol() {
             todo!("Error");
@@ -1047,6 +1085,8 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
     }
 
     fn struct_literal(&mut self, node: &StructLiteral) -> anyhow::Result<Value<'ctx>> {
+        // If this is from an external module, this name is mangled with the module name,
+        // Because the module name is automatically replaced. (See `access` method)
         let mangled_name = mangle_udt_name(self.cucx, &node.struct_ty, ModuleLocation::Internal);
 
         let struct_ty = Ty {
@@ -1535,7 +1575,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         let enum_ty = Ty {
             kind: TyKind::UserDefined(UserDefinedType::new(*enum_name, None)).into(),
             mutability: Mutability::Not,
-            external_module_name: None,
+            external_module_name: enum_info.external_module_name,
         };
 
         let enum_llvm_ty = self.cucx.conv_to_llvm_type(&enum_ty, enum_name.span())?;
@@ -1832,20 +1872,33 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         })
     }
 
+    fn build_expr_with_other_module_name(
+        &mut self,
+        module_name: &Ident,
+        expr: &Expr,
+    ) -> anyhow::Result<Option<Value<'ctx>>> {
+        if self.cucx.imported_modules.contains(&module_name.symbol()) {
+            // --- Module item access ---
+            self.cucx.module.set_name(module_name.as_str());
+
+            let value = build_expression(self.cucx, expr);
+
+            // Revert to the current module name
+            self.cucx.module.set_name(&self.cucx.module_name);
+
+            return value.map(Some);
+        }
+
+        Ok(None)
+    }
+
     /// Struct access or module item access
     fn access(&mut self, node: &Binary) -> anyhow::Result<Value<'ctx>> {
         assert!(matches!(node.kind, BinaryKind::Access));
 
-        if let ExprKind::Ident(modname) = &node.lhs.kind {
-            if self.cucx.imported_modules.contains(&modname.symbol()) {
-                // --- Module item access ---
-                self.cucx.module.set_name(modname.as_str());
-
-                let value = build_expression(self.cucx, &node.rhs);
-
-                // Revert to the current module name
-                self.cucx.module.set_name(&self.cucx.module_name);
-                return value;
+        if let ExprKind::Ident(module_name) = &node.lhs.kind {
+            if let Some(value) = self.build_expr_with_other_module_name(module_name, &node.rhs)? {
+                return Ok(value);
             }
         }
 

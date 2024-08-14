@@ -77,6 +77,7 @@ pub struct EnumInfo<'ctx> {
     pub ty: BasicTypeEnum<'ctx>,
     pub name: Ident,
     pub variants: HashMap<Symbol, EnumVariantInfo>,
+    pub external_module_name: Option<Symbol>,
 }
 
 #[derive(Debug)]
