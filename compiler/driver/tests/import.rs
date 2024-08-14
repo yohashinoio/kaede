@@ -155,7 +155,65 @@ fn import_struct_methods_with_name_conflict() -> anyhow::Result<()> {
 }
 
 #[test]
+fn imported_typed_member() -> anyhow::Result<()> {
+    let tempdir = assert_fs::TempDir::new()?;
+
+    let module = tempdir.child("m.kd");
+    module.write_str(
+        r#"pub struct Apple {
+            size: i32,
+        }"#,
+    )?;
+
+    let main = tempdir.child("main.kd");
+    main.write_str(
+        r#"import m
+        struct Fruit {
+            apple: m.Apple,
+        }
+        fn main(): i32 {
+            let fruit = Fruit { apple: m.Apple { size: 58 } }
+            return fruit.apple.size
+        }"#,
+    )?;
+
+    test(58, &[module.path(), main.path()])
+}
+
+#[test]
 fn import_enum() -> anyhow::Result<()> {
+    let tempdir = assert_fs::TempDir::new()?;
+
+    let module = tempdir.child("m.kd");
+    module.write_str(
+        r#"pub enum Fruit {
+            Apple(i32),
+            Orange,
+        }"#,
+    )?;
+
+    let main = tempdir.child("main.kd");
+    main.write_str(
+        r#"import m
+        fn main(): i32 {
+            let apple = m.Fruit::Apple(58);
+
+            match apple {
+                m.Fruit::Apple(value) => {
+                    return value
+                },
+                _ => return 123,
+            }
+
+            return 256
+        }"#,
+    )?;
+
+    test(58, &[module.path(), main.path()])
+}
+
+#[test]
+fn import_complex_enum() -> anyhow::Result<()> {
     let tempdir = assert_fs::TempDir::new()?;
 
     let module = tempdir.child("m.kd");
@@ -185,6 +243,95 @@ fn import_enum() -> anyhow::Result<()> {
                         },
                         _ => return 123,
                     }
+                },
+                _ => return 123,
+            }
+
+            return 256
+        }"#,
+    )?;
+
+    test(58, &[module.path(), main.path()])
+}
+
+#[test]
+fn enum_with_imported_struct() -> anyhow::Result<()> {
+    let tempdir = assert_fs::TempDir::new()?;
+
+    let module = tempdir.child("m.kd");
+    module.write_str(
+        r#"pub struct Apple {
+            size: i32,
+        }
+        impl Apple {
+            pub fn get_size(self): i32 {
+                return self
+            }
+        }"#,
+    )?;
+
+    let main = tempdir.child("main.kd");
+    main.write_str(
+        r#"import m
+        enum Fruit {
+            Apple(m.Apple),
+            Ichigo(i32),
+        }
+
+        fn main(): i32 {
+            let apple = Fruit::Apple(m.Apple { size: 48 });
+            let ichigo = Fruit::Ichigo(10);
+
+            match apple {
+                Fruit::Apple(a) => {
+                    match ichigo {
+                        Fruit::Ichigo(i) => {
+                            return a.get_size() + i
+                        },
+                        _ => return 123,
+                    }
+                },
+                _ => return 123,
+            }
+
+            return 256
+        }"#,
+    )?;
+
+    test(58, &[module.path(), main.path()])
+}
+
+#[test]
+fn import_enum_and_call_variant_method() -> anyhow::Result<()> {
+    let tempdir = assert_fs::TempDir::new()?;
+
+    let module = tempdir.child("m.kd");
+    module.write_str(
+        r#"pub struct Apple {
+            size: i32,
+        }
+
+        impl Apple {
+            pub fn get_size(self): i32 {
+                return self.size
+            }
+        }
+
+        pub enum Fruit {
+            Apple(Apple),
+            Ichigo(i32),
+        }"#,
+    )?;
+
+    let main = tempdir.child("main.kd");
+    main.write_str(
+        r#"import m
+        fn main(): i32 {
+            let apple = m.Fruit::Apple(m.Apple { size: 48 });
+
+            match apple {
+                m.Fruit::Apple(a) => {
+                    return a.get_size()
                 },
                 _ => return 123,
             }
