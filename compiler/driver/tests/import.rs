@@ -265,7 +265,7 @@ fn enum_with_imported_struct() -> anyhow::Result<()> {
         }
         impl Apple {
             pub fn get_size(self): i32 {
-                return self
+                return self.size
             }
         }"#,
     )?;
