@@ -122,6 +122,10 @@ impl Parser {
 
         let module_path = self.ident()?;
 
+        if !self.imported_modules.contains(&module_path.symbol()) {
+            self.imported_modules.push(module_path.symbol());
+        }
+
         let span = self.new_span(start, module_path.span().finish);
 
         Ok(Import { module_path, span })

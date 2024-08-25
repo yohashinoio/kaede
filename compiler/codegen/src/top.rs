@@ -12,9 +12,7 @@ use kaede_type::{Mutability, Ty, TyKind};
 
 use crate::{
     error::CodegenError,
-    mangle::{
-        mangle_external_name, mangle_method, mangle_name, mangle_static_method, ModuleLocation,
-    },
+    mangle::{mangle_method, mangle_name, mangle_static_method},
     stmt::{build_block, change_mutability_dup},
     tcx::{EnumInfo, EnumVariantInfo, GenericKind, ReturnType, StructInfo, UdtKind, VariableTable},
     CompileUnitCtx,
@@ -129,16 +127,11 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
     }
 
     fn enum_(&mut self, node: Enum) {
-        self.add_enum_type(node, None);
+        self.define_enum_type(node, false);
     }
 
-    fn add_enum_type(&mut self, node: Enum, external_module_name: Option<Symbol>) {
-        let mangled_name = Symbol::from(match external_module_name {
-            Some(external_module_name) => {
-                mangle_external_name(external_module_name, node.name.symbol())
-            }
-            None => mangle_name(self.cucx, node.name.symbol()),
-        });
+    fn define_enum_type(&mut self, node: Enum, is_external: bool) {
+        let mangled_name = Symbol::from(mangle_name(self.cucx, node.name.symbol()));
 
         let largest_type_size = self.get_largest_type_size_of_enum(&node.variants);
 
@@ -157,6 +150,12 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                 )
             })
             .collect();
+
+        let is_external = if is_external {
+            Some(self.cucx.modules_for_mangle.get())
+        } else {
+            None
+        };
 
         // If there is an item with a specified type
         // Specified: { i32, [i8; LARGEST_TYPE_SIZE_IN_BYTES] }
@@ -186,7 +185,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                         name: node.name,
                         ty: ty.into(),
                         variants: items,
-                        external_module_name,
+                        is_external,
                     }),
                 );
             }
@@ -205,7 +204,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                         name: node.name,
                         ty: ty.into(),
                         variants: items,
-                        external_module_name,
+                        is_external,
                     }),
                 );
             }
@@ -269,19 +268,18 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         self.build_fn(mangled_name.as_str(), node, span)
     }
 
-    fn mangle_method(&mut self, impl_for_ty: &Ty, node: &Fn, loc: ModuleLocation) -> String {
+    fn mangle_method(&mut self, impl_for_ty: &Ty, node: &Fn) -> String {
         let impl_for_ty_s = match impl_for_ty.kind.as_ref() {
             TyKind::Reference(refty) => refty.refee_ty.kind.to_string(),
             _ => impl_for_ty.kind.to_string(),
         };
 
-        if impl_for_ty.is_udt() {
+        let mangled = if impl_for_ty.is_udt() {
             if node.decl.self_.is_none() {
                 return mangle_static_method(
                     self.cucx,
                     Symbol::from(impl_for_ty_s),
                     node.decl.name.symbol(),
-                    loc,
                 );
             };
 
@@ -289,7 +287,6 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                 self.cucx,
                 Symbol::from(impl_for_ty_s),
                 node.decl.name.symbol(),
-                loc,
             )
         } else {
             // Builtin types
@@ -302,14 +299,16 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
 
             // Without module name
             format!("{}.{}", impl_for_ty_s, node.decl.name.symbol().as_str())
-        }
+        };
+
+        mangled
     }
 
     /// Static method can also be handled by this function
     ///
     /// If kind is `Normal`, it becomes a static method (said in C++ style)
     fn define_method(&mut self, impl_for_ty: Rc<Ty>, node: Fn) -> anyhow::Result<()> {
-        let mangled_name = self.mangle_method(&impl_for_ty, &node, ModuleLocation::Internal);
+        let mangled_name = self.mangle_method(&impl_for_ty, &node);
         self.define_method_internal(&mangled_name, impl_for_ty, node)
     }
 
@@ -342,14 +341,24 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         mangled_name: &str,
         impl_for_ty: Rc<Ty>,
         mut node: Fn,
-        external_module_name: Option<Symbol>,
+        is_external: Option<Symbol /* Module name */>,
     ) -> anyhow::Result<()> {
         let return_ty = if node.decl.return_ty.is_some() {
-            Some(Ty {
+            let ty = Ty {
                 kind: node.decl.return_ty.as_ref().unwrap().kind.clone(),
                 mutability: node.decl.return_ty.unwrap().mutability,
-                // We have to modify this field as this is imported method.
-                external_module_name,
+            };
+
+            // Wrapping with external type.
+            Some(if let Some(module) = is_external {
+                if ty.is_udt() {
+                    Ty::new_external(module, ty.into())
+                } else {
+                    // Builtin types
+                    ty
+                }
+            } else {
+                ty
             })
         } else {
             None
@@ -478,162 +487,6 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         Ok(var_table)
     }
 
-    fn import_(&mut self, node: Import) -> anyhow::Result<()> {
-        self.import_module(node.module_path)
-    }
-
-    fn import_module(&mut self, module_path: Ident) -> anyhow::Result<()> {
-        let import_module_name = module_path.as_str();
-
-        let path = self
-            .cucx
-            .file_path
-            .path()
-            .parent()
-            .unwrap()
-            .join(import_module_name)
-            .with_extension("kd");
-
-        if !path.exists() {
-            return Err(CodegenError::FileNotFoundForModule {
-                span: module_path.span(),
-                mod_name: module_path.symbol(),
-            }
-            .into());
-        }
-
-        // TODO: Optimize
-        let psd_module = Parser::new(
-            &fs::read_to_string(&path).unwrap(),
-            PathBuf::from(module_path.as_str()).into(),
-        )
-        .run()
-        .unwrap();
-
-        for top_level in psd_module.top_levels {
-            // Without checking visibility.
-            if let TopLevelKind::Impl(impl_) = top_level.kind {
-                self.import_impl(impl_, import_module_name.to_owned().into())?;
-                continue;
-            }
-
-            // Check visibility.
-            if top_level.vis.is_private() {
-                continue;
-            }
-
-            match top_level.kind {
-                TopLevelKind::Impl(_) => unreachable!(),
-
-                TopLevelKind::Fn(func) => {
-                    let return_ty = if func.decl.return_ty.is_some() {
-                        Some(Ty {
-                            kind: func.decl.return_ty.as_ref().unwrap().kind.clone(),
-                            mutability: func.decl.return_ty.unwrap().mutability,
-                            // We have to modify this field as this is imported function.
-                            external_module_name: Some(import_module_name.to_owned().into()),
-                        })
-                    } else {
-                        None
-                    };
-
-                    self.declare_fn(
-                        &mangle_external_name(
-                            import_module_name.to_owned().into(),
-                            func.decl.name.symbol(),
-                        ),
-                        func.decl.params,
-                        return_ty.into(),
-                        Linkage::External,
-                        false,
-                        func.span,
-                    )?;
-                }
-
-                TopLevelKind::Struct(struct_) => {
-                    self.import_struct(struct_, import_module_name.to_owned().into())?;
-                }
-
-                TopLevelKind::Enum(enum_) => {
-                    self.import_enum(enum_, import_module_name.to_owned().into());
-                }
-
-                TopLevelKind::Import(_) => todo!(),
-
-                TopLevelKind::Extern(_) => todo!(),
-
-                TopLevelKind::GenericFnInstance(_) => unreachable!(),
-            }
-        }
-
-        self.cucx.imported_modules.insert(module_path.symbol());
-
-        Ok(())
-    }
-
-    fn import_enum(&mut self, node: Enum, import_module_name: Symbol) {
-        self.add_enum_type(node, Some(import_module_name));
-    }
-
-    fn import_struct(&mut self, struct_: Struct, import_module_name: Symbol) -> anyhow::Result<()> {
-        let ty = create_struct_type(
-            self.cucx,
-            Symbol::from(mangle_external_name(
-                import_module_name,
-                struct_.name.symbol(),
-            )),
-            &struct_.fields,
-        )?;
-
-        let fields = struct_
-            .fields
-            .into_iter()
-            .map(|field| (field.name.symbol(), field))
-            .collect();
-
-        self.cucx.tcx.add_udt(
-            mangle_external_name(import_module_name, struct_.name.symbol()).into(),
-            UdtKind::Struct(StructInfo {
-                ty,
-                fields,
-                external_module_name: Some(import_module_name),
-            }),
-        );
-
-        Ok(())
-    }
-
-    fn import_impl(&mut self, impl_: Impl, import_module_name: Symbol) -> anyhow::Result<()> {
-        let impl_for_ty = Rc::new(impl_.ty);
-
-        for item in impl_.items {
-            match item.kind {
-                TopLevelKind::Fn(func) => {
-                    if item.vis.is_private() {
-                        continue;
-                    }
-
-                    let mangled_name = self.mangle_method(
-                        &impl_for_ty,
-                        &func,
-                        ModuleLocation::External(import_module_name),
-                    );
-
-                    self.declare_method(
-                        &mangled_name,
-                        impl_for_ty.clone(),
-                        func,
-                        Some(import_module_name),
-                    )?;
-                }
-
-                _ => todo!(),
-            }
-        }
-
-        Ok(())
-    }
-
     fn struct_(&mut self, node: Struct) -> anyhow::Result<()> {
         // For generic
         if node.generic_params.is_some() {
@@ -660,9 +513,174 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
             UdtKind::Struct(StructInfo {
                 ty,
                 fields,
-                external_module_name: None,
+                is_external: None,
             }),
         );
+
+        Ok(())
+    }
+
+    fn import_(&mut self, node: Import) -> anyhow::Result<()> {
+        self.import_module(node.module_path)
+    }
+
+    fn import_module(&mut self, module_path: Ident) -> anyhow::Result<()> {
+        let import_module_name = module_path.as_str();
+
+        let path = self
+            .cucx
+            .file_path
+            .path()
+            .parent()
+            .unwrap()
+            .join(import_module_name)
+            .with_extension("kd");
+
+        let import_module_name = Symbol::from(import_module_name.to_owned());
+
+        if !path.exists() {
+            return Err(CodegenError::FileNotFoundForModule {
+                span: module_path.span(),
+                mod_name: module_path.symbol(),
+            }
+            .into());
+        }
+
+        // TODO: Optimize
+        let psd_module = Parser::new(
+            &fs::read_to_string(&path).unwrap(),
+            PathBuf::from(module_path.as_str()).into(),
+        )
+        .run()
+        .unwrap();
+
+        // For mangle.
+        let bkup = self
+            .cucx
+            .modules_for_mangle
+            .drain_and_append(vec![import_module_name.to_owned().into()]);
+
+        for top_level in psd_module.top_levels {
+            // Without checking visibility.
+            if let TopLevelKind::Impl(impl_) = top_level.kind {
+                self.import_impl(impl_, import_module_name)?;
+                continue;
+            }
+
+            // Check visibility.
+            if top_level.vis.is_private() {
+                continue;
+            }
+
+            match top_level.kind {
+                TopLevelKind::Impl(_) => unreachable!(),
+
+                TopLevelKind::Fn(func) => {
+                    let return_ty = if func.decl.return_ty.is_some() {
+                        Some(Ty::new_external(
+                            import_module_name.to_owned().into(),
+                            Rc::new(Ty {
+                                kind: func.decl.return_ty.as_ref().unwrap().kind.clone(),
+                                mutability: func.decl.return_ty.unwrap().mutability,
+                            }),
+                        ))
+                    } else {
+                        None
+                    };
+
+                    let mangled_name = {
+                        let bkup = self
+                            .cucx
+                            .modules_for_mangle
+                            .drain_and_append(vec![import_module_name.to_owned().into()]);
+                        let mangled_name = mangle_name(self.cucx, func.decl.name.symbol());
+                        self.cucx.modules_for_mangle.replace(bkup);
+                        mangled_name
+                    };
+
+                    self.declare_fn(
+                        &mangled_name,
+                        func.decl.params,
+                        return_ty.into(),
+                        Linkage::External,
+                        false,
+                        func.span,
+                    )?;
+                }
+
+                TopLevelKind::Struct(struct_) => {
+                    self.import_struct(struct_)?;
+                }
+
+                TopLevelKind::Enum(enum_) => {
+                    self.import_enum(enum_);
+                }
+
+                TopLevelKind::Import(_) => todo!(),
+
+                TopLevelKind::Extern(_) => todo!(),
+
+                TopLevelKind::GenericFnInstance(_) => unreachable!(),
+            }
+        }
+
+        self.cucx.modules_for_mangle.replace(bkup);
+
+        self.cucx.imported_modules.insert(module_path.symbol());
+
+        Ok(())
+    }
+
+    fn import_enum(&mut self, node: Enum) {
+        self.define_enum_type(node, true);
+    }
+
+    fn import_struct(&mut self, struct_: Struct) -> anyhow::Result<()> {
+        let mangled_name = Symbol::from(mangle_name(self.cucx, struct_.name.symbol()));
+
+        let ty = create_struct_type(self.cucx, mangled_name, &struct_.fields)?;
+
+        let fields = struct_
+            .fields
+            .into_iter()
+            .map(|field| (field.name.symbol(), field))
+            .collect();
+
+        self.cucx.tcx.add_udt(
+            mangled_name,
+            UdtKind::Struct(StructInfo {
+                ty,
+                fields,
+                is_external: Some(self.cucx.modules_for_mangle.get()),
+            }),
+        );
+
+        Ok(())
+    }
+
+    fn import_impl(&mut self, impl_: Impl, import_module_name: Symbol) -> anyhow::Result<()> {
+        let impl_for_ty = Rc::new(impl_.ty);
+
+        for item in impl_.items {
+            match item.kind {
+                TopLevelKind::Fn(func) => {
+                    if item.vis.is_private() {
+                        continue;
+                    }
+
+                    let mangled_name = self.mangle_method(&impl_for_ty, &func);
+
+                    self.declare_method(
+                        &mangled_name,
+                        impl_for_ty.clone(),
+                        func,
+                        Some(import_module_name),
+                    )?;
+                }
+
+                _ => todo!(),
+            }
+        }
 
         Ok(())
     }

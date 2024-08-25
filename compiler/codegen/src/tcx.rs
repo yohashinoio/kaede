@@ -61,7 +61,7 @@ pub type FunctionTable<'ctx> = HashMap<FunctionValue<'ctx>, Rc<FunctionInfo>>;
 pub struct StructInfo<'ctx> {
     pub ty: StructType<'ctx>,
     pub fields: HashMap<Symbol, StructField>,
-    pub external_module_name: Option<Symbol>,
+    pub is_external: Option<Vec<Symbol>>,
 }
 
 #[derive(Debug)]
@@ -77,7 +77,7 @@ pub struct EnumInfo<'ctx> {
     pub ty: BasicTypeEnum<'ctx>,
     pub name: Ident,
     pub variants: HashMap<Symbol, EnumVariantInfo>,
-    pub external_module_name: Option<Symbol>,
+    pub is_external: Option<Vec<Symbol>>,
 }
 
 #[derive(Debug)]

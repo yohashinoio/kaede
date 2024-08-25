@@ -23,7 +23,7 @@ use kaede_type::{
     FundamentalType, FundamentalTypeKind, GenericArgs, Mutability, ReferenceType, Ty, TyKind,
     UserDefinedType,
 };
-use mangle::{mangle_udt_name, ModuleLocation};
+use mangle::mangle_udt_name;
 use tcx::{FunctionInfo, GenericKind, ReturnType, StructInfo, TypeCtx};
 use top::{build_top_level, create_struct_type};
 
@@ -162,6 +162,43 @@ enum LazyDefinedFn {
     GenericFn((TopLevel, GenericParams, GenericArgs)),
 }
 
+struct ModulesForMangle {
+    names: Vec<Symbol>,
+}
+
+impl ModulesForMangle {
+    fn new(names: &[Symbol]) -> Self {
+        Self {
+            names: names.to_vec(),
+        }
+    }
+
+    fn get(&self) -> Vec<Symbol> {
+        // TODO: Optimize
+        self.names.clone()
+    }
+
+    fn create_mangle_prefix(&self) -> String {
+        self.names
+            .iter()
+            .map(|name| name.as_str())
+            .collect::<Vec<_>>()
+            .join(".")
+    }
+
+    fn drain_and_append(&mut self, mut v: Vec<Symbol>) -> Vec<Symbol> {
+        let drained = self.names.drain(..).collect();
+
+        self.names.append(&mut v);
+
+        drained
+    }
+
+    fn replace(&mut self, backup: Vec<Symbol>) {
+        self.names = backup;
+    }
+}
+
 pub struct CompileUnitCtx<'ctx> {
     cgcx: &'ctx CodegenCtx<'ctx>,
     tcx: TypeCtx<'ctx>,
@@ -171,8 +208,9 @@ pub struct CompileUnitCtx<'ctx> {
 
     file_path: FilePath,
 
-    module_name: String,
     imported_modules: HashSet<Symbol>,
+
+    modules_for_mangle: ModulesForMangle,
 
     /// Block to jump to when a `break` is executed
     ///
@@ -206,7 +244,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             module,
             builder: cgcx.context.create_builder(),
             file_path,
-            module_name,
+            modules_for_mangle: ModulesForMangle::new(&[Symbol::from(module_name)]),
             imported_modules: HashSet::new(),
             loop_break_bb_stk: Vec::new(),
             is_ifmatch_stmt: false,
@@ -301,13 +339,11 @@ impl<'ctx> CompileUnitCtx<'ctx> {
                     })
                     .into(),
                     mutability: Mutability::Mut,
-                    external_module_name: None,
                 }
                 .into(),
             })
             .into(),
             mutability: Mutability::Mut,
-            external_module_name: None,
         }
         .into();
 
@@ -317,7 +353,6 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             })
             .into(),
             mutability: Mutability::Not,
-            external_module_name: None,
         }
         .into()];
 
@@ -373,7 +408,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         let generic_args = udt.generic_args.as_ref().unwrap();
 
         if let GenericKind::Struct(ast) = info.as_ref() {
-            let mangled_struct_name = mangle_udt_name(self, udt, ModuleLocation::Internal);
+            let mangled_struct_name = mangle_udt_name(self, udt);
 
             // Check if it is cached
             if let Some(udt_kind) = self.tcx.get_udt(mangled_struct_name) {
@@ -401,7 +436,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
                 UdtKind::Struct(StructInfo {
                     ty: generic_struct_ty,
                     fields,
-                    external_module_name: None,
+                    is_external: None,
                 }),
             );
 
@@ -415,6 +450,18 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         let context = self.context();
 
         Ok(match ty.kind.as_ref() {
+            TyKind::External(ety) => {
+                let bkup = self
+                    .modules_for_mangle
+                    .drain_and_append(vec![ety.module_name]);
+
+                let ty = self.conv_to_llvm_type(&ety.ty, span)?;
+
+                self.modules_for_mangle.replace(bkup);
+
+                ty
+            }
+
             TyKind::Fundamental(t) => t.as_llvm_type(self.context()),
 
             TyKind::UserDefined(udt) => {
@@ -422,17 +469,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
                     return self.create_generic_struct_type(udt).map(|ty| ty.into());
                 }
 
-                let mangled_name = mangle_udt_name(
-                    self,
-                    udt,
-                    // Determine whether the type is imported or not.
-                    match ty.external_module_name {
-                        Some(external_module_name) => {
-                            ModuleLocation::External(external_module_name)
-                        }
-                        None => ModuleLocation::Internal,
-                    },
-                );
+                let mangled_name = mangle_udt_name(self, udt);
 
                 let udt_kind = match self.tcx.get_udt(mangled_name) {
                     Some(udt) => udt,

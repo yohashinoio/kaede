@@ -25,6 +25,8 @@ pub struct Parser {
     in_cond_expr: bool,
 
     generic_param_names: Vec<Symbol>,
+
+    imported_modules: Vec<Symbol>,
 }
 
 impl Parser {
@@ -38,6 +40,7 @@ impl Parser {
             in_cond_expr: false,
             generic_param_names: Vec::new(),
             file,
+            imported_modules: Vec::new(),
         }
     }
 

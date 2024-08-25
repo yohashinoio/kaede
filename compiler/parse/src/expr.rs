@@ -370,7 +370,15 @@ impl Parser {
         }
 
         if let Ok((ty, span)) = self.ty() {
-            if let TyKind::Reference(refty) = ty.kind.as_ref() {
+            let ty = Rc::new(ty);
+
+            let unwrapped = if let TyKind::External(ety) = ty.kind.as_ref() {
+                ety.ty.clone()
+            } else {
+                ty.clone()
+            };
+
+            if let TyKind::Reference(refty) = unwrapped.kind.as_ref() {
                 if let TyKind::UserDefined(udt) = refty.refee_ty.kind.as_ref() {
                     // Function call
                     if self.first().kind == TokenKind::OpenParen {
@@ -400,7 +408,7 @@ impl Parser {
             // Type
             return Ok(Expr {
                 span,
-                kind: ExprKind::Ty(Rc::new(ty)),
+                kind: ExprKind::Ty(ty),
             });
         }
 

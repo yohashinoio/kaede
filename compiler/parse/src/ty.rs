@@ -2,6 +2,7 @@ use std::rc::Rc;
 
 use kaede_lex::token::TokenKind;
 use kaede_span::Span;
+use kaede_symbol::Ident;
 use kaede_type::{
     make_fundamental_type, FundamentalTypeKind, GenericArgs, GenericType, Mutability,
     ReferenceType, Ty, TyKind, UserDefinedType,
@@ -19,7 +20,6 @@ fn wrap_in_reference(refee_ty: Ty) -> Ty {
         })
         .into(),
         mutability: Mutability::Not,
-        external_module_name: None,
     }
 }
 
@@ -74,6 +74,13 @@ impl Parser {
             }
         };
 
+        // External type
+        if self.check(&TokenKind::Dot) {
+            if let Some(r) = self.try_external_ty(type_ident)? {
+                return Ok(r);
+            }
+        }
+
         Ok((
             match type_ident.as_str() {
                 "i8" => make_fundamental_type(I8, Mutability::Not),
@@ -99,7 +106,6 @@ impl Parser {
                         Ty {
                             kind: TyKind::Generic(GenericType { name: type_ident }).into(),
                             mutability: Mutability::Not,
-                            external_module_name: None,
                         }
                     } else {
                         wrap_in_reference(Ty {
@@ -109,13 +115,27 @@ impl Parser {
                             ))
                             .into(),
                             mutability: Mutability::Not,
-                            external_module_name: None,
                         })
                     }
                 }
             },
             type_ident.span(),
         ))
+    }
+
+    fn try_external_ty(&mut self, maybe_module_name: Ident) -> ParseResult<Option<(Ty, Span)>> {
+        if !self.imported_modules.contains(&maybe_module_name.symbol()) {
+            return Ok(None);
+        }
+
+        let start = self.consume(&TokenKind::Dot)?.start;
+
+        let ty = self.ty()?;
+
+        Ok(Some((
+            Ty::new_external(maybe_module_name.symbol(), Rc::new(ty.0)),
+            self.new_span(start, ty.1.finish),
+        )))
     }
 
     fn pointer_ty(&mut self) -> ParseResult<(Ty, Span)> {
@@ -131,7 +151,6 @@ impl Parser {
             Ty {
                 kind: TyKind::Pointer(Rc::new(ty)).into(),
                 mutability: Mutability::Not,
-                external_module_name: None,
             },
             self.new_span(start, span.finish),
         ))
@@ -179,7 +198,6 @@ impl Parser {
             wrap_in_reference(Ty {
                 kind: TyKind::Array((element_ty.into(), size)).into(),
                 mutability: Mutability::Not,
-                external_module_name: None,
             }),
             self.new_span(start, finish),
         ))
@@ -202,7 +220,6 @@ impl Parser {
                     wrap_in_reference(Ty {
                         kind: TyKind::Tuple(field_types).into(),
                         mutability: Mutability::Not,
-                        external_module_name: None,
                     }),
                     self.new_span(start, span.finish),
                 ));

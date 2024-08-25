@@ -7,7 +7,7 @@ use std::{
 use crate::{
     error::CodegenError,
     generic::{def_generic_args, undef_generic_args},
-    mangle::{mangle_external_name, mangle_name, mangle_udt_name, ModuleLocation},
+    mangle::{mangle_name, mangle_udt_name},
     stmt::{build_block, build_normal_let, build_statement, change_mutability_dup},
     tcx::{EnumInfo, EnumVariantInfo, GenericKind, ReturnType, UdtKind, VariableTable},
     value::{has_signed, Value},
@@ -218,7 +218,6 @@ pub fn build_tuple_indexing_internal<'ctx>(
                 )
                 .into(),
                 mutability: Mutability::Not,
-                external_module_name: None,
             }),
 
             1 => Rc::new(make_fundamental_type(
@@ -245,7 +244,6 @@ pub fn build_tuple_indexing_internal<'ctx>(
         Ty {
             kind: elem_ty.kind.clone(),
             mutability: tuple_ty.mutability,
-            external_module_name: None,
         }
         .into(),
     ))
@@ -569,7 +567,9 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                 self.dismantle_enum_variant_pattern(&arm.pattern);
 
             if let Some(module_name) = module_name {
-                if module_name.symbol() != enum_info.external_module_name.unwrap() {
+                // TODO: Support for multiple external modules
+                if module_name.symbol() != *enum_info.is_external.as_ref().unwrap().first().unwrap()
+                {
                     todo!("Error");
                 }
             }
@@ -630,12 +630,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             _ => unimplemented!(),
         };
 
-        let mangled_name = match base_ty_of_ref.external_module_name {
-            Some(module_name) => {
-                mangle_udt_name(self.cucx, udt, ModuleLocation::External(module_name))
-            }
-            None => mangle_udt_name(self.cucx, udt, ModuleLocation::Internal),
-        };
+        let mangled_name = mangle_udt_name(self.cucx, udt);
 
         let udt_kind = match self.cucx.tcx.get_udt(mangled_name) {
             Some(udt) => udt,
@@ -807,7 +802,8 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             self.dismantle_enum_variant_pattern(pattern);
 
         if let Some(module_name) = module_name {
-            if module_name.symbol() != enum_info.external_module_name.unwrap() {
+            // TODO: Support for multiple external modules
+            if module_name.symbol() != *enum_info.is_external.as_ref().unwrap().first().unwrap() {
                 todo!("Error");
             }
         }
@@ -1085,15 +1081,11 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
     }
 
     fn struct_literal(&mut self, node: &StructLiteral) -> anyhow::Result<Value<'ctx>> {
-        // If this is from an external module, this name is mangled with the module name,
-        // Because the module name is automatically replaced. (See `access` method)
-        let mangled_name = mangle_udt_name(self.cucx, &node.struct_ty, ModuleLocation::Internal);
+        let mangled_name = mangle_udt_name(self.cucx, &node.struct_ty);
 
         let struct_ty = Ty {
             kind: TyKind::UserDefined(node.struct_ty.clone()).into(),
             mutability: Mutability::Not,
-            // Temporary
-            external_module_name: None,
         };
 
         // If this is a generic type, the type is generated here.
@@ -1123,11 +1115,16 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             }
         };
 
-        let struct_ty = Ty {
+        let struct_ty = Rc::new(Ty {
             kind: struct_ty.kind.clone(),
             mutability: struct_ty.mutability,
-            // Actual
-            external_module_name: struct_info.external_module_name,
+        });
+
+        // Wrapping with external types.
+        let struct_ty = if let Some(externals) = &struct_info.is_external {
+            Ty::wrap_in_externals(struct_ty, &externals)
+        } else {
+            struct_ty
         };
 
         let mut values = Vec::new();
@@ -1149,7 +1146,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
         Ok(Value::new(
             create_gc_struct(self.cucx, struct_llvm_ty, &inits)?.into(),
-            wrap_in_ref(struct_ty.into(), Mutability::Mut).into(),
+            wrap_in_ref(struct_ty, Mutability::Mut).into(),
         ))
     }
 
@@ -1165,7 +1162,6 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         let tuple_ty = Ty {
             kind: TyKind::Tuple(element_values.iter().map(|v| v.get_type()).collect()).into(),
             mutability: Mutability::Not,
-            external_module_name: None,
         };
 
         let tuple_llvm_ty = self.cucx.conv_to_llvm_type(&tuple_ty, node.span)?;
@@ -1198,7 +1194,6 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         let array_ty = Rc::new(Ty {
             kind: TyKind::Array((elems[0].get_type(), elems.len() as u32)).into(),
             mutability: Mutability::Not,
-            external_module_name: None,
         });
 
         let array_llvm_ty = self.cucx.conv_to_llvm_type(&array_ty, node.span)?;
@@ -1229,7 +1224,6 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                 })
                 .into(),
                 mutability: Mutability::Mut,
-                external_module_name: None,
             }
             .into(),
         ))
@@ -1299,7 +1293,6 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             Ty {
                 kind: elem_ty.kind.clone(),
                 mutability: array_ref_ty.mutability,
-                external_module_name: None,
             }
             .into(),
         ))
@@ -1525,7 +1518,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             args
         };
 
-        self.build_call_fn(actual_method_name.into(), args, call.span, None)
+        self.build_call_fn(actual_method_name.into(), args, call.span)
     }
 
     fn create_enum_variant(
@@ -1540,7 +1533,6 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                 name: *enum_name,
                 generic_args: None,
             },
-            ModuleLocation::Internal,
         );
 
         let udt_kind = match self.cucx.tcx.get_udt(mangled_name) {
@@ -1572,10 +1564,15 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             )?
             .offset;
 
-        let enum_ty = Ty {
+        let enum_ty = Rc::new(Ty {
             kind: TyKind::UserDefined(UserDefinedType::new(*enum_name, None)).into(),
             mutability: Mutability::Not,
-            external_module_name: enum_info.external_module_name,
+        });
+
+        let enum_ty = if let Some(externals) = &enum_info.is_external {
+            Ty::wrap_in_externals(enum_ty, &externals)
+        } else {
+            enum_ty
         };
 
         let enum_llvm_ty = self.cucx.conv_to_llvm_type(&enum_ty, enum_name.span())?;
@@ -1594,7 +1591,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
         Ok(Value::new(
             create_gc_struct(self.cucx, enum_llvm_ty, &inits)?.into(),
-            wrap_in_ref(enum_ty.into(), Mutability::Mut).into(),
+            wrap_in_ref(enum_ty, Mutability::Mut).into(),
         ))
     }
 
@@ -1877,14 +1874,18 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         module_name: &Ident,
         expr: &Expr,
     ) -> anyhow::Result<Option<Value<'ctx>>> {
+        // TODO: Support for multiple modules
+        // Example: m1.m2.m3.func()
+
         if self.cucx.imported_modules.contains(&module_name.symbol()) {
-            // --- Module item access ---
-            self.cucx.module.set_name(module_name.as_str());
+            let bkup = self
+                .cucx
+                .modules_for_mangle
+                .drain_and_append(vec![module_name.symbol()]);
 
             let value = build_expression(self.cucx, expr);
 
-            // Revert to the current module name
-            self.cucx.module.set_name(&self.cucx.module_name);
+            self.cucx.modules_for_mangle.replace(bkup);
 
             return value.map(Some);
         }
@@ -1979,7 +1980,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         // Push self to front
         args.push_front((value.clone(), call_node.args.1));
 
-        self.build_call_fn(actual_method_name.into(), args, call_node.span, None)
+        self.build_call_fn(actual_method_name.into(), args, call_node.span)
     }
 
     fn struct_access_or_tuple_indexing(
@@ -2018,17 +2019,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         left_span: Span,
     ) -> anyhow::Result<Value<'ctx>> {
         let (udt, mangled_struct_name) = if let TyKind::UserDefined(udt) = struct_ty.kind.as_ref() {
-            (
-                udt,
-                mangle_udt_name(
-                    self.cucx,
-                    udt,
-                    match struct_ty.external_module_name {
-                        Some(external) => ModuleLocation::External(external),
-                        None => ModuleLocation::Internal,
-                    },
-                ),
-            )
+            (udt, mangle_udt_name(self.cucx, udt))
         } else {
             unreachable!()
         };
@@ -2099,14 +2090,20 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             .cucx
             .conv_to_llvm_type(&field_info.ty, field_name.span())?;
 
+        let ty = Rc::new(Ty {
+            kind: field_info.ty.kind.clone(),
+            mutability: struct_ty.mutability,
+        });
+
+        let ty = if let Some(externals) = &struct_info.is_external {
+            Ty::wrap_in_externals(ty, &externals)
+        } else {
+            ty
+        };
+
         Ok(Value::new(
             self.cucx.builder.build_load(llvm_field_ty, gep, "")?,
-            Ty {
-                kind: field_info.ty.kind.clone(),
-                mutability: struct_ty.mutability,
-                external_module_name: struct_ty.external_module_name,
-            }
-            .into(),
+            ty,
         ))
     }
 
@@ -2133,12 +2130,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         // Push self to front
         args.push_front((struct_value.clone(), call_node.args.1));
 
-        self.build_call_fn(
-            actual_method_name.into(),
-            args,
-            call_node.span,
-            struct_value.get_type().external_module_name,
-        )
+        self.build_call_fn(actual_method_name.into(), args, call_node.span)
     }
 
     fn str_indexing_or_method_call(
@@ -2164,7 +2156,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
                 args.push_front((left.clone(), node.args.1));
 
-                self.build_call_fn(method_name.into(), args, node.span, None)
+                self.build_call_fn(method_name.into(), args, node.span)
             }
 
             _ => self.str_indexing(left, right, str_ty),
@@ -2315,7 +2307,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
         let mangled_name = self.define_generic_fn_instance(name, fn_ast_vis, &args, span)?;
 
-        self.build_call_fn(mangled_name, args, span, None)
+        self.build_call_fn(mangled_name, args, span)
     }
 
     fn call_fn(&mut self, node: &FnCall) -> anyhow::Result<Value<'ctx>> {
@@ -2343,7 +2335,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             );
         }
 
-        self.build_call_fn(node.name.symbol(), args, node.span, None)
+        self.build_call_fn(node.name.symbol(), args, node.span)
     }
 
     fn build_call_fn(
@@ -2351,12 +2343,8 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         name: Symbol,
         args: VecDeque<(Value<'ctx>, Span)>,
         span: Span,
-        external_module_name: Option<Symbol>,
     ) -> anyhow::Result<Value<'ctx>> {
-        let mangled_name = match external_module_name {
-            Some(external) => mangle_external_name(external, name),
-            None => mangle_name(self.cucx, name),
-        };
+        let mangled_name = mangle_name(self.cucx, name);
 
         let func = self
             .cucx

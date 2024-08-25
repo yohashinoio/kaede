@@ -15,7 +15,6 @@ pub fn create_inferred_tuple(element_len: usize) -> TyKind {
             v.push(Rc::new(Ty {
                 kind: Rc::new(TyKind::Inferred),
                 mutability: Mutability::Not,
-                external_module_name: None,
             }))
         });
         v
@@ -24,7 +23,6 @@ pub fn create_inferred_tuple(element_len: usize) -> TyKind {
 
 pub fn wrap_in_ref(ty: Rc<Ty>, mutability: Mutability) -> Ty {
     Ty {
-        external_module_name: ty.external_module_name,
         kind: TyKind::Reference(ReferenceType { refee_ty: ty }).into(),
         mutability,
     }
@@ -48,7 +46,6 @@ pub fn is_same_type(t1: &Ty, t2: &Ty) -> bool {
 pub struct Ty {
     pub kind: Rc<TyKind>,
     pub mutability: Mutability,
-    pub external_module_name: Option<Symbol>,
 }
 
 impl Ty {
@@ -56,8 +53,22 @@ impl Ty {
         Self {
             kind: TyKind::Inferred.into(),
             mutability,
-            external_module_name: None,
         }
+    }
+
+    pub fn new_external(module_name: Symbol, ty: Rc<Ty>) -> Self {
+        Self {
+            mutability: ty.mutability,
+            kind: TyKind::External(ExternalType { module_name, ty }).into(),
+        }
+    }
+
+    pub fn wrap_in_externals(ty: Rc<Ty>, module_names: &[Symbol]) -> Rc<Ty> {
+        let mut ty = ty;
+        for module_name in module_names.iter().rev() {
+            ty = Rc::new(Ty::new_external(module_name.clone(), ty));
+        }
+        ty
     }
 
     pub fn new_str(mutability: Mutability) -> Self {
@@ -67,7 +78,6 @@ impl Ty {
             })
             .into(),
             mutability,
-            external_module_name: None,
         }
     }
 
@@ -157,7 +167,6 @@ pub fn make_fundamental_type(kind: FundamentalTypeKind, mutability: Mutability) 
     Ty {
         kind: TyKind::Fundamental(FundamentalType { kind }).into(),
         mutability,
-        external_module_name: None,
     }
 }
 
@@ -183,6 +192,8 @@ pub enum TyKind {
     Never,
 
     Inferred,
+
+    External(ExternalType),
 }
 
 impl std::fmt::Display for TyKind {
@@ -215,6 +226,8 @@ impl std::fmt::Display for TyKind {
             Self::Never => write!(f, "!"),
 
             Self::Inferred => write!(f, "_"),
+
+            Self::External(ety) => write!(f, "{}.{}", ety.module_name.as_str(), ety.ty.kind),
         }
     }
 }
@@ -226,6 +239,7 @@ impl TyKind {
             Self::UserDefined(_) => todo!(),
             Self::Generic(_) => todo!(),
             Self::Reference(ty) => ty.refee_ty.kind.is_signed(),
+            Self::External(ety) => ety.ty.kind.is_signed(),
 
             Self::Pointer(_) => panic!("Cannot get sign information of pointer type!"),
             Self::Array(_) => panic!("Cannot get sign information of array type!"),
@@ -242,6 +256,7 @@ impl TyKind {
             Self::UserDefined(_) => todo!(),
             Self::Generic(_) => todo!(),
             Self::Reference(ty) => ty.refee_ty.kind.is_int_or_bool(),
+            Self::External(ety) => ety.ty.kind.is_int_or_bool(),
 
             Self::Array(_)
             | Self::Tuple(_)
@@ -306,6 +321,20 @@ impl FundamentalType {
         }
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct ExternalType {
+    pub module_name: Symbol,
+    pub ty: Rc<Ty>,
+}
+
+impl PartialEq for ExternalType {
+    fn eq(&self, other: &Self) -> bool {
+        self.module_name == other.module_name
+    }
+}
+
+impl Eq for ExternalType {}
 
 #[derive(Debug, Clone)]
 pub struct GenericArgs {
