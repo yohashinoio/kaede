@@ -332,7 +332,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
     /// A::B to ("A", "B", None)
     /// A::B(a, b, c) to ("A", "B", Some(["a", "b", "c"]))
-    fn dismantle_enum_variant_pattern<'pat>(
+    fn decompose_enum_variant_pattern<'pat>(
         &self,
         pattern: &'pat Expr,
     ) -> ((Option<Ident>, Ident), &'pat Ident, Option<&'pat Args>) {
@@ -564,7 +564,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
         for arm in arms.non_wildcard_iter() {
             let ((module_name, enum_name), variant_name, _) =
-                self.dismantle_enum_variant_pattern(&arm.pattern);
+                self.decompose_enum_variant_pattern(&arm.pattern);
 
             if let Some(module_name) = module_name {
                 // TODO: Support for multiple external modules
@@ -806,7 +806,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         pattern: &'pat Expr,
     ) -> anyhow::Result<(&'e EnumVariantInfo, Option<&'pat Args>)> {
         let ((module_name, enum_name), variant_name, param) =
-            self.dismantle_enum_variant_pattern(pattern);
+            self.decompose_enum_variant_pattern(pattern);
 
         if let Some(module_name) = module_name {
             // TODO: Support for multiple external modules
