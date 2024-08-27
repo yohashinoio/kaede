@@ -274,7 +274,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
             _ => impl_for_ty.kind.to_string(),
         };
 
-        let mangled = if impl_for_ty.is_udt() {
+        if impl_for_ty.is_udt() {
             if node.decl.self_.is_none() {
                 return mangle_static_method(
                     self.cucx,
@@ -299,9 +299,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
 
             // Without module name
             format!("{}.{}", impl_for_ty_s, node.decl.name.symbol().as_str())
-        };
-
-        mangled
+        }
     }
 
     /// Static method can also be handled by this function

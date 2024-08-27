@@ -66,7 +66,7 @@ impl Ty {
     pub fn wrap_in_externals(ty: Rc<Ty>, module_names: &[Ident]) -> Rc<Ty> {
         let mut ty = ty;
         for module_name in module_names.iter().rev() {
-            ty = Rc::new(Ty::new_external(module_name.clone(), ty));
+            ty = Rc::new(Ty::new_external(*module_name, ty));
         }
         ty
     }

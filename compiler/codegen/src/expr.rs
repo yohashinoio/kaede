@@ -1137,7 +1137,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
         // Wrapping with external types.
         let struct_ty = if let Some(externals) = &struct_info.is_external {
-            Ty::wrap_in_externals(struct_ty, &externals)
+            Ty::wrap_in_externals(struct_ty, externals)
         } else {
             struct_ty
         };
@@ -1585,7 +1585,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         });
 
         let enum_ty = if let Some(externals) = &enum_info.is_external {
-            Ty::wrap_in_externals(enum_ty, &externals)
+            Ty::wrap_in_externals(enum_ty, externals)
         } else {
             enum_ty
         };
@@ -2111,7 +2111,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         });
 
         let ty = if let Some(externals) = &struct_info.is_external {
-            Ty::wrap_in_externals(ty, &externals)
+            Ty::wrap_in_externals(ty, externals)
         } else {
             ty
         };

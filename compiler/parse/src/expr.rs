@@ -614,7 +614,7 @@ impl Parser {
     fn fn_call(&mut self, callee: Rc<Ty>) -> ParseResult<Expr> {
         let callees = match callee.kind.as_ref() {
             // f()
-            TyKind::UserDefined(udt) => (vec![], udt.name.clone()),
+            TyKind::UserDefined(udt) => (vec![], udt.name),
             // m.f()
             TyKind::External(ety) => ety.decompose_for_fncall(),
             _ => unreachable!(),
