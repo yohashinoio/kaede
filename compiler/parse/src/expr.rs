@@ -614,7 +614,14 @@ impl Parser {
     fn fn_call(&mut self, callee: Rc<Ty>) -> ParseResult<Expr> {
         let callees = match callee.kind.as_ref() {
             // f()
-            TyKind::UserDefined(udt) => (vec![], udt.name),
+            TyKind::Reference(rty)
+                if matches!(rty.refee_ty.kind.as_ref(), TyKind::UserDefined(_)) =>
+            {
+                match rty.refee_ty.kind.as_ref() {
+                    TyKind::UserDefined(udt) => (vec![], udt.name),
+                    _ => unreachable!(),
+                }
+            }
             // m.f()
             TyKind::External(ety) => ety.decompose_for_fncall(),
             _ => unreachable!(),
@@ -622,7 +629,11 @@ impl Parser {
 
         let args = self.fn_call_args()?;
 
-        let start = callees.0.first().unwrap().span().start;
+        let start = if let Some(ev) = callees.0.first() {
+            ev.span().start
+        } else {
+            callees.1.span().start
+        };
         let span = self.new_span(start, args.1.finish);
 
         Ok(Expr {
