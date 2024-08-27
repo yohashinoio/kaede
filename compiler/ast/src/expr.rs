@@ -25,7 +25,8 @@ pub struct Args(pub VecDeque<Expr>, pub Span);
 
 #[derive(Debug)]
 pub struct FnCall {
-    pub name: Ident,
+    pub external_modules: Vec<Ident>,
+    pub callee: Ident,
     pub args: Args,
     pub span: Span,
 }

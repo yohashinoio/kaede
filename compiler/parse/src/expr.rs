@@ -8,7 +8,7 @@ use kaede_ast::expr::{
 use kaede_lex::token::TokenKind;
 use kaede_span::Location;
 use kaede_symbol::{Ident, Symbol};
-use kaede_type::{TyKind, UserDefinedType};
+use kaede_type::{Ty, TyKind, UserDefinedType};
 
 use crate::{
     error::{ParseError, ParseResult},
@@ -382,7 +382,7 @@ impl Parser {
                 if let TyKind::UserDefined(udt) = refty.refee_ty.kind.as_ref() {
                     // Function call
                     if self.first().kind == TokenKind::OpenParen {
-                        return self.fn_call(udt.name);
+                        return self.fn_call(ty);
                     }
 
                     // Struct literal
@@ -611,14 +611,27 @@ impl Parser {
         }
     }
 
-    fn fn_call(&mut self, name: Ident) -> ParseResult<Expr> {
+    fn fn_call(&mut self, callee: Rc<Ty>) -> ParseResult<Expr> {
+        let callees = match callee.kind.as_ref() {
+            // f()
+            TyKind::UserDefined(udt) => (vec![], udt.name.clone()),
+            // m.f()
+            TyKind::External(ety) => ety.decompose_for_fncall(),
+            _ => unreachable!(),
+        };
+
         let args = self.fn_call_args()?;
 
-        let start = name.span().start;
+        let start = callees.0.first().unwrap().span().start;
         let span = self.new_span(start, args.1.finish);
 
         Ok(Expr {
-            kind: ExprKind::FnCall(FnCall { name, args, span }),
+            kind: ExprKind::FnCall(FnCall {
+                external_modules: callees.0,
+                callee: callees.1,
+                args,
+                span,
+            }),
             span,
         })
     }

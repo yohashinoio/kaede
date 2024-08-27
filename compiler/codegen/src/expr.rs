@@ -371,7 +371,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
         let (variant_name, param) = match &variant_name_and_param.kind {
             ExprKind::Ident(ident) => (ident, None),
-            ExprKind::FnCall(fncall) => (&fncall.name, Some(&fncall.args)),
+            ExprKind::FnCall(fncall) => (&fncall.callee, Some(&fncall.args)),
             _ => unreachable!(),
         };
 
@@ -568,7 +568,14 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
             if let Some(module_name) = module_name {
                 // TODO: Support for multiple external modules
-                if module_name.symbol() != *enum_info.is_external.as_ref().unwrap().first().unwrap()
+                if module_name.symbol()
+                    != enum_info
+                        .is_external
+                        .as_ref()
+                        .unwrap()
+                        .first()
+                        .unwrap()
+                        .symbol()
                 {
                     todo!("Error");
                 }
@@ -803,7 +810,15 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
         if let Some(module_name) = module_name {
             // TODO: Support for multiple external modules
-            if module_name.symbol() != *enum_info.is_external.as_ref().unwrap().first().unwrap() {
+            if module_name.symbol()
+                != enum_info
+                    .is_external
+                    .as_ref()
+                    .unwrap()
+                    .first()
+                    .unwrap()
+                    .symbol()
+            {
                 todo!("Error");
             }
         }
@@ -1483,7 +1498,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
             let value = right.args.0.front().unwrap();
 
-            if let Ok(val) = self.create_enum_variant(left, &right.name, Some(value)) {
+            if let Ok(val) = self.create_enum_variant(left, &right.callee, Some(value)) {
                 return Ok(val);
             }
 
@@ -1505,7 +1520,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         call: &FnCall,
     ) -> anyhow::Result<Value<'ctx>> {
         // For example: Apple::from
-        let actual_method_name = format!("{}::{}", object_name.as_str(), call.name.as_str());
+        let actual_method_name = format!("{}::{}", object_name.as_str(), call.callee.as_str());
 
         // Convert arguments(exprs) to values
         let args = {
@@ -1881,7 +1896,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             let bkup = self
                 .cucx
                 .modules_for_mangle
-                .drain_and_append(vec![module_name.symbol()]);
+                .drain_and_append(vec![*module_name]);
 
             let value = build_expression(self.cucx, expr);
 
@@ -1964,7 +1979,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         call_node: &FnCall,
     ) -> anyhow::Result<Value<'ctx>> {
         // For example: i32.add
-        let actual_method_name = format!("{}.{}", fundamental_ty_name, call_node.name.as_str());
+        let actual_method_name = format!("{}.{}", fundamental_ty_name, call_node.callee.as_str());
 
         // Convert arguments(exprs) to values
         let mut args = {
@@ -2114,7 +2129,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         call_node: &FnCall,
     ) -> anyhow::Result<Value<'ctx>> {
         // For example: Person.get_age
-        let actual_method_name = format!("{}.{}", struct_name, call_node.name.as_str());
+        let actual_method_name = format!("{}.{}", struct_name, call_node.callee.as_str());
 
         // Convert arguments(exprs) to values
         let mut args = {
@@ -2142,7 +2157,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         match &right.kind {
             // Method call
             ExprKind::FnCall(node) => {
-                let method_name = format!("str.{}", node.name.symbol());
+                let method_name = format!("str.{}", node.callee.symbol());
 
                 let mut args = {
                     let mut args = VecDeque::new();
@@ -2311,6 +2326,16 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
     }
 
     fn call_fn(&mut self, node: &FnCall) -> anyhow::Result<Value<'ctx>> {
+        let bkup = if !node.external_modules.is_empty() {
+            Some(
+                self.cucx
+                    .modules_for_mangle
+                    .drain_and_append(node.external_modules.clone()),
+            )
+        } else {
+            None
+        };
+
         let args = {
             let mut args = VecDeque::new();
 
@@ -2324,18 +2349,24 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         let generic_info = self
             .cucx
             .tcx
-            .get_generic_info(mangle_name(self.cucx, node.name.symbol()).into());
+            .get_generic_info(mangle_name(self.cucx, node.callee.symbol()).into());
 
         if let Some(unwraped) = generic_info {
             return self.build_call_generic_fn(
-                node.name.symbol(),
+                node.callee.symbol(),
                 args,
                 node.span,
                 unwraped.as_ref(),
             );
         }
 
-        self.build_call_fn(node.name.symbol(), args, node.span)
+        let evaled = self.build_call_fn(node.callee.symbol(), args, node.span);
+
+        if let Some(bkup) = bkup {
+            self.cucx.modules_for_mangle.replace(bkup);
+        }
+
+        evaled
     }
 
     fn build_call_fn(

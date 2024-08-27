@@ -133,7 +133,7 @@ impl Parser {
         let ty = self.ty()?;
 
         Ok(Some((
-            Ty::new_external(maybe_module_name.symbol(), Rc::new(ty.0)),
+            Ty::new_external(maybe_module_name, Rc::new(ty.0)),
             self.new_span(start, ty.1.finish),
         )))
     }

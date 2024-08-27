@@ -6,7 +6,7 @@ use inkwell::{
     AddressSpace,
 };
 use kaede_span::Span;
-use kaede_symbol::{Ident, Symbol};
+use kaede_symbol::Ident;
 
 pub fn create_inferred_tuple(element_len: usize) -> TyKind {
     TyKind::Tuple({
@@ -56,14 +56,14 @@ impl Ty {
         }
     }
 
-    pub fn new_external(module_name: Symbol, ty: Rc<Ty>) -> Self {
+    pub fn new_external(module_name: Ident, ty: Rc<Ty>) -> Self {
         Self {
             mutability: ty.mutability,
             kind: TyKind::External(ExternalType { module_name, ty }).into(),
         }
     }
 
-    pub fn wrap_in_externals(ty: Rc<Ty>, module_names: &[Symbol]) -> Rc<Ty> {
+    pub fn wrap_in_externals(ty: Rc<Ty>, module_names: &[Ident]) -> Rc<Ty> {
         let mut ty = ty;
         for module_name in module_names.iter().rev() {
             ty = Rc::new(Ty::new_external(module_name.clone(), ty));
@@ -324,13 +324,37 @@ impl FundamentalType {
 
 #[derive(Debug, Clone)]
 pub struct ExternalType {
-    pub module_name: Symbol,
+    pub module_name: Ident,
     pub ty: Rc<Ty>,
+}
+
+impl ExternalType {
+    pub fn decompose_for_fncall(&self) -> (Vec<Ident>, Ident) /* Module names, Function name */ {
+        let mut v = vec![];
+        v.push(self.module_name);
+
+        // m1.m2.f()
+        if let TyKind::External(ety) = self.ty.kind.as_ref() {
+            let tmp = ety.decompose_for_fncall();
+            v.extend(tmp.0);
+            return (v, tmp.1);
+        }
+
+        if let TyKind::Reference(rty) = self.ty.kind.as_ref() {
+            if matches!(rty.refee_ty.kind.as_ref(), TyKind::UserDefined(_)) {
+                if let TyKind::UserDefined(udt) = rty.refee_ty.kind.as_ref() {
+                    return (v, udt.name);
+                }
+            }
+        }
+
+        todo!("Error")
+    }
 }
 
 impl PartialEq for ExternalType {
     fn eq(&self, other: &Self) -> bool {
-        self.module_name == other.module_name
+        self.module_name.symbol() == other.module_name.symbol()
     }
 }
 

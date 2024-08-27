@@ -163,17 +163,17 @@ enum LazyDefinedFn {
 }
 
 struct ModulesForMangle {
-    names: Vec<Symbol>,
+    names: Vec<Ident>,
 }
 
 impl ModulesForMangle {
-    fn new(names: &[Symbol]) -> Self {
+    fn new(names: &[Ident]) -> Self {
         Self {
             names: names.to_vec(),
         }
     }
 
-    fn get(&self) -> Vec<Symbol> {
+    fn get(&self) -> Vec<Ident> {
         // TODO: Optimize
         self.names.clone()
     }
@@ -186,7 +186,7 @@ impl ModulesForMangle {
             .join(".")
     }
 
-    fn drain_and_append(&mut self, mut v: Vec<Symbol>) -> Vec<Symbol> {
+    fn drain_and_append(&mut self, mut v: Vec<Ident>) -> Vec<Ident> {
         let drained = self.names.drain(..).collect();
 
         self.names.append(&mut v);
@@ -194,7 +194,7 @@ impl ModulesForMangle {
         drained
     }
 
-    fn replace(&mut self, backup: Vec<Symbol>) {
+    fn replace(&mut self, backup: Vec<Ident>) {
         self.names = backup;
     }
 }
@@ -244,7 +244,10 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             module,
             builder: cgcx.context.create_builder(),
             file_path,
-            modules_for_mangle: ModulesForMangle::new(&[Symbol::from(module_name)]),
+            modules_for_mangle: ModulesForMangle::new(&[Ident::new(
+                module_name.into(),
+                Span::dummy(),
+            )]),
             imported_modules: HashSet::new(),
             loop_break_bb_stk: Vec::new(),
             is_ifmatch_stmt: false,

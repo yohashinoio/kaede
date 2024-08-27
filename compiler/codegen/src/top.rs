@@ -341,7 +341,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         mangled_name: &str,
         impl_for_ty: Rc<Ty>,
         mut node: Fn,
-        is_external: Option<Symbol /* Module name */>,
+        is_external: Option<Ident /* Module name */>,
     ) -> anyhow::Result<()> {
         let return_ty = if node.decl.return_ty.is_some() {
             let ty = Ty {
@@ -525,7 +525,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
     }
 
     fn import_module(&mut self, module_path: Ident) -> anyhow::Result<()> {
-        let import_module_name = module_path.as_str();
+        let import_module = module_path;
 
         let path = self
             .cucx
@@ -533,10 +533,8 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
             .path()
             .parent()
             .unwrap()
-            .join(import_module_name)
+            .join(import_module.as_str())
             .with_extension("kd");
-
-        let import_module_name = Symbol::from(import_module_name.to_owned());
 
         if !path.exists() {
             return Err(CodegenError::FileNotFoundForModule {
@@ -558,12 +556,12 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         let bkup = self
             .cucx
             .modules_for_mangle
-            .drain_and_append(vec![import_module_name.to_owned().into()]);
+            .drain_and_append(vec![import_module]);
 
         for top_level in psd_module.top_levels {
             // Without checking visibility.
             if let TopLevelKind::Impl(impl_) = top_level.kind {
-                self.import_impl(impl_, import_module_name)?;
+                self.import_impl(impl_, import_module)?;
                 continue;
             }
 
@@ -578,7 +576,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                 TopLevelKind::Fn(func) => {
                     let return_ty = if func.decl.return_ty.is_some() {
                         Some(Ty::new_external(
-                            import_module_name.to_owned().into(),
+                            import_module,
                             Rc::new(Ty {
                                 kind: func.decl.return_ty.as_ref().unwrap().kind.clone(),
                                 mutability: func.decl.return_ty.unwrap().mutability,
@@ -592,7 +590,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                         let bkup = self
                             .cucx
                             .modules_for_mangle
-                            .drain_and_append(vec![import_module_name.to_owned().into()]);
+                            .drain_and_append(vec![import_module]);
                         let mangled_name = mangle_name(self.cucx, func.decl.name.symbol());
                         self.cucx.modules_for_mangle.replace(bkup);
                         mangled_name
@@ -658,7 +656,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         Ok(())
     }
 
-    fn import_impl(&mut self, impl_: Impl, import_module_name: Symbol) -> anyhow::Result<()> {
+    fn import_impl(&mut self, impl_: Impl, import_module: Ident) -> anyhow::Result<()> {
         let impl_for_ty = Rc::new(impl_.ty);
 
         for item in impl_.items {
@@ -674,7 +672,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                         &mangled_name,
                         impl_for_ty.clone(),
                         func,
-                        Some(import_module_name),
+                        Some(import_module),
                     )?;
                 }
 
