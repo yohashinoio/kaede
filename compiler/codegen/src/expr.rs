@@ -1096,6 +1096,16 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
     }
 
     fn struct_literal(&mut self, node: &StructLiteral) -> anyhow::Result<Value<'ctx>> {
+        let bkup = if !node.external_modules.is_empty() {
+            Some(
+                self.cucx
+                    .modules_for_mangle
+                    .drain_and_append(node.external_modules.clone()),
+            )
+        } else {
+            None
+        };
+
         let mangled_name = mangle_udt_name(self.cucx, &node.struct_ty);
 
         let struct_ty = Ty {
@@ -1135,6 +1145,8 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             mutability: struct_ty.mutability,
         });
 
+        let struct_ty = wrap_in_ref(struct_ty, Mutability::Mut).into();
+
         // Wrapping with external types.
         let struct_ty = if let Some(externals) = &struct_info.is_external {
             Ty::wrap_in_externals(struct_ty, externals)
@@ -1159,10 +1171,16 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         // Remove offsets
         let inits: Vec<_> = values.iter().map(|e| e.1).collect();
 
-        Ok(Value::new(
+        let value = Value::new(
             create_gc_struct(self.cucx, struct_llvm_ty, &inits)?.into(),
-            wrap_in_ref(struct_ty, Mutability::Mut).into(),
-        ))
+            struct_ty,
+        );
+
+        if let Some(bkup) = bkup {
+            self.cucx.modules_for_mangle.replace(bkup);
+        }
+
+        Ok(value)
     }
 
     fn tuple_literal(&mut self, node: &TupleLiteral) -> anyhow::Result<Value<'ctx>> {
@@ -1884,39 +1902,9 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         })
     }
 
-    fn build_expr_with_other_module_name(
-        &mut self,
-        module_name: &Ident,
-        expr: &Expr,
-    ) -> anyhow::Result<Option<Value<'ctx>>> {
-        // TODO: Support for multiple modules
-        // Example: m1.m2.m3.func()
-
-        if self.cucx.imported_modules.contains(&module_name.symbol()) {
-            let bkup = self
-                .cucx
-                .modules_for_mangle
-                .drain_and_append(vec![*module_name]);
-
-            let value = build_expression(self.cucx, expr);
-
-            self.cucx.modules_for_mangle.replace(bkup);
-
-            return value.map(Some);
-        }
-
-        Ok(None)
-    }
-
     /// Struct access or module item access
     fn access(&mut self, node: &Binary) -> anyhow::Result<Value<'ctx>> {
         assert!(matches!(node.kind, BinaryKind::Access));
-
-        if let ExprKind::Ident(module_name) = &node.lhs.kind {
-            if let Some(value) = self.build_expr_with_other_module_name(module_name, &node.rhs)? {
-                return Ok(value);
-            }
-        }
 
         let left = build_expression(self.cucx, &node.lhs)?;
 
@@ -1926,50 +1914,72 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             return self.str_indexing_or_method_call(&left, &node.rhs, left_ty);
         }
 
-        if let TyKind::Reference(rty) = left_ty.kind.as_ref() {
+        let (bkup, left_ty) = if let TyKind::External(ety) = left_ty.kind.as_ref() {
+            (
+                Some(
+                    self.cucx
+                        .modules_for_mangle
+                        .drain_and_append(ety.get_module_names_recursively()),
+                ),
+                ety.get_base_type(),
+            )
+        } else {
+            (None, left_ty.clone())
+        };
+
+        // Unwrap externals
+        let left = Value::new(left.get_value(), left_ty.clone());
+
+        let result = if let TyKind::Reference(rty) = left_ty.kind.as_ref() {
             // ---  Struct access or tuple indexing ---
             if matches!(
                 rty.get_base_type_of_reference().kind.as_ref(),
                 TyKind::UserDefined(_) | TyKind::Tuple(_)
             ) {
-                return self.struct_access_or_tuple_indexing(&left, node.lhs.span, &node.rhs);
+                self.struct_access_or_tuple_indexing(&left, node.lhs.span, &node.rhs)
             } else {
                 return Err(CodegenError::HasNoFields {
                     span: node.lhs.span,
                 }
                 .into());
             }
-        }
-
-        if let TyKind::Generic(gty) = left_ty.kind.as_ref() {
+        } else if let TyKind::Generic(gty) = left_ty.kind.as_ref() {
             let udt = self.cucx.tcx.get_udt(gty.name.symbol());
 
             if let UdtKind::GenericArg(actual) = udt.as_ref().unwrap().as_ref() {
                 // GenericArg(type) -> type
                 let left = Value::new(left.get_value(), actual.clone());
-                return self.struct_access_or_tuple_indexing(&left, node.lhs.span, &node.rhs);
+                self.struct_access_or_tuple_indexing(&left, node.lhs.span, &node.rhs)
+            } else {
+                unreachable!()
             }
-        }
+        } else {
+            // --- Fundamental type method calling ---
+            let call_node = match &node.rhs.kind {
+                ExprKind::FnCall(call_node) => call_node,
+                _ => {
+                    return Err(CodegenError::HasNoFields {
+                        span: node.lhs.span,
+                    }
+                    .into())
+                }
+            };
 
-        // --- Fundamental type method calling ---
-        let call_node = match &node.rhs.kind {
-            ExprKind::FnCall(call_node) => call_node,
-            _ => {
-                return Err(CodegenError::HasNoFields {
+            if let TyKind::Fundamental(fty) = left_ty.kind.as_ref() {
+                self.call_fundamental_type_method(&left, fty.kind.to_string().into(), call_node)
+            } else {
+                Err(CodegenError::HasNoFields {
                     span: node.lhs.span,
                 }
                 .into())
             }
         };
 
-        if let TyKind::Fundamental(fty) = left_ty.kind.as_ref() {
-            self.call_fundamental_type_method(&left, fty.kind.to_string().into(), call_node)
-        } else {
-            Err(CodegenError::HasNoFields {
-                span: node.lhs.span,
-            }
-            .into())
+        if let Some(bkup) = bkup {
+            self.cucx.modules_for_mangle.replace(bkup);
         }
+
+        result
     }
 
     fn call_fundamental_type_method(
@@ -2011,15 +2021,15 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
         let left_ty = &left.get_type();
 
-        let refee_ty = match left_ty.kind.as_ref() {
-            TyKind::Reference(rty) => &rty.refee_ty,
+        let base_type = match left_ty.kind.as_ref() {
+            TyKind::Reference(rty) => rty.get_base_type_of_reference(),
             _ => unreachable!(),
         };
 
-        match refee_ty.kind.as_ref() {
-            TyKind::UserDefined(_) => self.struct_access(left, right, refee_ty, left_span),
+        match base_type.kind.as_ref() {
+            TyKind::UserDefined(_) => self.struct_access(left, right, &base_type, left_span),
 
-            TyKind::Tuple(_) => self.tuple_indexing(left, right, refee_ty),
+            TyKind::Tuple(_) => self.tuple_indexing(left, right, &base_type),
 
             _ => Err(CodegenError::HasNoFields { span: left_span }.into()),
         }

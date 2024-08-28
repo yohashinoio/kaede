@@ -329,6 +329,25 @@ pub struct ExternalType {
 }
 
 impl ExternalType {
+    pub fn get_module_names_recursively(&self) -> Vec<Ident> {
+        let mut v = vec![];
+        v.push(self.module_name);
+
+        if let TyKind::External(ety) = self.ty.kind.as_ref() {
+            v.extend(ety.get_module_names_recursively());
+        }
+
+        v
+    }
+
+    pub fn get_base_type(&self) -> Rc<Ty> {
+        if let TyKind::External(ety) = self.ty.kind.as_ref() {
+            return ety.get_base_type();
+        }
+
+        self.ty.clone()
+    }
+
     pub fn decompose_for_fncall(&self) -> (Vec<Ident>, Ident) /* Module names, Function name */ {
         let mut v = vec![];
         v.push(self.module_name);
@@ -344,6 +363,27 @@ impl ExternalType {
             if matches!(rty.refee_ty.kind.as_ref(), TyKind::UserDefined(_)) {
                 if let TyKind::UserDefined(udt) = rty.refee_ty.kind.as_ref() {
                     return (v, udt.name);
+                }
+            }
+        }
+
+        todo!("Error")
+    }
+
+    pub fn decompose_for_struct_literal(&self) -> (Vec<Ident>, UserDefinedType) {
+        let mut v = vec![];
+        v.push(self.module_name);
+
+        if let TyKind::External(ety) = self.ty.kind.as_ref() {
+            let tmp = ety.decompose_for_struct_literal();
+            v.extend(tmp.0);
+            return (v, tmp.1);
+        }
+
+        if let TyKind::Reference(rty) = self.ty.kind.as_ref() {
+            if matches!(rty.refee_ty.kind.as_ref(), TyKind::UserDefined(_)) {
+                if let TyKind::UserDefined(udt) = rty.refee_ty.kind.as_ref() {
+                    return (v, udt.clone());
                 }
             }
         }

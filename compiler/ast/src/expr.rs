@@ -15,6 +15,7 @@ pub struct StringLiteral {
 
 #[derive(Debug)]
 pub struct StructLiteral {
+    pub external_modules: Vec<Ident>,
     pub struct_ty: UserDefinedType,
     pub values: Vec<(Ident, Expr)>,
     pub span: Span,

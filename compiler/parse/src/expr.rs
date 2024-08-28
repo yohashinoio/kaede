@@ -8,7 +8,7 @@ use kaede_ast::expr::{
 use kaede_lex::token::TokenKind;
 use kaede_span::Location;
 use kaede_symbol::{Ident, Symbol};
-use kaede_type::{Ty, TyKind, UserDefinedType};
+use kaede_type::{Ty, TyKind};
 
 use crate::{
     error::{ParseError, ParseResult},
@@ -372,10 +372,11 @@ impl Parser {
         if let Ok((ty, span)) = self.ty() {
             let ty = Rc::new(ty);
 
-            let unwrapped = if let TyKind::External(ety) = ty.kind.as_ref() {
-                ety.ty.clone()
+            let (unwrapped, external_module_names) = if let TyKind::External(ety) = ty.kind.as_ref()
+            {
+                (ety.ty.clone(), ety.get_module_names_recursively())
             } else {
-                ty.clone()
+                (ty.clone(), vec![])
             };
 
             if let TyKind::Reference(refty) = unwrapped.kind.as_ref() {
@@ -393,15 +394,30 @@ impl Parser {
 
                         // If parsing an expression for a condition now, skip
                         if !self.in_cond_expr {
-                            return self.struct_literal(udt.clone());
+                            return self.struct_literal(ty);
                         }
                     }
 
                     // Identifier
-                    return Ok(Expr {
-                        span: udt.name.span(),
-                        kind: ExprKind::Ident(udt.name),
-                    });
+                    if external_module_names.is_empty() {
+                        return Ok(Expr {
+                            span: udt.name.span(),
+                            kind: ExprKind::Ident(udt.name),
+                        });
+                    } else {
+                        let prefix = external_module_names
+                            .iter()
+                            .map(|m| m.as_str())
+                            .collect::<Vec<_>>()
+                            .join(".");
+                        return Ok(Expr {
+                            span: udt.name.span(),
+                            kind: ExprKind::Ident(Ident::new(
+                                format!("{}.{}", prefix, udt.name.as_str()).into(),
+                                udt.name.span(),
+                            )),
+                        });
+                    }
                 }
             }
 
@@ -551,7 +567,22 @@ impl Parser {
         None
     }
 
-    fn struct_literal(&mut self, struct_ty: UserDefinedType) -> ParseResult<Expr> {
+    fn struct_literal(&mut self, ty: Rc<Ty>) -> ParseResult<Expr> {
+        let (external_modules, udt) = match ty.kind.as_ref() {
+            // X {}
+            TyKind::Reference(rty)
+                if matches!(rty.refee_ty.kind.as_ref(), TyKind::UserDefined(_)) =>
+            {
+                match rty.refee_ty.kind.as_ref() {
+                    TyKind::UserDefined(udt) => (vec![], udt.clone()),
+                    _ => unreachable!(),
+                }
+            }
+            // m.X {}
+            TyKind::External(ety) => ety.decompose_for_struct_literal(),
+            _ => unreachable!(),
+        };
+
         let mut inits = Vec::new();
 
         self.consume(&TokenKind::OpenBrace)?;
@@ -576,12 +607,13 @@ impl Parser {
 
         let finish = self.consume(&TokenKind::CloseBrace)?.finish;
 
-        let span = self.new_span(struct_ty.name.span().start, finish);
+        let span = self.new_span(udt.name.span().start, finish);
 
         Ok(Expr {
             span,
             kind: ExprKind::StructLiteral(StructLiteral {
-                struct_ty,
+                external_modules,
+                struct_ty: udt,
                 values: inits,
                 span,
             }),
