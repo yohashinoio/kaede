@@ -327,7 +327,7 @@ fn import_enum_and_call_variant_method() -> anyhow::Result<()> {
     main.write_str(
         r#"import m
         fn main(): i32 {
-            let apple = m.Fruit::Apple(m.Apple { size: 48 });
+            let apple = m.Fruit::Apple(m.Apple { size: 58 });
 
             match apple {
                 m.Fruit::Apple(a) => {
