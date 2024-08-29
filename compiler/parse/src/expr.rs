@@ -1,9 +1,9 @@
 use std::{collections::VecDeque, rc::Rc};
 
 use kaede_ast::expr::{
-    Args, ArrayLiteral, Binary, BinaryKind, Break, Else, Expr, ExprKind, FnCall, If, Indexing, Int,
-    IntKind, LogicalNot, Loop, Match, MatchArm, MatchArmList, Return, StringLiteral, StructLiteral,
-    TupleLiteral,
+    Args, ArrayLiteral, Binary, BinaryKind, Break, Else, Expr, ExprKind, ExternalIdent, FnCall, If,
+    Indexing, Int, IntKind, LogicalNot, Loop, Match, MatchArm, MatchArmList, Return, StringLiteral,
+    StructLiteral, TupleLiteral,
 };
 use kaede_lex::token::TokenKind;
 use kaede_span::Location;
@@ -405,17 +405,13 @@ impl Parser {
                             kind: ExprKind::Ident(udt.name),
                         });
                     } else {
-                        let prefix = external_module_names
-                            .iter()
-                            .map(|m| m.as_str())
-                            .collect::<Vec<_>>()
-                            .join(".");
                         return Ok(Expr {
                             span: udt.name.span(),
-                            kind: ExprKind::Ident(Ident::new(
-                                format!("{}.{}", prefix, udt.name.as_str()).into(),
-                                udt.name.span(),
-                            )),
+                            kind: ExprKind::ExternalIdent(ExternalIdent {
+                                external_modules: external_module_names,
+                                ident: udt.name,
+                                span: udt.name.span(),
+                            }),
                         });
                     }
                 }

@@ -8,6 +8,13 @@ use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability, Ty, Use
 use crate::stmt::Block;
 
 #[derive(Debug)]
+pub struct ExternalIdent {
+    pub external_modules: Vec<Ident>,
+    pub ident: Ident,
+    pub span: Span,
+}
+
+#[derive(Debug)]
 pub struct StringLiteral {
     pub syb: Symbol,
     pub span: Span,
@@ -242,6 +249,7 @@ pub enum ExprKind {
     StringLiteral(StringLiteral),
     Binary(Binary),
     Ident(Ident),
+    ExternalIdent(ExternalIdent),
     FnCall(FnCall),
     StructLiteral(StructLiteral),
     True,

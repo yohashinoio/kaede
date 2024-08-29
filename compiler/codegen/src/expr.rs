@@ -304,6 +304,8 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
             ExprKind::Ident(name) => self.ident_expr(name)?,
 
+            ExprKind::ExternalIdent(_) => todo!(),
+
             ExprKind::Binary(node) => self.binary_op(node)?,
 
             ExprKind::LogicalNot(node) => self.logical_not(node)?,
@@ -335,33 +337,16 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
     fn decompose_enum_variant_pattern<'pat>(
         &self,
         pattern: &'pat Expr,
-    ) -> ((Option<Ident>, Ident), &'pat Ident, Option<&'pat Args>) {
+    ) -> ((Option<Vec<Ident>>, Ident), &'pat Ident, Option<&'pat Args>) {
         let (module_name_and_enum_name, variant_name_and_param) = match &pattern.kind {
             ExprKind::Binary(b) => match b.kind {
-                BinaryKind::ScopeResolution => match b.lhs.kind {
-                    ExprKind::Ident(s) => ((None, s), &b.rhs),
+                BinaryKind::ScopeResolution => match &b.lhs.kind {
+                    ExprKind::Ident(i) => ((None, *i), &b.rhs),
+                    ExprKind::ExternalIdent(ei) => {
+                        ((Some(ei.external_modules.clone()), ei.ident), &b.rhs)
+                    }
                     _ => unreachable!(),
                 },
-
-                // TODO: Recursive dismantling
-                BinaryKind::Access => {
-                    // Expect external enum variant.
-                    let module_name = match b.lhs.kind {
-                        ExprKind::Ident(s) => s,
-                        _ => unreachable!(),
-                    };
-
-                    match &b.rhs.kind {
-                        ExprKind::Binary(rb) => match rb.kind {
-                            BinaryKind::ScopeResolution => match rb.lhs.kind {
-                                ExprKind::Ident(s) => ((Some(module_name), s), &rb.rhs),
-                                _ => unreachable!(),
-                            },
-                            _ => unreachable!(),
-                        },
-                        _ => unreachable!(),
-                    }
-                }
 
                 _ => unreachable!(),
             },
@@ -563,21 +548,15 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         let mut pattern_variant_names = BTreeSet::new();
 
         for arm in arms.non_wildcard_iter() {
-            let ((module_name, enum_name), variant_name, _) =
+            let ((module_names, enum_name), variant_name, _) =
                 self.decompose_enum_variant_pattern(&arm.pattern);
 
-            if let Some(module_name) = module_name {
-                // TODO: Support for multiple external modules
-                if module_name.symbol()
-                    != enum_info
-                        .is_external
-                        .as_ref()
-                        .unwrap()
-                        .first()
-                        .unwrap()
-                        .symbol()
-                {
-                    todo!("Error");
+            if let Some(module_names) = module_names {
+                let enum_info_external_modules = enum_info.is_external.as_ref().unwrap();
+                for (idx, mn) in module_names.iter().enumerate() {
+                    if mn.as_str() != enum_info_external_modules[idx].as_str() {
+                        todo!("Error");
+                    }
                 }
             }
 
@@ -632,7 +611,17 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
     ) -> anyhow::Result<Value<'ctx>> {
         let base_ty_of_ref = refty.get_base_type_of_reference();
 
-        let udt = match base_ty_of_ref.kind.as_ref() {
+        let (base_ty, bkup) = if let TyKind::External(ety) = base_ty_of_ref.kind.as_ref() {
+            let bkup = self
+                .cucx
+                .modules_for_mangle
+                .drain_and_append(ety.get_module_names_recursively());
+            (ety.get_base_type(), Some(bkup))
+        } else {
+            (base_ty_of_ref, None)
+        };
+
+        let udt = match base_ty.kind.as_ref() {
             TyKind::UserDefined(udt) => udt,
             _ => unimplemented!(),
         };
@@ -663,7 +652,13 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
         self.check_exhaustiveness_for_match_on_enum(enum_info, &node.arms, node.span)?;
 
-        self.build_match_on_enum(enum_info, target, &node.arms, node.span)
+        let result = self.build_match_on_enum(enum_info, target, &node.arms, node.span);
+
+        if let Some(bkup) = bkup {
+            self.cucx.modules_for_mangle.replace(bkup);
+        }
+
+        result
     }
 
     fn build_match_on_enum(
@@ -805,21 +800,15 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         enum_info: &'e EnumInfo,
         pattern: &'pat Expr,
     ) -> anyhow::Result<(&'e EnumVariantInfo, Option<&'pat Args>)> {
-        let ((module_name, enum_name), variant_name, param) =
+        let ((module_names, enum_name), variant_name, param) =
             self.decompose_enum_variant_pattern(pattern);
 
-        if let Some(module_name) = module_name {
-            // TODO: Support for multiple external modules
-            if module_name.symbol()
-                != enum_info
-                    .is_external
-                    .as_ref()
-                    .unwrap()
-                    .first()
-                    .unwrap()
-                    .symbol()
-            {
-                todo!("Error");
+        if let Some(module_names) = module_names {
+            let enum_info_external_modules = enum_info.is_external.as_ref().unwrap();
+            for (idx, mn) in module_names.iter().enumerate() {
+                if mn.as_str() != enum_info_external_modules[idx].as_str() {
+                    todo!("Error");
+                }
             }
         }
 
@@ -1502,14 +1491,21 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
     fn scope_resolution(&mut self, node: &Binary) -> anyhow::Result<Value<'ctx>> {
         assert!(matches!(node.kind, BinaryKind::ScopeResolution));
 
-        let left = match &node.lhs.kind {
-            ExprKind::Ident(ident) => ident,
+        let (left, modules_bkup) = match &node.lhs.kind {
+            ExprKind::Ident(ident) => (ident, None),
+            ExprKind::ExternalIdent(eident) => {
+                let bkup = self
+                    .cucx
+                    .modules_for_mangle
+                    .drain_and_append(eident.external_modules.clone());
+                (&eident.ident, Some(bkup))
+            }
             _ => todo!(),
         };
 
         // Try to create new enum variant with value
         // If it fails, try to call static methods
-        if let ExprKind::FnCall(right) = &node.rhs.kind {
+        let result = if let ExprKind::FnCall(right) = &node.rhs.kind {
             if right.args.0.len() != 1 {
                 todo!("Error");
             }
@@ -1517,19 +1513,23 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             let value = right.args.0.front().unwrap();
 
             if let Ok(val) = self.create_enum_variant(left, &right.callee, Some(value)) {
-                return Ok(val);
+                Ok(val)
+            } else {
+                // Couldn't create static method, so try to call static methods
+                self.call_static_method(left, right)
             }
+        } else if let ExprKind::Ident(right) = &node.rhs.kind {
+            // Create enum variant without value
+            self.create_enum_variant(left, right, None)
+        } else {
+            todo!()
+        };
 
-            // Couldn't create static method, so try to call static methods
-            return self.call_static_method(left, right);
+        if let Some(bkup) = modules_bkup {
+            self.cucx.modules_for_mangle.replace(bkup);
         }
 
-        // Create enum variant without value
-        if let ExprKind::Ident(right) = &node.rhs.kind {
-            return self.create_enum_variant(left, right, None);
-        }
-
-        todo!()
+        result
     }
 
     fn call_static_method(
