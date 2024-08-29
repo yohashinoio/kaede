@@ -132,6 +132,9 @@ pub fn build_block_expression<'ctx>(
     Ok(value)
 }
 
+type DecomposedEnumVariantPattern<'pat> =
+    ((Option<Vec<Ident>>, Ident), &'pat Ident, Option<&'pat Args>);
+
 pub fn build_expression<'ctx>(
     cucx: &mut CompileUnitCtx<'ctx>,
     node: &Expr,
@@ -337,7 +340,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
     fn decompose_enum_variant_pattern<'pat>(
         &self,
         pattern: &'pat Expr,
-    ) -> ((Option<Vec<Ident>>, Ident), &'pat Ident, Option<&'pat Args>) {
+    ) -> DecomposedEnumVariantPattern<'pat> {
         let (module_name_and_enum_name, variant_name_and_param) = match &pattern.kind {
             ExprKind::Binary(b) => match b.kind {
                 BinaryKind::ScopeResolution => match &b.lhs.kind {
