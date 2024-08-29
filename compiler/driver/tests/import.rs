@@ -364,8 +364,8 @@ fn nested_import() -> anyhow::Result<()> {
         r#"import m1
         pub fn get_value(fruit: m1.Fruit): i32 {
             return match fruit {
-                m1.Fruit::Apple(a) => return a.size,
-                m1.Fruit::Ichigo(n) => return n,
+                m1.Fruit::Apple(a) => a.size,
+                m1.Fruit::Ichigo(n) => n,
             }
         }
         pub fn f(): i32 {
