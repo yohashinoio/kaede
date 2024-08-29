@@ -371,11 +371,31 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
         let value_ty = value.get_type();
 
-        match value_ty.kind.as_ref() {
+        let (value_ty, bkup) = if let TyKind::External(ety) = value_ty.kind.as_ref() {
+            (
+                ety.ty.clone(),
+                Some(
+                    self.cucx
+                        .modules_for_mangle
+                        .drain_and_append(ety.get_module_names_recursively()),
+                ),
+            )
+        } else {
+            (value_ty, None)
+        };
+
+        let result = match value_ty.kind.as_ref() {
             TyKind::Reference(refty) => self.build_match_on_reference(node, &value, refty),
             TyKind::Fundamental(fty) => self.build_match_on_fundamental_value(node, &value, fty),
+
             _ => todo!("Unsupported enum target"),
+        };
+
+        if let Some(bkup) = bkup {
+            self.cucx.modules_for_mangle.replace(bkup);
         }
+
+        result
     }
 
     fn check_exhaustiveness_for_match_on_int(
