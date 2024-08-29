@@ -1620,18 +1620,22 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             )?
             .offset;
 
-        let enum_ty = Rc::new(Ty {
+        let enum_ty = Ty {
             kind: TyKind::UserDefined(UserDefinedType::new(*enum_name, None)).into(),
             mutability: Mutability::Not,
-        });
+        };
+
+        // Convert to LLVM type before wrapping in reference.
+        // Because reference types would be `ptr`.
+        let enum_llvm_ty = self.cucx.conv_to_llvm_type(&enum_ty, enum_name.span())?;
+
+        let enum_ty = wrap_in_ref(enum_ty.into(), Mutability::Mut).into();
 
         let enum_ty = if let Some(externals) = &enum_info.is_external {
             Ty::wrap_in_externals(enum_ty, externals)
         } else {
             enum_ty
         };
-
-        let enum_llvm_ty = self.cucx.conv_to_llvm_type(&enum_ty, enum_name.span())?;
 
         let offset_in_llvm = self
             .cucx
@@ -1647,7 +1651,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
         Ok(Value::new(
             create_gc_struct(self.cucx, enum_llvm_ty, &inits)?.into(),
-            wrap_in_ref(enum_ty, Mutability::Mut).into(),
+            enum_ty,
         ))
     }
 
