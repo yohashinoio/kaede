@@ -2142,20 +2142,24 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             .cucx
             .conv_to_llvm_type(&field_info.ty, field_name.span())?;
 
-        let ty = Rc::new(Ty {
+        let field_ty = Rc::new(Ty {
             kind: field_info.ty.kind.clone(),
             mutability: struct_ty.mutability,
         });
 
-        let ty = if let Some(externals) = &struct_info.is_external {
-            Ty::wrap_in_externals(ty, externals)
+        let field_ty = if let Some(externals) = &struct_info.is_external {
+            if field_ty.is_udt() {
+                Ty::wrap_in_externals(field_ty, externals)
+            } else {
+                field_ty
+            }
         } else {
-            ty
+            field_ty
         };
 
         Ok(Value::new(
             self.cucx.builder.build_load(llvm_field_ty, gep, "")?,
-            ty,
+            field_ty,
         ))
     }
 
