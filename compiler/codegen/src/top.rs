@@ -572,14 +572,18 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                 TopLevelKind::Impl(_) => unreachable!(),
 
                 TopLevelKind::Fn(func) => {
-                    let return_ty = if func.decl.return_ty.is_some() {
-                        Some(Ty::new_external(
-                            import_module,
-                            Rc::new(Ty {
-                                kind: func.decl.return_ty.as_ref().unwrap().kind.clone(),
-                                mutability: func.decl.return_ty.unwrap().mutability,
-                            }),
-                        ))
+                    let return_ty = if let Some(ty) = func.decl.return_ty {
+                        Some(if ty.is_udt() {
+                            Ty::new_external(
+                                import_module,
+                                Rc::new(Ty {
+                                    kind: ty.kind.clone(),
+                                    mutability: ty.mutability,
+                                }),
+                            )
+                        } else {
+                            ty
+                        })
                     } else {
                         None
                     };
