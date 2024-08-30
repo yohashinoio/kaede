@@ -2326,3 +2326,24 @@ fn single_variant_enum() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn generic_enum() -> anyhow::Result<()> {
+    let program = r#"enum Opt<T> {
+        Some(T),
+        None
+    }
+
+    fn main(): i32 {
+        let a = Opt<i32>::Some(58)
+
+        return match a {
+            Opt::Some(n) => n,
+            Opt::None => 123,
+        }
+    }"#;
+
+    assert_eq!(exec(program)?, 58);
+
+    Ok(())
+}
