@@ -255,6 +255,12 @@ impl Parser {
 
         let name = self.ident()?;
 
+        let generic_params = if self.check(&TokenKind::Lt) {
+            Some(self.generic_params()?)
+        } else {
+            None
+        };
+
         self.consume(&TokenKind::OpenBrace)?;
 
         let variants = self.enum_variants()?;
@@ -263,6 +269,7 @@ impl Parser {
 
         Ok(Enum {
             name,
+            generic_params,
             variants,
             span: self.new_span(start, finish),
         })

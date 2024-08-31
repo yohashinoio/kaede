@@ -2129,7 +2129,43 @@ fn generic_function_with_array_type() -> anyhow::Result<()> {
 }
 
 #[test]
-fn generic_struct() -> anyhow::Result<()> {
+fn generic_struct_with_single_parameter() -> anyhow::Result<()> {
+    let program = r#"struct Any<T> {
+        value: T,
+    }
+    fn main(): i32 {
+        let any = Any<i32> { value: 58 }
+
+        return any.value
+    }"#;
+
+    assert_eq!(exec(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn generic_struct_as_function_argument() -> anyhow::Result<()> {
+    let program = r#"struct Sample<T> {
+        n: T,
+    }
+
+    fn get_n(s: Sample<i32>): i32 {
+        return s.n
+    }
+
+    fn main(): i32 {
+        let s = Sample<i32> { n: 58 }
+        return get_n(s)
+    }"#;
+
+    assert_eq!(exec(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn generic_struct_with_multiple_parameters() -> anyhow::Result<()> {
     let program = r#"struct Fruits<T1, T2> {
         apple: T1,
         ichigo: T2,
@@ -2328,10 +2364,10 @@ fn single_variant_enum() -> anyhow::Result<()> {
 }
 
 #[test]
-fn generic_enum() -> anyhow::Result<()> {
+fn generic_enum_with_single_parameter() -> anyhow::Result<()> {
     let program = r#"enum Opt<T> {
         Some(T),
-        None
+        None,
     }
 
     fn main(): i32 {
@@ -2340,6 +2376,61 @@ fn generic_enum() -> anyhow::Result<()> {
         return match a {
             Opt::Some(n) => n,
             Opt::None => 123,
+        }
+    }"#;
+
+    assert_eq!(exec(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn generic_enum_as_function_argument() -> anyhow::Result<()> {
+    let program = r#"enum Opt<T> {
+        Some(T),
+        None,
+    }
+
+    fn get(opt: Opt<i32>): i32 {
+        return match opt {
+            Opt::Some(n) => n,
+            Opt::None => 123,
+        }
+    }
+
+    fn main(): i32 {
+        let opt = Opt<i32>::Some(58)
+        return get(opt)
+    }"#;
+
+    assert_eq!(exec(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn generic_enum_with_multiple_parameters() -> anyhow::Result<()> {
+    let program = r#"enum Res<T1, T2> {
+            Ok(T1),
+            Err(T2),
+    }
+
+    fn main(): i32 {
+        let res1 = Res<i32, bool>::Err(false)
+        let res2 = Res<i32, bool>::Ok(58)
+
+        match res1 {
+            Res::Ok(n) => return n,
+            Res::Err(f) => {
+                if f {
+                    return 123
+                }
+            },
+        }
+
+        return match res2 {
+            Res::Ok(n) => n,
+            Res::Err(_) => 123,
         }
     }"#;
 

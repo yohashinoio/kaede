@@ -3,7 +3,9 @@ use std::{collections::VecDeque, rc::Rc, slice::Iter};
 use inkwell::{context::Context, values::IntValue};
 use kaede_span::Span;
 use kaede_symbol::{Ident, Symbol};
-use kaede_type::{make_fundamental_type, FundamentalTypeKind, Mutability, Ty, UserDefinedType};
+use kaede_type::{
+    make_fundamental_type, FundamentalTypeKind, GenericArgs, Mutability, Ty, UserDefinedType,
+};
 
 use crate::stmt::Block;
 
@@ -35,6 +37,7 @@ pub struct Args(pub VecDeque<Expr>, pub Span);
 pub struct FnCall {
     pub external_modules: Vec<Ident>,
     pub callee: Ident,
+    pub generic_args: Option<GenericArgs>,
     pub args: Args,
     pub span: Span,
 }
@@ -250,6 +253,7 @@ pub enum ExprKind {
     Binary(Binary),
     Ident(Ident),
     ExternalIdent(ExternalIdent),
+    GenericIdent((Ident, GenericArgs)),
     FnCall(FnCall),
     StructLiteral(StructLiteral),
     True,

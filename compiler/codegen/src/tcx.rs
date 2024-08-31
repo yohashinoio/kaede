@@ -1,10 +1,10 @@
 use std::{collections::HashMap, rc::Rc};
 
 use inkwell::{
-    types::{BasicTypeEnum, StructType},
+    types::StructType,
     values::{FunctionValue, PointerValue},
 };
-use kaede_ast::top::{Fn, Struct, StructField, Visibility};
+use kaede_ast::top::{Enum, Fn, Struct, StructField, Visibility};
 use kaede_symbol::{Ident, Symbol};
 use kaede_type::Ty;
 
@@ -64,7 +64,7 @@ pub struct StructInfo<'ctx> {
     pub is_external: Option<Vec<Ident>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EnumVariantInfo {
     pub name: Ident,
     pub _vis: Visibility,
@@ -74,8 +74,8 @@ pub struct EnumVariantInfo {
 
 #[derive(Debug)]
 pub struct EnumInfo<'ctx> {
-    pub ty: BasicTypeEnum<'ctx>,
-    pub name: Ident,
+    pub ty: StructType<'ctx>,
+    pub name: Symbol, // Non-mangled
     pub variants: HashMap<Symbol, EnumVariantInfo>,
     pub is_external: Option<Vec<Ident>>,
 }
@@ -94,9 +94,10 @@ pub type UdtTable<'ctx> = HashMap<Symbol /* Mangled */, Rc<UdtKind<'ctx>>>;
 pub enum GenericKind {
     Struct(Struct),
     Func((Fn, Visibility)),
+    Enum(Enum),
 }
 
-pub type GenericTable<'ctx> = HashMap<Symbol, Rc<GenericKind>>;
+pub type GenericTable<'ctx> = HashMap<Symbol /* Mangled */, Rc<GenericKind>>;
 
 #[derive(Default)]
 pub struct TypeCtx<'ctx> {

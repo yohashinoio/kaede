@@ -16,7 +16,7 @@ use crate::{
 
 use inkwell::{
     module::Linkage,
-    types::BasicTypeEnum,
+    types::{BasicTypeEnum, StructType},
     values::{BasicValue, BasicValueEnum, IntValue, PointerValue},
     IntPredicate,
 };
@@ -33,7 +33,7 @@ use kaede_span::Span;
 use kaede_symbol::{Ident, Symbol};
 use kaede_type::{
     is_same_type, make_fundamental_type, wrap_in_ref, FundamentalType, FundamentalTypeKind,
-    GenericArgs, Mutability, ReferenceType, Ty, TyKind, UserDefinedType,
+    GenericArgs, Mutability, PointerType, ReferenceType, Ty, TyKind, UserDefinedType,
 };
 
 pub fn mangle_generic_fn_name(
@@ -59,7 +59,7 @@ struct EnumUnpack<'ctx> {
     name: Ident,
     /// match x
     ///       ^
-    enum_ty: BasicTypeEnum<'ctx>,
+    enum_ty: StructType<'ctx>,
     enum_value: Value<'ctx>,
     variant_ty: Rc<Ty>,
     span: Span,
@@ -216,9 +216,10 @@ pub fn build_tuple_indexing_internal<'ctx>(
         // (*i8, u64)
         _ if tuple_ty.is_str() => match index {
             0 => Rc::new(Ty {
-                kind: TyKind::Pointer(
-                    make_fundamental_type(FundamentalTypeKind::I8, Mutability::Not).into(),
-                )
+                kind: TyKind::Pointer(PointerType {
+                    pointee_ty: make_fundamental_type(FundamentalTypeKind::I8, Mutability::Not)
+                        .into(),
+                })
                 .into(),
                 mutability: Mutability::Not,
             }),
@@ -308,6 +309,8 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             ExprKind::Ident(name) => self.ident_expr(name)?,
 
             ExprKind::ExternalIdent(_) => todo!(),
+
+            ExprKind::GenericIdent(_) => todo!("Error"),
 
             ExprKind::Binary(node) => self.binary_op(node)?,
 
@@ -583,7 +586,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                 }
             }
 
-            if enum_info.name.symbol() != enum_name.symbol() {
+            if enum_info.name != enum_name.symbol() {
                 todo!("Error");
             }
 
@@ -632,7 +635,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         target: &Value<'ctx>,
         refty: &ReferenceType,
     ) -> anyhow::Result<Value<'ctx>> {
-        let base_ty_of_ref = refty.get_base_type_of_reference();
+        let base_ty_of_ref = refty.get_base_type();
 
         let (base_ty, bkup) = if let TyKind::External(ety) = base_ty_of_ref.kind.as_ref() {
             let bkup = self
@@ -795,7 +798,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
     fn load_enum_variant_offset_from_value(
         &mut self,
-        enum_ty: BasicTypeEnum<'ctx>,
+        enum_ty: StructType<'ctx>,
         value: &Value<'ctx>,
     ) -> anyhow::Result<Value<'ctx>> {
         let gep = unsafe {
@@ -835,7 +838,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             }
         }
 
-        if enum_info.name.symbol() != enum_name.symbol() {
+        if enum_info.name != enum_name.symbol() {
             todo!("Error");
         }
 
@@ -858,7 +861,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             None => {
                 return Err(CodegenError::NoVariant {
                     variant_name: variant_name.0,
-                    parent_name: enum_info.name.symbol(),
+                    parent_name: enum_info.name,
                     span: variant_name.1,
                 }
                 .into())
@@ -1514,15 +1517,16 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
     fn scope_resolution(&mut self, node: &Binary) -> anyhow::Result<Value<'ctx>> {
         assert!(matches!(node.kind, BinaryKind::ScopeResolution));
 
-        let (left, modules_bkup) = match &node.lhs.kind {
-            ExprKind::Ident(ident) => (ident, None),
+        let (left, modules_bkup, generic_args) = match &node.lhs.kind {
+            ExprKind::Ident(ident) => (ident, None, None),
             ExprKind::ExternalIdent(eident) => {
                 let bkup = self
                     .cucx
                     .modules_for_mangle
                     .drain_and_append(eident.external_modules.clone());
-                (&eident.ident, Some(bkup))
+                (&eident.ident, Some(bkup), None)
             }
+            ExprKind::GenericIdent(gident) => (&gident.0, None, Some(gident.1.clone())),
             _ => todo!(),
         };
 
@@ -1535,7 +1539,9 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
             let value = right.args.0.front().unwrap();
 
-            if let Ok(val) = self.create_enum_variant(left, &right.callee, Some(value)) {
+            if let Ok(val) =
+                self.create_enum_variant(left, &right.callee, Some(value), generic_args, right.span)
+            {
                 Ok(val)
             } else {
                 // Couldn't create static method, so try to call static methods
@@ -1543,7 +1549,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             }
         } else if let ExprKind::Ident(right) = &node.rhs.kind {
             // Create enum variant without value
-            self.create_enum_variant(left, right, None)
+            self.create_enum_variant(left, right, None, generic_args, right.span())
         } else {
             todo!()
         };
@@ -1582,14 +1588,23 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         enum_name: &Ident,
         variant_name: &Ident,
         value: Option<&Expr>,
+        generic_args: Option<GenericArgs>,
+        span: Span,
     ) -> anyhow::Result<Value<'ctx>> {
-        let mangled_name = mangle_udt_name(
-            self.cucx,
-            &UserDefinedType {
-                name: *enum_name,
-                generic_args: None,
-            },
-        );
+        let enum_udt = UserDefinedType {
+            name: *enum_name,
+            generic_args,
+        };
+
+        let mangled_name = mangle_udt_name(self.cucx, &enum_udt);
+
+        let enum_ty = Ty {
+            kind: TyKind::UserDefined(enum_udt).into(),
+            mutability: Mutability::Not,
+        };
+
+        // If this is a generic type, the type is generated here.
+        let enum_llvm_ty = self.cucx.conv_to_llvm_type(&enum_ty, span)?;
 
         let udt_kind = match self.cucx.tcx.get_udt(mangled_name) {
             Some(udt) => udt,
@@ -1619,15 +1634,6 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                 (variant_name.symbol(), variant_name.span()),
             )?
             .offset;
-
-        let enum_ty = Ty {
-            kind: TyKind::UserDefined(UserDefinedType::new(*enum_name, None)).into(),
-            mutability: Mutability::Not,
-        };
-
-        // Convert to LLVM type before wrapping in reference.
-        // Because reference types would be `ptr`.
-        let enum_llvm_ty = self.cucx.conv_to_llvm_type(&enum_ty, enum_name.span())?;
 
         let enum_ty = wrap_in_ref(enum_ty.into(), Mutability::Mut).into();
 
@@ -1960,7 +1966,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         let result = if let TyKind::Reference(rty) = left_ty.kind.as_ref() {
             // ---  Struct access or tuple indexing ---
             if matches!(
-                rty.get_base_type_of_reference().kind.as_ref(),
+                rty.get_base_type().kind.as_ref(),
                 TyKind::UserDefined(_) | TyKind::Tuple(_)
             ) {
                 self.struct_access_or_tuple_indexing(&left, node.lhs.span, &node.rhs)
@@ -2049,7 +2055,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         let left_ty = &left.get_type();
 
         let base_type = match left_ty.kind.as_ref() {
-            TyKind::Reference(rty) => rty.get_base_type_of_reference(),
+            TyKind::Reference(rty) => rty.get_base_type(),
             _ => unreachable!(),
         };
 

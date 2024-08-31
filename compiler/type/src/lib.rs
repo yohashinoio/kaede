@@ -180,7 +180,7 @@ pub enum TyKind {
 
     Reference(ReferenceType),
 
-    Pointer(Rc<Ty> /* Pointee type */),
+    Pointer(PointerType),
 
     Array((Rc<Ty> /* Element type */, u32 /* Size */)),
 
@@ -207,7 +207,7 @@ impl std::fmt::Display for TyKind {
 
             Self::Reference(refee) => write!(f, "&{}", refee.refee_ty.kind),
 
-            Self::Pointer(pointee) => write!(f, "*{}", pointee.kind),
+            Self::Pointer(pty) => write!(f, "*{}", pty.pointee_ty.kind),
 
             Self::Array((elem_ty, size)) => write!(f, "[{}; {}]", elem_ty.kind, size),
 
@@ -321,6 +321,29 @@ impl FundamentalType {
         }
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct PointerType {
+    pub pointee_ty: Rc<Ty>,
+}
+
+impl PointerType {
+    pub fn get_base_type(&self) -> Rc<Ty> {
+        if let TyKind::Pointer(pty) = self.pointee_ty.kind.as_ref() {
+            return pty.get_base_type();
+        }
+
+        self.pointee_ty.clone()
+    }
+}
+
+impl PartialEq for PointerType {
+    fn eq(&self, other: &Self) -> bool {
+        is_same_type(&self.pointee_ty, &other.pointee_ty)
+    }
+}
+
+impl Eq for PointerType {}
 
 #[derive(Debug, Clone)]
 pub struct ExternalType {
@@ -446,9 +469,9 @@ impl ReferenceType {
     /// &i32 -> i32
     ///
     /// &&i32 -> i32
-    pub fn get_base_type_of_reference(&self) -> Rc<Ty> {
+    pub fn get_base_type(&self) -> Rc<Ty> {
         match self.refee_ty.kind.as_ref() {
-            TyKind::Reference(rty) => rty.get_base_type_of_reference(),
+            TyKind::Reference(rty) => rty.get_base_type(),
 
             _ => self.refee_ty.clone(),
         }

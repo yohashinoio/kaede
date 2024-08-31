@@ -1,4 +1,4 @@
-use std::{fs, path::PathBuf, rc::Rc};
+use std::{collections::HashMap, fs, path::PathBuf, rc::Rc};
 
 use inkwell::{module::Linkage, types::StructType, values::FunctionValue};
 use kaede_ast::top::{
@@ -37,6 +37,95 @@ pub fn create_struct_type<'ctx>(
     ty.set_body(&field_tys, true);
 
     Ok(ty)
+}
+
+/// Return None if type is not specified for all (like C's enum)
+/// The size is returned in bits
+fn get_largest_type_size_of_enum(
+    cucx: &mut CompileUnitCtx,
+    enum_items: &[EnumVariant],
+) -> Option<u64> {
+    let mut largest = 0;
+
+    for item in enum_items.iter() {
+        if let Some(ty) = &item.ty {
+            let llvm_ty = cucx.conv_to_llvm_type(ty, item.name.span()).unwrap();
+            let size = cucx.get_size_in_bits(&llvm_ty);
+            largest = std::cmp::max(size, largest);
+        }
+    }
+
+    match largest {
+        0 => None,
+        _ => Some(largest),
+    }
+}
+
+pub fn create_enum_type<'ctx>(
+    cucx: &mut CompileUnitCtx<'ctx>,
+    node: &Enum,
+    mangled_name: Symbol,
+    is_external: bool,
+) -> (
+    HashMap<Symbol, EnumVariantInfo>,
+    StructType<'ctx>,
+    Option<Vec<Ident>>, // External module names
+) {
+    let largest_type_size = get_largest_type_size_of_enum(cucx, &node.variants);
+
+    let variants = node
+        .variants
+        .iter()
+        .map(|e| {
+            (
+                e.name.symbol(),
+                EnumVariantInfo {
+                    name: e.name,
+                    _vis: e.vis,
+                    offset: e.offset,
+                    ty: e.ty.clone().map(Rc::new),
+                },
+            )
+        })
+        .collect();
+
+    let is_external = if is_external {
+        Some(cucx.modules_for_mangle.get())
+    } else {
+        None
+    };
+
+    // If there is an item with a specified type
+    // Specified: { i32, [i8; LARGEST_TYPE_SIZE_IN_BYTES] }
+    // Not specified: { i32 }
+    let ty = match largest_type_size {
+        Some(size) => {
+            let ty = cucx.context().opaque_struct_type(mangled_name.as_str());
+
+            ty.set_body(
+                &[
+                    cucx.context().i32_type().into(),
+                    cucx.context()
+                        .i8_type()
+                        .array_type((size / 8) as u32)
+                        .into(),
+                ],
+                true,
+            );
+
+            ty
+        }
+
+        None => {
+            let ty = cucx.context().opaque_struct_type(mangled_name.as_str());
+
+            ty.set_body(&[cucx.context().i32_type().into()], true);
+
+            ty
+        }
+    };
+
+    (variants, ty, is_external)
 }
 
 pub fn build_top_level(cucx: &mut CompileUnitCtx, node: TopLevel) -> anyhow::Result<()> {
@@ -127,107 +216,36 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
     }
 
     fn enum_(&mut self, node: Enum) {
-        self.define_enum_type(node, false);
+        self.create_enum_type(node, false);
     }
 
-    fn define_enum_type(&mut self, node: Enum, is_external: bool) {
+    fn create_enum_type(&mut self, node: Enum, is_external: bool) {
         let mangled_name = Symbol::from(mangle_name(self.cucx, node.name.symbol()));
 
-        let largest_type_size = self.get_largest_type_size_of_enum(&node.variants);
+        // For generic
+        if node.generic_params.is_some() {
+            self.cucx
+                .tcx
+                .add_generic(mangled_name, GenericKind::Enum(node));
 
-        let items = node
-            .variants
-            .into_iter()
-            .map(|e| {
-                (
-                    e.name.symbol(),
-                    EnumVariantInfo {
-                        name: e.name,
-                        _vis: e.vis,
-                        offset: e.offset,
-                        ty: e.ty.map(Rc::new),
-                    },
-                )
-            })
-            .collect();
-
-        let is_external = if is_external {
-            Some(self.cucx.modules_for_mangle.get())
-        } else {
-            None
-        };
-
-        // If there is an item with a specified type
-        // Specified: { i32, [i8; LARGEST_TYPE_SIZE_IN_BYTES] }
-        // Not specified: { i32 }
-        match largest_type_size {
-            Some(size) => {
-                let ty = self
-                    .cucx
-                    .context()
-                    .opaque_struct_type(mangled_name.as_str());
-
-                ty.set_body(
-                    &[
-                        self.cucx.context().i32_type().into(),
-                        self.cucx
-                            .context()
-                            .i8_type()
-                            .array_type((size / 8) as u32)
-                            .into(),
-                    ],
-                    true,
-                );
-
-                self.cucx.tcx.add_udt(
-                    mangled_name,
-                    UdtKind::Enum(EnumInfo {
-                        name: node.name,
-                        ty: ty.into(),
-                        variants: items,
-                        is_external,
-                    }),
-                );
-            }
-
-            None => {
-                let ty = self
-                    .cucx
-                    .context()
-                    .opaque_struct_type(mangled_name.as_str());
-
-                ty.set_body(&[self.cucx.context().i32_type().into()], true);
-
-                self.cucx.tcx.add_udt(
-                    mangled_name,
-                    UdtKind::Enum(EnumInfo {
-                        name: node.name,
-                        ty: ty.into(),
-                        variants: items,
-                        is_external,
-                    }),
-                );
-            }
-        }
-    }
-
-    /// Return None if type is not specified for all (like C's enum)
-    /// The size is returned in bits
-    fn get_largest_type_size_of_enum(&mut self, enum_items: &[EnumVariant]) -> Option<u64> {
-        let mut largest = 0;
-
-        for item in enum_items.iter() {
-            if let Some(ty) = &item.ty {
-                let llvm_ty = self.cucx.conv_to_llvm_type(ty, item.name.span()).unwrap();
-                let size = self.cucx.get_size_in_bits(&llvm_ty);
-                largest = std::cmp::max(size, largest);
-            }
+            // Generics are not created immediately, but are created when they are used.
+            return;
         }
 
-        match largest {
-            0 => None,
-            _ => Some(largest),
-        }
+        let name = node.name.symbol();
+
+        let (variants, ty, is_external) =
+            create_enum_type(self.cucx, &node, mangled_name, is_external);
+
+        self.cucx.tcx.add_udt(
+            mangled_name,
+            UdtKind::Enum(EnumInfo {
+                name,
+                ty,
+                variants,
+                is_external,
+            }),
+        );
     }
 
     fn impl_(&mut self, node: Impl) -> anyhow::Result<()> {
@@ -486,17 +504,17 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
     }
 
     fn struct_(&mut self, node: Struct) -> anyhow::Result<()> {
+        let mangled_name = mangle_name(self.cucx, node.name.symbol()).into();
+
         // For generic
         if node.generic_params.is_some() {
             self.cucx
                 .tcx
-                .add_generic(node.name.symbol(), GenericKind::Struct(node));
+                .add_generic(mangled_name, GenericKind::Struct(node));
 
             // Generic structs are not created immediately, but are created when they are used.
             return Ok(());
         }
-
-        let mangled_name = mangle_name(self.cucx, node.name.symbol()).into();
 
         let ty = create_struct_type(self.cucx, mangled_name, &node.fields)?;
 
@@ -632,7 +650,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
     }
 
     fn import_enum(&mut self, node: Enum) {
-        self.define_enum_type(node, true);
+        self.create_enum_type(node, true);
     }
 
     fn import_struct(&mut self, struct_: Struct) -> anyhow::Result<()> {

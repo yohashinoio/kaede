@@ -4,7 +4,7 @@ use kaede_lex::token::TokenKind;
 use kaede_span::Span;
 use kaede_symbol::Ident;
 use kaede_type::{
-    make_fundamental_type, FundamentalTypeKind, GenericArgs, GenericType, Mutability,
+    make_fundamental_type, FundamentalTypeKind, GenericArgs, GenericType, Mutability, PointerType,
     ReferenceType, Ty, TyKind, UserDefinedType,
 };
 
@@ -24,7 +24,7 @@ fn wrap_in_reference(refee_ty: Ty) -> Ty {
 }
 
 impl Parser {
-    fn generic_args(&mut self) -> ParseResult<GenericArgs> {
+    pub fn generic_args(&mut self) -> ParseResult<GenericArgs> {
         let start = self.consume(&TokenKind::Lt)?.start;
 
         let mut types = Vec::new();
@@ -149,7 +149,10 @@ impl Parser {
 
         Ok((
             Ty {
-                kind: TyKind::Pointer(Rc::new(ty)).into(),
+                kind: TyKind::Pointer(PointerType {
+                    pointee_ty: Rc::new(ty),
+                })
+                .into(),
                 mutability: Mutability::Not,
             },
             self.new_span(start, span.finish),

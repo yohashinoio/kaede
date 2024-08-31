@@ -1,4 +1,7 @@
-use std::{collections::HashSet, rc::Rc};
+use std::{
+    collections::{HashMap, HashSet},
+    rc::Rc,
+};
 
 use error::CodegenError;
 use generic::{def_generic_args, undef_generic_args};
@@ -13,7 +16,7 @@ use inkwell::{
     AddressSpace, OptimizationLevel,
 };
 use kaede_ast::{
-    top::{GenericParams, Import, StructField, TopLevel, TopLevelKind, Visibility},
+    top::{Enum, GenericParams, Import, Struct, StructField, TopLevel, TopLevelKind, Visibility},
     CompileUnit,
 };
 use kaede_common::kaede_dir;
@@ -24,8 +27,8 @@ use kaede_type::{
     UserDefinedType,
 };
 use mangle::mangle_udt_name;
-use tcx::{FunctionInfo, GenericKind, ReturnType, StructInfo, TypeCtx};
-use top::{build_top_level, create_struct_type};
+use tcx::{EnumInfo, EnumVariantInfo, FunctionInfo, GenericKind, ReturnType, StructInfo, TypeCtx};
+use top::{build_top_level, create_enum_type, create_struct_type};
 
 use crate::tcx::UdtKind;
 
@@ -89,6 +92,59 @@ fn generic_types_to_actual_in_struct(
             }
             _ => {
                 actual.push(field.clone());
+                continue;
+            }
+        }
+    }
+
+    actual
+}
+
+fn generic_types_to_actual_in_enum(
+    cucx: &CompileUnitCtx,
+    variants: &HashMap<Symbol, EnumVariantInfo>,
+) -> HashMap<Symbol, EnumVariantInfo> {
+    let mut actual = HashMap::new();
+
+    for variant in variants.iter() {
+        let variant_ty = match variant.1.ty.as_ref() {
+            Some(ty) => ty.clone(),
+            None => {
+                actual.insert(*variant.0, variant.1.clone());
+                continue;
+            }
+        };
+
+        let variant_ty_name = match variant_ty.kind.as_ref() {
+            TyKind::Generic(gty) => gty.name,
+            _ => {
+                actual.insert(*variant.0, variant.1.clone());
+                continue;
+            }
+        };
+
+        let udt_kind = match cucx.tcx.get_udt(variant_ty_name.symbol()) {
+            Some(udt_kind) => udt_kind,
+            None => {
+                actual.insert(*variant.0, variant.1.clone());
+                continue;
+            }
+        };
+
+        match udt_kind.as_ref() {
+            UdtKind::GenericArg(ty) => {
+                // Replace with actual type
+                actual.insert(
+                    *variant.0,
+                    EnumVariantInfo {
+                        ty: Some(ty.clone()),
+                        ..*variant.1
+                    },
+                );
+                continue;
+            }
+            _ => {
+                actual.insert(*variant.0, variant.1.clone());
                 continue;
             }
         }
@@ -405,48 +461,104 @@ impl<'ctx> CompileUnitCtx<'ctx> {
     /// If already created, this function is not created anew
     fn create_generic_struct_type(
         &mut self,
-        udt: &UserDefinedType,
+        mangled_name: Symbol,
+        ast: &Struct,
+        generic_args: &GenericArgs,
     ) -> anyhow::Result<StructType<'ctx>> {
-        let info = self.tcx.get_generic_info(udt.name.symbol()).unwrap();
-        let generic_args = udt.generic_args.as_ref().unwrap();
-
-        if let GenericKind::Struct(ast) = info.as_ref() {
-            let mangled_struct_name = mangle_udt_name(self, udt);
-
-            // Check if it is cached
-            if let Some(udt_kind) = self.tcx.get_udt(mangled_struct_name) {
-                match udt_kind.as_ref() {
-                    UdtKind::Struct(info) => return Ok(info.ty),
-                    _ => unreachable!(),
-                }
+        // Check if already created.
+        if let Some(udt_kind) = self.tcx.get_udt(mangled_name) {
+            match udt_kind.as_ref() {
+                UdtKind::Struct(info) => return Ok(info.ty),
+                _ => unreachable!(),
             }
-
-            def_generic_args(self, ast.generic_params.as_ref().unwrap(), generic_args)?;
-
-            let generic_struct_ty = create_struct_type(self, mangled_struct_name, &ast.fields)?;
-            // To resolve generics types when using this struct.
-            let actual_fields = generic_types_to_actual_in_struct(self, &ast.fields);
-
-            undef_generic_args(self, ast.generic_params.as_ref().unwrap());
-
-            let fields = actual_fields
-                .iter()
-                .map(|field| (field.name.symbol(), field.clone()))
-                .collect();
-
-            self.tcx.add_udt(
-                mangled_struct_name,
-                UdtKind::Struct(StructInfo {
-                    ty: generic_struct_ty,
-                    fields,
-                    is_external: None,
-                }),
-            );
-
-            return Ok(generic_struct_ty);
         }
 
-        unreachable!()
+        def_generic_args(self, ast.generic_params.as_ref().unwrap(), generic_args)?;
+
+        let ty = create_struct_type(self, mangled_name, &ast.fields)?;
+        // To resolve generics types when using this struct.
+        let actual_fields = generic_types_to_actual_in_struct(self, &ast.fields);
+
+        undef_generic_args(self, ast.generic_params.as_ref().unwrap());
+
+        let fields = actual_fields
+            .iter()
+            .map(|field| (field.name.symbol(), field.clone()))
+            .collect();
+
+        self.tcx.add_udt(
+            mangled_name,
+            UdtKind::Struct(StructInfo {
+                ty,
+                fields,
+                is_external: None,
+            }),
+        );
+
+        return Ok(ty);
+    }
+
+    /// If already created, this function is not created anew
+    fn create_generic_enum_type(
+        &mut self,
+        mangled_name: Symbol,
+        ast: &Enum,
+        generic_args: &GenericArgs,
+    ) -> anyhow::Result<StructType<'ctx>> {
+        // Check if already created.
+        if let Some(udt_kind) = self.tcx.get_udt(mangled_name) {
+            match udt_kind.as_ref() {
+                UdtKind::Enum(info) => return Ok(info.ty),
+                _ => unreachable!(),
+            }
+        }
+
+        def_generic_args(self, ast.generic_params.as_ref().unwrap(), generic_args)?;
+
+        let (variants, ty, _) = create_enum_type(self, ast, mangled_name, false);
+        // To resolve generics types when using this struct.
+        let variants = generic_types_to_actual_in_enum(self, &variants);
+
+        undef_generic_args(self, ast.generic_params.as_ref().unwrap());
+
+        self.tcx.add_udt(
+            mangled_name,
+            UdtKind::Enum(EnumInfo {
+                name: ast.name.symbol(),
+                ty,
+                variants,
+                is_external: None,
+            }),
+        );
+
+        return Ok(ty);
+    }
+
+    fn create_generic_type(&mut self, udt: &UserDefinedType) -> anyhow::Result<StructType<'ctx>> {
+        let kind = self
+            .tcx
+            .get_generic_info(mangle_udt_name(
+                self,
+                &UserDefinedType {
+                    name: udt.name,
+                    generic_args: None, // Generic table's key doesn't include generic arg types.
+                },
+            ))
+            .unwrap();
+
+        let generic_args = udt.generic_args.as_ref().unwrap();
+
+        let mangled_generic_name = mangle_udt_name(self, udt);
+
+        match kind.as_ref() {
+            GenericKind::Struct(ast) => {
+                self.create_generic_struct_type(mangled_generic_name, ast, generic_args)
+            }
+            GenericKind::Enum(ast) => {
+                self.create_generic_enum_type(mangled_generic_name, ast, generic_args)
+            }
+            _ => unimplemented!(),
+        }
     }
 
     fn conv_to_llvm_type(&mut self, ty: &Ty, span: Span) -> anyhow::Result<BasicTypeEnum<'ctx>> {
@@ -469,7 +581,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
 
             TyKind::UserDefined(udt) => {
                 if udt.generic_args.is_some() {
-                    return self.create_generic_struct_type(udt).map(|ty| ty.into());
+                    return self.create_generic_type(udt).map(|ty| ty.into());
                 }
 
                 let mangled_name = mangle_udt_name(self, udt);
@@ -487,7 +599,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
 
                 match udt_kind.as_ref() {
                     UdtKind::Struct(sty) => sty.ty.into(),
-                    UdtKind::Enum(ety) => ety.ty,
+                    UdtKind::Enum(ety) => ety.ty.as_basic_type_enum(),
                     UdtKind::GenericArg(ty) => self.conv_to_llvm_type(ty, span)?,
                 }
             }
@@ -510,9 +622,29 @@ impl<'ctx> CompileUnitCtx<'ctx> {
                 }
             }
 
-            TyKind::Reference(_) => self.context().ptr_type(AddressSpace::default()).into(),
+            TyKind::Reference(rty) => {
+                // If the reference includes generic types, create a generic type.
+                // But return a pointer type.
+                if let TyKind::UserDefined(udt) = rty.get_base_type().kind.as_ref() {
+                    if udt.generic_args.is_some() {
+                        self.create_generic_type(udt)?;
+                    }
+                }
 
-            TyKind::Pointer(_) => self.context().ptr_type(AddressSpace::default()).into(),
+                self.context().ptr_type(AddressSpace::default()).into()
+            }
+
+            TyKind::Pointer(pty) => {
+                // If the reference includes generic types, create a generic type.
+                // But return a pointer type.
+                if let TyKind::UserDefined(udt) = pty.get_base_type().kind.as_ref() {
+                    if udt.generic_args.is_some() {
+                        self.create_generic_type(udt)?;
+                    }
+                }
+
+                self.context().ptr_type(AddressSpace::default()).into()
+            }
 
             TyKind::Array((elem_ty, size)) => self
                 .conv_to_llvm_type(elem_ty, span)?

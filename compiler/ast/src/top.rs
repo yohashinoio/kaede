@@ -111,6 +111,7 @@ pub struct EnumVariant {
 #[derive(Debug)]
 pub struct Enum {
     pub name: Ident,
+    pub generic_params: Option<GenericParams>,
     pub variants: Vec<EnumVariant>,
     pub span: Span,
 }

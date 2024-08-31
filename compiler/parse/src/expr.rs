@@ -399,12 +399,7 @@ impl Parser {
                     }
 
                     // Identifier
-                    if external_module_names.is_empty() {
-                        return Ok(Expr {
-                            span: udt.name.span(),
-                            kind: ExprKind::Ident(udt.name),
-                        });
-                    } else {
+                    if !external_module_names.is_empty() {
                         return Ok(Expr {
                             span: udt.name.span(),
                             kind: ExprKind::ExternalIdent(ExternalIdent {
@@ -412,6 +407,18 @@ impl Parser {
                                 ident: udt.name,
                                 span: udt.name.span(),
                             }),
+                        });
+                    }
+
+                    if let Some(generic_args) = &udt.generic_args {
+                        return Ok(Expr {
+                            span: span,
+                            kind: ExprKind::GenericIdent((udt.name, generic_args.clone())),
+                        });
+                    } else {
+                        return Ok(Expr {
+                            span: span,
+                            kind: ExprKind::Ident(udt.name),
                         });
                     }
                 }
@@ -646,12 +653,15 @@ impl Parser {
                 if matches!(rty.refee_ty.kind.as_ref(), TyKind::UserDefined(_)) =>
             {
                 match rty.refee_ty.kind.as_ref() {
-                    TyKind::UserDefined(udt) => (vec![], udt.name),
+                    TyKind::UserDefined(udt) => (vec![], udt.name, udt.generic_args.clone()),
                     _ => unreachable!(),
                 }
             }
             // m.f()
-            TyKind::External(ety) => ety.decompose_for_fncall(),
+            TyKind::External(ety) => {
+                let tmp = ety.decompose_for_fncall();
+                (tmp.0, tmp.1, None)
+            }
             _ => unreachable!(),
         };
 
@@ -668,6 +678,7 @@ impl Parser {
             kind: ExprKind::FnCall(FnCall {
                 external_modules: callees.0,
                 callee: callees.1,
+                generic_args: callees.2,
                 args,
                 span,
             }),
