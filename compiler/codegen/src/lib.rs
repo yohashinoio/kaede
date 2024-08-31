@@ -495,7 +495,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             }),
         );
 
-        return Ok(ty);
+        Ok(ty)
     }
 
     /// If already created, this function is not created anew
@@ -531,7 +531,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             }),
         );
 
-        return Ok(ty);
+        Ok(ty)
     }
 
     fn create_generic_type(&mut self, udt: &UserDefinedType) -> anyhow::Result<StructType<'ctx>> {

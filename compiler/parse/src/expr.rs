@@ -412,12 +412,12 @@ impl Parser {
 
                     if let Some(generic_args) = &udt.generic_args {
                         return Ok(Expr {
-                            span: span,
+                            span,
                             kind: ExprKind::GenericIdent((udt.name, generic_args.clone())),
                         });
                     } else {
                         return Ok(Expr {
-                            span: span,
+                            span,
                             kind: ExprKind::Ident(udt.name),
                         });
                     }
