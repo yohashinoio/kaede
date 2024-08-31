@@ -2440,15 +2440,48 @@ fn generic_enum_with_multiple_parameters() -> anyhow::Result<()> {
 }
 
 #[test]
-fn omit_comma_at_end_of_block() -> anyhow::Result<()> {
+fn omit_comma_at_end_of_struct_fields() -> anyhow::Result<()> {
+    let program = r#"struct S {
+        n: i32,
+        m: i32
+    }
+
+    fn main(): i32 {
+        let a = S { n: 48, m: 10 }
+        return a.n + a.m
+    }"#;
+
+    assert_eq!(exec(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn omit_comma_at_end_of_enum_variants() -> anyhow::Result<()> {
     let program = r#"enum A {
         B,
         C(i32)
     }
 
-    struct S {
-        n: i32,
-        m: i32
+    fn main(): i32 {
+        let a = A::C(58)
+
+        return match a {
+            A::B => 123,
+            A::C(n) => 58,
+        }
+    }"#;
+
+    assert_eq!(exec(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn omit_comma_at_end_of_match_arms() -> anyhow::Result<()> {
+    let program = r#"enum A {
+        B,
+        C(i32),
     }
 
     fn main(): i32 {
