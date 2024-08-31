@@ -2420,7 +2420,7 @@ fn generic_enum_with_multiple_parameters() -> anyhow::Result<()> {
         let res2 = Res<i32, bool>::Ok(58)
 
         match res1 {
-            Res::Ok(n) => return n,
+            Res::Ok(_) => return 123,
             Res::Err(f) => {
                 if f {
                     return 123
