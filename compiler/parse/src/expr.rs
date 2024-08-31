@@ -472,7 +472,9 @@ impl Parser {
                 arms.push(arm);
             }
 
+            // Allow commas to be omitted only in the last arm.
             if !self.consume_b(&TokenKind::Comma) {
+                self.consume_semi()?;
                 break;
             }
         }

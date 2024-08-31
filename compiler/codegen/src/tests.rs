@@ -2438,3 +2438,29 @@ fn generic_enum_with_multiple_parameters() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn omit_comma_at_end_of_block() -> anyhow::Result<()> {
+    let program = r#"enum A {
+        B,
+        C(i32)
+    }
+
+    struct S {
+        n: i32,
+        m: i32
+    }
+
+    fn main(): i32 {
+        let a = A::C(58)
+
+        return match a {
+            A::B => 123,
+            A::C(n) => 58
+        }
+    }"#;
+
+    assert_eq!(exec(program)?, 58);
+
+    Ok(())
+}
