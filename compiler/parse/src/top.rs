@@ -295,16 +295,18 @@ impl Parser {
                 None
             };
 
-            if !self.consume_b(&TokenKind::Comma) {
-                break;
-            }
-
             variants.push(EnumVariant {
                 name,
                 ty,
                 vis: Visibility::Public,
                 offset,
             });
+
+            // Allow commas to be omitted only in the last variant.
+            if !self.consume_b(&TokenKind::Comma) {
+                self.consume_semi()?;
+                break;
+            }
 
             offset += 1;
         }
@@ -355,16 +357,18 @@ impl Parser {
 
             let (ty, _) = self.ty()?;
 
-            if !self.consume_b(&TokenKind::Comma) {
-                break;
-            }
-
             fields.push(StructField {
                 name,
                 ty: Rc::new(ty),
                 vis: Visibility::Public,
                 offset,
             });
+
+            // Allow commas to be omitted only in the last field.
+            if !self.consume_b(&TokenKind::Comma) {
+                self.consume_semi()?;
+                break;
+            }
 
             offset += 1;
         }
