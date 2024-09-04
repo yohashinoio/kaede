@@ -2497,3 +2497,23 @@ fn omit_comma_at_end_of_match_arms() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn less_than_with_variables() -> anyhow::Result<()> {
+    let program = r#"fn main(): i32 {
+        let a = 48
+        let b = 10
+
+        // This is a parser test.
+        // Below is not a<b> but a < b
+        if a < b {
+            return 123
+        }
+
+        return 58
+    }"#;
+
+    assert_eq!(exec(program)?, 58);
+
+    Ok(())
+}
