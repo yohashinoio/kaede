@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use cursor::Cursor;
 use kaede_span::file::FilePath;
 use semi::insert_semi;
@@ -20,24 +22,24 @@ impl<'a> Lexer<'a> {
         Self { source, file }
     }
 
-    pub fn run(&self) -> Vec<Token> {
+    pub fn run(&self) -> VecDeque<Token> {
         insert_semi(self.run_without_insert_semi().into_iter(), self.file)
     }
 
-    fn run_without_insert_semi(&self) -> Vec<Token> {
+    fn run_without_insert_semi(&self) -> VecDeque<Token> {
         let mut cursor = Cursor::new(self.source, self.file);
-        let mut res = Vec::new();
+        let mut res = VecDeque::new();
 
         loop {
             let token = cursor.advance_token();
 
             match token.kind {
                 TokenKind::Eoi => {
-                    res.push(token);
+                    res.push_back(token);
                     break;
                 }
 
-                _ => res.push(token),
+                _ => res.push_back(token),
             }
         }
 

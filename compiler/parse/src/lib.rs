@@ -4,7 +4,7 @@ mod stmt;
 mod top;
 mod ty;
 
-use std::iter::Peekable;
+use std::collections::VecDeque;
 
 use error::{ParseError, ParseResult};
 use kaede_ast::{expr::Expr, CompileUnit};
@@ -18,7 +18,10 @@ use kaede_symbol::Symbol;
 pub struct Parser {
     file: FilePath,
 
-    tokens: Peekable<Box<dyn Iterator<Item = Token>>>,
+    tokens: VecDeque<Token>,
+    consumed_tokens: VecDeque<Token>,
+    // Record the number of elements in consumed_tokens.
+    checkpoint: usize,
 
     end_token: Option<Token>,
 
@@ -31,11 +34,10 @@ pub struct Parser {
 
 impl Parser {
     pub fn new(source: &str, file: FilePath) -> Self {
-        let tokens: Box<dyn Iterator<Item = Token>> =
-            Box::new(Lexer::new(source, file).run().into_iter());
-
         Self {
-            tokens: tokens.peekable(),
+            tokens: Lexer::new(source, file).run(),
+            consumed_tokens: VecDeque::new(),
+            checkpoint: 0,
             end_token: None,
             in_cond_expr: false,
             generic_param_names: Vec::new(),
@@ -90,20 +92,42 @@ impl Parser {
 
     fn first(&mut self) -> &Token {
         self.tokens
-            .peek()
+            .front()
             .unwrap_or_else(|| self.end_token.as_ref().unwrap())
     }
 
     /// Advance to next token
     fn bump(&mut self) -> Option<Token> {
-        self.tokens.next().map(|t| match t.kind {
-            TokenKind::Eoi => {
-                self.end_token = Some(t.clone());
-                t
-            }
+        let token = self.tokens.pop_front();
 
-            _ => t,
-        })
+        // Record the consumed token
+        if let Some(token) = &token {
+            self.consumed_tokens.push_back(token.clone());
+        }
+
+        if let Some(token) = &token {
+            if token.kind == TokenKind::Eoi {
+                self.end_token = Some(token.clone());
+            }
+        }
+
+        token
+    }
+
+    // Create a checkpoint.
+    fn checkpoint(&mut self) {
+        self.checkpoint = self.consumed_tokens.len();
+    }
+
+    // Backtrack to the checkpoint.
+    fn backtrack(&mut self) {
+        let len = self.consumed_tokens.len();
+        let diff = len - self.checkpoint;
+
+        for _ in 0..diff {
+            self.tokens
+                .push_front(self.consumed_tokens.pop_back().unwrap());
+        }
     }
 
     /// Check without consuming tokens
