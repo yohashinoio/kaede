@@ -24,7 +24,9 @@ fn wrap_in_reference(refee_ty: Ty) -> Ty {
 }
 
 impl Parser {
-    pub fn generic_args(&mut self) -> ParseResult<GenericArgs> {
+    pub fn generic_args(&mut self) -> ParseResult<Option<GenericArgs>> {
+        self.checkpoint();
+
         let start = self.consume(&TokenKind::Lt)?.start;
 
         let mut types = Vec::new();
@@ -37,12 +39,15 @@ impl Parser {
             }
         }
 
-        let finish = self.consume(&TokenKind::Gt)?.finish;
-
-        Ok(GenericArgs {
-            types,
-            span: self.new_span(start, finish),
-        })
+        if let Ok(span) = self.consume(&TokenKind::Gt) {
+            Ok(Some(GenericArgs {
+                types,
+                span: self.new_span(start, span.finish),
+            }))
+        } else {
+            self.backtrack();
+            Ok(None)
+        }
     }
 
     pub fn ty(&mut self) -> ParseResult<(Ty, Span)> {
@@ -96,7 +101,7 @@ impl Parser {
                 // User defined type
                 _ => {
                     let generic_args = if self.check(&TokenKind::Lt) {
-                        Some(self.generic_args()?)
+                        self.generic_args()?
                     } else {
                         None
                     };
