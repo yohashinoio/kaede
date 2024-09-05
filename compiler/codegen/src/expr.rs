@@ -1534,21 +1534,26 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         // If it fails, try to call static methods
         let result = if let ExprKind::FnCall(right) = &node.rhs.kind {
             if right.args.0.len() != 1 {
-                todo!("Error");
-            }
-
-            let value = right.args.0.front().unwrap();
-
-            if let Ok(val) =
-                self.create_enum_variant(left, &right.callee, Some(value), generic_args, right.span)
-            {
-                Ok(val)
-            } else {
-                // Couldn't create static method, so try to call static methods
+                // Static methods with no arguments.
                 self.call_static_method(left, right)
+            } else {
+                let value = right.args.0.front().unwrap();
+
+                if let Ok(val) = self.create_enum_variant(
+                    left,
+                    &right.callee,
+                    Some(value),
+                    generic_args,
+                    right.span,
+                ) {
+                    Ok(val)
+                } else {
+                    // Couldn't create enum variant, so try to call static methods
+                    self.call_static_method(left, right)
+                }
             }
         } else if let ExprKind::Ident(right) = &node.rhs.kind {
-            // Create enum variant without value
+            // Create enum variant without value.
             self.create_enum_variant(left, right, None, generic_args, right.span())
         } else {
             todo!()

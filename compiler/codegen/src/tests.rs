@@ -2517,3 +2517,26 @@ fn less_than_with_variables() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn static_method_with_no_args() -> anyhow::Result<()> {
+    let program = r#"struct A {
+        size: i32,
+    }
+    impl A {
+        fn new(): A {
+            return A { size: 58 }
+        }
+        fn get_size(self): i32 {
+            return self.size
+        }
+    }
+    fn main(): i32 {
+        let a = A::new()
+        return a.get_size()
+    }"#;
+
+    assert_eq!(exec(program)?, 58);
+
+    Ok(())
+}
