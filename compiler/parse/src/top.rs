@@ -70,7 +70,9 @@ impl Parser {
         })
     }
 
-    fn generic_params(&mut self) -> ParseResult<GenericParams> {
+    fn generic_params(&mut self) -> ParseResult<Option<GenericParams>> {
+        self.checkpoint();
+
         let start = self.consume(&TokenKind::Lt)?.start;
 
         let mut names = Vec::new();
@@ -83,15 +85,18 @@ impl Parser {
             }
         }
 
-        let finish = self.consume(&TokenKind::Gt)?.finish;
+        Ok(if let Ok(span) = self.consume(&TokenKind::Gt) {
+            names.iter().for_each(|name| {
+                self.generic_param_names.push(name.symbol());
+            });
 
-        names.iter().for_each(|name| {
-            self.generic_param_names.push(name.symbol());
-        });
-
-        Ok(GenericParams {
-            names,
-            span: self.new_span(start, finish),
+            Some(GenericParams {
+                names,
+                span: self.new_span(start, span.finish),
+            })
+        } else {
+            self.backtrack();
+            None
         })
     }
 
@@ -137,7 +142,7 @@ impl Parser {
         let name = self.ident()?;
 
         let generic_params = if self.check(&TokenKind::Lt) {
-            Some(self.generic_params()?)
+            self.generic_params()?
         } else {
             None
         };
@@ -256,7 +261,7 @@ impl Parser {
         let name = self.ident()?;
 
         let generic_params = if self.check(&TokenKind::Lt) {
-            Some(self.generic_params()?)
+            self.generic_params()?
         } else {
             None
         };
@@ -320,7 +325,7 @@ impl Parser {
         let name = self.ident()?;
 
         let generic_params = if self.check(&TokenKind::Lt) {
-            Some(self.generic_params()?)
+            self.generic_params()?
         } else {
             None
         };
