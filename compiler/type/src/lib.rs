@@ -84,7 +84,9 @@ impl Ty {
     /// Return true if it is a user-defined type
     pub fn is_udt(&self) -> bool {
         match self.kind.as_ref() {
-            TyKind::Reference(rty) => matches!(rty.refee_ty.kind.as_ref(), TyKind::UserDefined(_)),
+            TyKind::Reference(rty) => {
+                matches!(rty.get_base_type().kind.as_ref(), TyKind::UserDefined(_))
+            }
             _ => false,
         }
     }
