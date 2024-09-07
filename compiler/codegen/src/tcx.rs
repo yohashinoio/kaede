@@ -116,8 +116,8 @@ impl<'ctx> TypeCtx<'ctx> {
     }
 
     pub fn lookup_variable(&self, ident: &Ident) -> anyhow::Result<&Variable<'ctx>> {
-        for variable_table in &self.variable_table_stack {
-            if let Some(var) = variable_table.lookup(ident.symbol()) {
+        for table in self.variable_table_stack.iter().rev() {
+            if let Some(var) = table.lookup(ident.symbol()) {
                 return Ok(var);
             }
         }
