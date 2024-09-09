@@ -8,6 +8,31 @@ use inkwell::{
 use kaede_span::Span;
 use kaede_symbol::Ident;
 
+/// Duplicate the type, change the mutability, and return the duplicated type
+pub fn change_mutability_dup(ty: Rc<Ty>, mutability: Mutability) -> Rc<Ty> {
+    let mut duped = (*ty).clone();
+
+    change_mutability(&mut duped, mutability);
+
+    duped.into()
+}
+
+pub fn change_mutability(ty: &mut Ty, mutability: Mutability) {
+    ty.mutability = mutability;
+
+    if let TyKind::Reference(rty) = ty.kind.as_ref() {
+        let new_refee_ty = Ty {
+            kind: rty.refee_ty.kind.clone(),
+            mutability,
+        };
+
+        ty.kind = TyKind::Reference(ReferenceType {
+            refee_ty: new_refee_ty.into(),
+        })
+        .into();
+    }
+}
+
 pub fn create_inferred_tuple(element_len: usize) -> TyKind {
     TyKind::Tuple({
         let mut v = Vec::with_capacity(element_len);

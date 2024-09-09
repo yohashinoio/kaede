@@ -58,7 +58,6 @@ pub struct Struct {
 #[derive(Debug, Clone)]
 pub struct Param {
     pub name: Ident,
-    pub mutability: Mutability,
     pub ty: Rc<Ty>,
 }
 

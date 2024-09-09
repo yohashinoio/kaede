@@ -4,8 +4,8 @@ use kaede_lex::token::TokenKind;
 use kaede_span::Span;
 use kaede_symbol::Ident;
 use kaede_type::{
-    make_fundamental_type, FundamentalTypeKind, GenericArgs, GenericType, Mutability, PointerType,
-    ReferenceType, Ty, TyKind, UserDefinedType,
+    change_mutability, make_fundamental_type, FundamentalTypeKind, GenericArgs, GenericType,
+    Mutability, PointerType, ReferenceType, Ty, TyKind, UserDefinedType,
 };
 
 use crate::{
@@ -52,6 +52,13 @@ impl Parser {
 
     pub fn ty(&mut self) -> ParseResult<(Ty, Span)> {
         use FundamentalTypeKind::*;
+
+        if self.consume_b(&TokenKind::Mut) {
+            // Mutable type
+            let mut ty = self.ty()?;
+            change_mutability(&mut ty.0, Mutability::Mut);
+            return Ok(ty);
+        }
 
         if self.check(&TokenKind::Asterisk) {
             // Pointer type

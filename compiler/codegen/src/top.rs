@@ -8,12 +8,12 @@ use kaede_ast::top::{
 use kaede_parse::Parser;
 use kaede_span::Span;
 use kaede_symbol::{Ident, Symbol};
-use kaede_type::{Mutability, Ty, TyKind};
+use kaede_type::{change_mutability_dup, GenericArgs, Mutability, Ty, TyKind, UserDefinedType};
 
 use crate::{
     error::CodegenError,
     mangle::{mangle_method, mangle_name, mangle_static_method},
-    stmt::{build_block, change_mutability_dup},
+    stmt::build_block,
     tcx::{EnumInfo, EnumVariantInfo, GenericKind, ReturnType, StructInfo, UdtKind, VariableTable},
     CompileUnitCtx,
 };
@@ -139,8 +139,7 @@ pub fn build_top_level(cucx: &mut CompileUnitCtx, node: TopLevel) -> anyhow::Res
 pub fn push_self_to_front(params: &mut Params, impl_for_ty: Rc<Ty>, mutability: Mutability) {
     params.v.push_front(Param {
         name: Ident::new("self".to_string().into(), params.span),
-        mutability,
-        ty: impl_for_ty,
+        ty: change_mutability_dup(impl_for_ty, mutability),
     });
 }
 
@@ -423,7 +422,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         let params = params
             .v
             .into_iter()
-            .map(|e| (e.name, change_mutability_dup(e.ty, e.mutability)))
+            .map(|e| (e.name, e.ty))
             .collect::<Vec<_>>();
 
         if let Some(fn_value) = self.cucx.module.get_function(mangled_name) {

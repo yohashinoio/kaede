@@ -2342,7 +2342,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                 .params
                 .v
                 .iter()
-                .map(|e| change_mutability_dup(e.ty.clone(), e.mutability))
+                .map(|e| e.ty.clone())
                 .collect::<Vec<_>>(),
             ast.decl.return_ty.clone().into(),
             Some(Linkage::External),

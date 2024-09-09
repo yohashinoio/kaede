@@ -7,7 +7,9 @@ use kaede_ast::stmt::{
 };
 use kaede_span::Span;
 use kaede_symbol::Ident;
-use kaede_type::{create_inferred_tuple, is_same_type, Mutability, ReferenceType, Ty, TyKind};
+use kaede_type::{
+    change_mutability_dup, create_inferred_tuple, is_same_type, Mutability, Ty, TyKind,
+};
 
 use crate::expr::build_tuple_indexing;
 use crate::value::Value;
@@ -34,27 +36,6 @@ pub fn build_statement(cucx: &mut CompileUnitCtx, node: &Stmt) -> anyhow::Result
     builder.build(node)?;
 
     Ok(())
-}
-
-/// Duplicate the type, change the mutability, and return the duplicated type
-pub fn change_mutability_dup(ty: Rc<Ty>, mutability: Mutability) -> Rc<Ty> {
-    let mut var_ty = (*ty).clone();
-
-    var_ty.mutability = mutability;
-
-    if let TyKind::Reference(rty) = var_ty.kind.as_ref() {
-        let new_refee_ty = Ty {
-            kind: rty.refee_ty.kind.clone(),
-            mutability,
-        };
-
-        var_ty.kind = TyKind::Reference(ReferenceType {
-            refee_ty: new_refee_ty.into(),
-        })
-        .into();
-    };
-
-    var_ty.into()
 }
 
 pub fn build_normal_let(

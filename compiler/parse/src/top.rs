@@ -6,6 +6,7 @@ use kaede_ast::top::{
 };
 use kaede_lex::token::TokenKind;
 use kaede_span::Location;
+use kaede_type::Mutability;
 
 use crate::{error::ParseResult, Parser};
 
@@ -151,15 +152,17 @@ impl Parser {
 
         let mutability = self.consume_b(&TokenKind::Mut).into();
         let has_self = self.consume_b(&TokenKind::Self_);
+        if !has_self && mutability == Mutability::Mut {
+            todo!("`mut is not allowed not in type");
+        }
         let first_param = if has_self {
             let _ = self.consume(&TokenKind::Comma);
             None
         } else if self.check(&TokenKind::CloseParen) {
             None
         } else {
-            let mut param = self.fn_param()?;
+            let param = self.fn_param()?;
             let _ = self.consume(&TokenKind::Comma);
-            param.mutability = mutability;
             Some(param)
         };
 
@@ -232,8 +235,6 @@ impl Parser {
     }
 
     fn fn_param(&mut self) -> ParseResult<Param> {
-        let mutability = self.consume_b(&TokenKind::Mut).into();
-
         let name = self.ident()?;
 
         self.consume(&TokenKind::Colon)?;
@@ -242,7 +243,6 @@ impl Parser {
 
         Ok(Param {
             name,
-            mutability,
             ty: Rc::new(ty),
         })
     }
