@@ -89,7 +89,7 @@ fn type_to_actual(cucx: &CompileUnitCtx, ty: Rc<Ty>, span: Span) -> anyhow::Resu
             let actual_elem_ty = type_to_actual(cucx, elem_ty.clone(), span)?;
 
             Ok(Ty {
-                kind: TyKind::Array((actual_elem_ty.into(), *size)).into(),
+                kind: TyKind::Array((actual_elem_ty, *size)).into(),
                 mutability: ty.mutability,
             }
             .into())
@@ -123,7 +123,7 @@ fn type_to_actual(cucx: &CompileUnitCtx, ty: Rc<Ty>, span: Span) -> anyhow::Resu
 
             Ok(Ty {
                 kind: TyKind::Reference(ReferenceType {
-                    refee_ty: actual_refee_ty.into(),
+                    refee_ty: actual_refee_ty,
                 })
                 .into(),
                 mutability: ty.mutability,
@@ -165,13 +165,10 @@ fn generic_types_to_actual_in_struct(
     let mut actual = Vec::new();
 
     for field in fields.iter() {
-        actual.push(
-            StructField {
-                ty: type_to_actual(cucx, field.ty.clone(), field.name.span()).unwrap(),
-                ..field.clone()
-            }
-            .into(),
-        );
+        actual.push(StructField {
+            ty: type_to_actual(cucx, field.ty.clone(), field.name.span()).unwrap(),
+            ..field.clone()
+        });
     }
 
     actual
@@ -712,10 +709,10 @@ impl<'ctx> CompileUnitCtx<'ctx> {
 
         match kind.as_ref() {
             GenericKind::Struct(ast) => {
-                self.create_generic_struct_type(mangled_generic_name, ast, &generic_args)
+                self.create_generic_struct_type(mangled_generic_name, ast, generic_args)
             }
             GenericKind::Enum(ast) => {
-                self.create_generic_enum_type(mangled_generic_name, ast, &generic_args)
+                self.create_generic_enum_type(mangled_generic_name, ast, generic_args)
             }
             _ => unimplemented!(),
         }

@@ -670,8 +670,8 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                 TopLevelKind::Impl(_) => unreachable!(),
 
                 TopLevelKind::Fn(func) => {
-                    let return_ty = if let Some(ty) = func.decl.return_ty {
-                        Some(if ty.is_udt() {
+                    let return_ty = func.decl.return_ty.map(|ty| {
+                        if ty.is_udt() {
                             Ty::new_external(
                                 import_module,
                                 Rc::new(Ty {
@@ -682,10 +682,8 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                             .into()
                         } else {
                             ty
-                        })
-                    } else {
-                        None
-                    };
+                        }
+                    });
 
                     let mangled_name = {
                         let bkup = self
@@ -767,7 +765,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                         continue;
                     }
 
-                    let mangled_name = self.mangle_method(impl_for_ty.clone(), &func);
+                    let mangled_name = self.mangle_method(impl_for_ty.clone(), func);
 
                     self.declare_method(
                         &mangled_name,
