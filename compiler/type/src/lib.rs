@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{fmt::Display, rc::Rc};
 
 use inkwell::{
     context::Context,
@@ -160,7 +160,7 @@ impl Mutability {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub enum FundamentalTypeKind {
     I8,
     U8,
@@ -299,7 +299,7 @@ impl TyKind {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct FundamentalType {
     pub kind: FundamentalTypeKind,
 }
@@ -450,7 +450,7 @@ impl PartialEq for ExternalType {
 
 impl Eq for ExternalType {}
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GenericArgs {
     pub types: Vec<Rc<Ty>>,
     pub span: Span,
@@ -465,6 +465,28 @@ pub struct UserDefinedType {
 impl UserDefinedType {
     pub fn new(name: Ident, generic_args: Option<GenericArgs>) -> Self {
         Self { name, generic_args }
+    }
+}
+
+impl Display for UserDefinedType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.generic_args.is_none() {
+            write!(f, "{}", self.name.symbol().as_str())
+        } else {
+            write!(
+                f,
+                "{}<{}>",
+                self.name.symbol().as_str(),
+                self.generic_args
+                    .as_ref()
+                    .unwrap()
+                    .types
+                    .iter()
+                    .map(|t| t.kind.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        }
     }
 }
 
@@ -505,7 +527,7 @@ impl ReferenceType {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct GenericType {
     pub name: Ident,
 }

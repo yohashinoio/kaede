@@ -12,22 +12,16 @@ pub fn mangle_name(cucx: &CompileUnitCtx, name: Symbol) -> String {
     )
 }
 
-pub fn mangle_method(cucx: &CompileUnitCtx, impl_for: Symbol, name: Symbol) -> String {
-    format!(
-        "{}.{}.{}",
-        cucx.modules_for_mangle.create_mangle_prefix(),
-        impl_for,
-        name
-    )
+pub fn mangle_method(cucx: &CompileUnitCtx, impl_for: &UserDefinedType, name: Symbol) -> String {
+    format!("{}.{}", mangle_udt_name(cucx, impl_for), name)
 }
 
-pub fn mangle_static_method(cucx: &CompileUnitCtx, impl_for: Symbol, name: Symbol) -> String {
-    format!(
-        "{}.{}::{}",
-        cucx.modules_for_mangle.create_mangle_prefix(),
-        impl_for,
-        name
-    )
+pub fn mangle_static_method(
+    cucx: &CompileUnitCtx,
+    impl_for: &UserDefinedType,
+    name: Symbol,
+) -> String {
+    format!("{}::{}", mangle_udt_name(cucx, impl_for), name)
 }
 
 pub fn mangle_udt_name(cucx: &CompileUnitCtx, udt: &UserDefinedType) -> Symbol {
@@ -38,7 +32,13 @@ pub fn mangle_udt_name(cucx: &CompileUnitCtx, udt: &UserDefinedType) -> Symbol {
             generic_args
                 .types
                 .iter()
-                .map(|t| t.kind.to_string())
+                .map(|t| {
+                    if let Some(ty) = cucx.tcx.lookup_generic_arg(t.kind.to_string().into()) {
+                        ty.kind.to_string()
+                    } else {
+                        t.kind.to_string()
+                    }
+                })
                 .collect::<Vec<_>>()
                 .join("_")
         )

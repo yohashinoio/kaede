@@ -2,8 +2,8 @@ use std::{collections::HashMap, fs, path::PathBuf, rc::Rc};
 
 use inkwell::{module::Linkage, types::StructType, values::FunctionValue};
 use kaede_ast::top::{
-    Enum, EnumVariant, Extern, Fn, GenericFnInstance, Impl, Import, Param, Params, Struct,
-    StructField, TopLevel, TopLevelKind, Visibility,
+    Enum, EnumVariant, Extern, Fn, GenericFnInstance, GenericParams, Impl, Import, Param, Params,
+    Struct, StructField, TopLevel, TopLevelKind, Visibility,
 };
 use kaede_parse::Parser;
 use kaede_span::Span;
@@ -12,9 +12,12 @@ use kaede_type::{change_mutability_dup, GenericArgs, Mutability, Ty, TyKind, Use
 
 use crate::{
     error::CodegenError,
-    mangle::{mangle_method, mangle_name, mangle_static_method},
+    mangle::{mangle_method, mangle_name, mangle_static_method, mangle_udt_name},
     stmt::build_block,
-    tcx::{EnumInfo, EnumVariantInfo, GenericKind, ReturnType, StructInfo, UdtKind, VariableTable},
+    tcx::{
+        EnumInfo, EnumVariantInfo, GenericArgTable, GenericKind, ReturnType, StructInfo, UdtKind,
+        VariableTable,
+    },
     CompileUnitCtx,
 };
 
@@ -136,6 +139,25 @@ pub fn build_top_level(cucx: &mut CompileUnitCtx, node: TopLevel) -> anyhow::Res
     Ok(())
 }
 
+pub fn build_top_level_with_generic_args(
+    cucx: &mut CompileUnitCtx,
+    node: TopLevel,
+    generic_params: GenericParams,
+    generic_args: GenericArgs,
+) -> anyhow::Result<()> {
+    let generic_arg_table = GenericArgTable::from((generic_params, generic_args));
+
+    cucx.tcx.push_generic_arg_table(generic_arg_table);
+
+    let mut builder = TopLevelBuilder { cucx };
+
+    builder.build(node)?;
+
+    cucx.tcx.pop_generic_arg_table();
+
+    Ok(())
+}
+
 pub fn push_self_to_front(params: &mut Params, impl_for_ty: Rc<Ty>, mutability: Mutability) {
     params.v.push_front(Param {
         name: Ident::new("self".to_string().into(), params.span),
@@ -161,7 +183,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
 
             TopLevelKind::Struct(node) => self.struct_(node)?,
 
-            TopLevelKind::Impl(node) => self.impl_(node)?,
+            TopLevelKind::Impl(node) => self.impl_(node, tl.vis, tl.span, false)?,
 
             TopLevelKind::Enum(node) => self.enum_(node),
 
@@ -247,12 +269,46 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         );
     }
 
-    fn impl_(&mut self, node: Impl) -> anyhow::Result<()> {
+    fn impl_(
+        &mut self,
+        node: Impl,
+        vis: Visibility,
+        span: Span,
+        without_define: bool,
+    ) -> anyhow::Result<()> {
+        if node.generic_params.is_some() {
+            let base_ty = if let TyKind::Reference(rty) = node.ty.kind.as_ref() {
+                rty.get_base_type()
+            } else {
+                todo!("Error")
+            };
+
+            if let TyKind::UserDefined(udt) = base_ty.kind.as_ref() {
+                let mangled_name = mangle_udt_name(
+                    self.cucx,
+                    // Remove generic arguments.
+                    &UserDefinedType {
+                        name: udt.name,
+                        generic_args: None,
+                    },
+                );
+
+                self.cucx
+                    .tcx
+                    .add_generic_impl(mangled_name, (node, vis, span));
+
+                // Generic impls are not created immediately, but are created when they are used.
+                return Ok(());
+            } else {
+                todo!("Error")
+            }
+        }
+
         let ty = Rc::new(node.ty);
 
-        for item in node.items {
-            match item.kind {
-                TopLevelKind::Fn(fn_) => self.define_method(ty.clone(), fn_)?,
+        for item in node.items.iter() {
+            match &item.kind {
+                TopLevelKind::Fn(fn_) => self.handle_method(ty.clone(), fn_, without_define)?,
                 _ => todo!("Error"),
             }
         }
@@ -285,53 +341,56 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         self.build_fn(mangled_name.as_str(), node, span)
     }
 
-    fn mangle_method(&mut self, impl_for_ty: &Ty, node: &Fn) -> String {
-        let impl_for_ty_s = match impl_for_ty.kind.as_ref() {
-            TyKind::Reference(refty) => refty.refee_ty.kind.to_string(),
-            _ => impl_for_ty.kind.to_string(),
+    fn mangle_method(&mut self, impl_for_ty: Rc<Ty>, node: &Fn) -> String {
+        let base_ty = match impl_for_ty.kind.as_ref() {
+            TyKind::Reference(refty) => refty.get_base_type(),
+            _ => impl_for_ty.clone(),
         };
 
         if impl_for_ty.is_udt() {
-            if node.decl.self_.is_none() {
-                return mangle_static_method(
-                    self.cucx,
-                    Symbol::from(impl_for_ty_s),
-                    node.decl.name.symbol(),
-                );
+            let udt = match base_ty.kind.as_ref() {
+                TyKind::UserDefined(udt) => udt,
+                _ => unreachable!(),
             };
 
-            mangle_method(
-                self.cucx,
-                Symbol::from(impl_for_ty_s),
-                node.decl.name.symbol(),
-            )
+            if node.decl.self_.is_none() {
+                return mangle_static_method(self.cucx, udt, node.decl.name.symbol());
+            };
+
+            mangle_method(self.cucx, udt, node.decl.name.symbol())
         } else {
             // Builtin types
 
             if node.decl.self_.is_none() {
                 // Static method
                 // Without module name
-                return format!("{}::{}", impl_for_ty_s, node.decl.name.symbol().as_str());
+                return format!("{}::{}", base_ty.kind, node.decl.name.symbol().as_str());
             };
 
             // Without module name
-            format!("{}.{}", impl_for_ty_s, node.decl.name.symbol().as_str())
+            format!("{}.{}", base_ty.kind, node.decl.name.symbol().as_str())
         }
     }
 
     /// Static method can also be handled by this function
     ///
     /// If kind is `Normal`, it becomes a static method (said in C++ style)
-    fn define_method(&mut self, impl_for_ty: Rc<Ty>, node: Fn) -> anyhow::Result<()> {
-        let mangled_name = self.mangle_method(&impl_for_ty, &node);
-        self.define_method_internal(&mangled_name, impl_for_ty, node)
+    fn handle_method(
+        &mut self,
+        impl_for_ty: Rc<Ty>,
+        node: &Fn,
+        without_define: bool,
+    ) -> anyhow::Result<()> {
+        let mangled_name = self.mangle_method(impl_for_ty.clone(), node);
+        self.handle_method_internal(&mangled_name, impl_for_ty, node.clone(), without_define)
     }
 
-    fn define_method_internal(
+    fn handle_method_internal(
         &mut self,
         mangled_name: &str,
         impl_for_ty: Rc<Ty>,
         mut node: Fn,
+        without_define: bool,
     ) -> anyhow::Result<()> {
         let span = node.span;
 
@@ -339,12 +398,34 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
             Some(mutability) => {
                 // Method
                 push_self_to_front(&mut node.decl.params, impl_for_ty, mutability);
-                self.build_fn(mangled_name, node, span)?;
+                if without_define {
+                    self.declare_fn(
+                        mangled_name,
+                        node.decl.params,
+                        node.decl.return_ty.into(),
+                        Linkage::External,
+                        false,
+                        span,
+                    )?;
+                } else {
+                    self.build_fn(mangled_name, node, span)?;
+                }
             }
 
             None => {
                 // Static method
-                self.build_fn(mangled_name, node, span)?;
+                if without_define {
+                    self.declare_fn(
+                        mangled_name,
+                        node.decl.params,
+                        node.decl.return_ty.into(),
+                        Linkage::External,
+                        false,
+                        span,
+                    )?;
+                } else {
+                    self.build_fn(mangled_name, node, span)?;
+                }
             }
         }
 
@@ -359,15 +440,15 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         is_external: Option<Ident /* Module name */>,
     ) -> anyhow::Result<()> {
         let return_ty = if node.decl.return_ty.is_some() {
-            let ty = Ty {
+            let ty = Rc::new(Ty {
                 kind: node.decl.return_ty.as_ref().unwrap().kind.clone(),
                 mutability: node.decl.return_ty.unwrap().mutability,
-            };
+            });
 
             // Wrapping with external type.
             Some(if let Some(module) = is_external {
                 if ty.is_udt() {
-                    Ty::new_external(module, ty.into())
+                    Ty::new_external(module, ty).into()
                 } else {
                     // Builtin types
                     ty
@@ -598,6 +679,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                                     mutability: ty.mutability,
                                 }),
                             )
+                            .into()
                         } else {
                             ty
                         })
@@ -678,19 +760,19 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
     fn import_impl(&mut self, impl_: Impl, import_module: Ident) -> anyhow::Result<()> {
         let impl_for_ty = Rc::new(impl_.ty);
 
-        for item in impl_.items {
-            match item.kind {
+        for item in impl_.items.iter() {
+            match &item.kind {
                 TopLevelKind::Fn(func) => {
                     if item.vis.is_private() {
                         continue;
                     }
 
-                    let mangled_name = self.mangle_method(&impl_for_ty, &func);
+                    let mangled_name = self.mangle_method(impl_for_ty.clone(), &func);
 
                     self.declare_method(
                         &mangled_name,
                         impl_for_ty.clone(),
-                        func,
+                        func.clone(),
                         Some(import_module),
                     )?;
                 }

@@ -1,10 +1,9 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     rc::Rc,
 };
 
 use error::CodegenError;
-use generic::{def_generic_args, undef_generic_args};
 use inkwell::{
     basic_block::BasicBlock,
     builder::Builder,
@@ -16,25 +15,32 @@ use inkwell::{
     AddressSpace, OptimizationLevel,
 };
 use kaede_ast::{
-    top::{Enum, GenericParams, Import, Struct, StructField, TopLevel, TopLevelKind, Visibility},
+    top::{
+        Enum, Fn, GenericParams, Impl, Import, Param, Params, Struct, StructField, TopLevel,
+        TopLevelKind, Visibility,
+    },
     CompileUnit,
 };
 use kaede_common::kaede_dir;
 use kaede_span::{file::FilePath, Span};
 use kaede_symbol::{Ident, Symbol};
 use kaede_type::{
-    FundamentalType, FundamentalTypeKind, GenericArgs, Mutability, ReferenceType, Ty, TyKind,
-    UserDefinedType,
+    ExternalType, FundamentalType, FundamentalTypeKind, GenericArgs, Mutability, PointerType,
+    ReferenceType, Ty, TyKind, UserDefinedType,
 };
 use mangle::mangle_udt_name;
-use tcx::{EnumInfo, EnumVariantInfo, FunctionInfo, GenericKind, ReturnType, StructInfo, TypeCtx};
-use top::{build_top_level, create_enum_type, create_struct_type};
+use tcx::{
+    EnumInfo, EnumVariantInfo, FunctionInfo, GenericArgTable, GenericKind, ReturnType, StructInfo,
+    TypeCtx,
+};
+use top::{
+    build_top_level, build_top_level_with_generic_args, create_enum_type, create_struct_type,
+};
 
 use crate::tcx::UdtKind;
 
 pub mod error;
 mod expr;
-mod generic;
 mod mangle;
 mod stmt;
 mod tcx;
@@ -58,6 +64,100 @@ fn get_loaded_pointer<'ctx>(load_instr: &InstructionValue<'ctx>) -> Option<Point
     None
 }
 
+fn type_to_actual(cucx: &CompileUnitCtx, ty: Rc<Ty>, span: Span) -> anyhow::Result<Rc<Ty>> {
+    match ty.kind.as_ref() {
+        TyKind::UserDefined(udt) => {
+            if udt.generic_args.is_none() {
+                Ok(ty)
+            } else {
+                let mut generic_args = udt.generic_args.clone();
+                for ga in generic_args.as_mut().unwrap().types.iter_mut() {
+                    *ga = type_to_actual(cucx, ga.clone(), span)?;
+                }
+                Ok(Ty {
+                    kind: TyKind::UserDefined(UserDefinedType {
+                        generic_args,
+                        ..udt.clone()
+                    })
+                    .into(),
+                    mutability: ty.mutability,
+                }
+                .into())
+            }
+        }
+        TyKind::Array((elem_ty, size)) => {
+            let actual_elem_ty = type_to_actual(cucx, elem_ty.clone(), span)?;
+
+            Ok(Ty {
+                kind: TyKind::Array((actual_elem_ty.into(), *size)).into(),
+                mutability: ty.mutability,
+            }
+            .into())
+        }
+        TyKind::Tuple(types) => {
+            let mut actual_types = Vec::new();
+            for ty in types.iter() {
+                actual_types.push(type_to_actual(cucx, ty.clone(), span)?);
+            }
+
+            Ok(Ty {
+                kind: TyKind::Tuple(actual_types).into(),
+                mutability: ty.mutability,
+            }
+            .into())
+        }
+        TyKind::Pointer(pty) => {
+            let actual_pointee_type = type_to_actual(cucx, pty.pointee_ty.clone(), span)?;
+
+            Ok(Ty {
+                kind: TyKind::Pointer(PointerType {
+                    pointee_ty: actual_pointee_type,
+                })
+                .into(),
+                mutability: ty.mutability,
+            }
+            .into())
+        }
+        TyKind::Reference(rty) => {
+            let actual_refee_ty = type_to_actual(cucx, rty.refee_ty.clone(), span)?;
+
+            Ok(Ty {
+                kind: TyKind::Reference(ReferenceType {
+                    refee_ty: actual_refee_ty.into(),
+                })
+                .into(),
+                mutability: ty.mutability,
+            }
+            .into())
+        }
+        TyKind::Generic(gty) => {
+            if let Some(actual_ty) = cucx.tcx.lookup_generic_arg(gty.name.symbol()) {
+                Ok(actual_ty)
+            } else {
+                Err(CodegenError::Undeclared {
+                    name: gty.name.symbol(),
+                    span,
+                }
+                .into())
+            }
+        }
+        TyKind::External(ety) => {
+            let actual = type_to_actual(cucx, ety.ty.clone(), span)?;
+            Ok(Ty {
+                kind: TyKind::External(ExternalType {
+                    ty: actual,
+                    module_name: ety.module_name,
+                })
+                .into(),
+                mutability: ty.mutability,
+            }
+            .into())
+        }
+        TyKind::Fundamental(_) => Ok(ty),
+        TyKind::Inferred | TyKind::Unit | TyKind::Never => unreachable!(),
+    }
+}
+
 fn generic_types_to_actual_in_struct(
     cucx: &CompileUnitCtx,
     fields: &[StructField],
@@ -65,36 +165,13 @@ fn generic_types_to_actual_in_struct(
     let mut actual = Vec::new();
 
     for field in fields.iter() {
-        let field_ty_name = match field.ty.kind.as_ref() {
-            TyKind::Generic(gty) => gty.name,
-            _ => {
-                actual.push(field.clone());
-                continue;
+        actual.push(
+            StructField {
+                ty: type_to_actual(cucx, field.ty.clone(), field.name.span()).unwrap(),
+                ..field.clone()
             }
-        };
-
-        let udt_kind = match cucx.tcx.get_udt(field_ty_name.symbol()) {
-            Some(udt_kind) => udt_kind,
-            None => {
-                actual.push(field.clone());
-                continue;
-            }
-        };
-
-        match udt_kind.as_ref() {
-            UdtKind::GenericArg(ty) => {
-                // Replace with actual type
-                actual.push(StructField {
-                    ty: ty.clone(),
-                    ..field.clone()
-                });
-                continue;
-            }
-            _ => {
-                actual.push(field.clone());
-                continue;
-            }
-        }
+            .into(),
+        );
     }
 
     actual
@@ -115,39 +192,13 @@ fn generic_types_to_actual_in_enum(
             }
         };
 
-        let variant_ty_name = match variant_ty.kind.as_ref() {
-            TyKind::Generic(gty) => gty.name,
-            _ => {
-                actual.insert(*variant.0, variant.1.clone());
-                continue;
-            }
-        };
-
-        let udt_kind = match cucx.tcx.get_udt(variant_ty_name.symbol()) {
-            Some(udt_kind) => udt_kind,
-            None => {
-                actual.insert(*variant.0, variant.1.clone());
-                continue;
-            }
-        };
-
-        match udt_kind.as_ref() {
-            UdtKind::GenericArg(ty) => {
-                // Replace with actual type
-                actual.insert(
-                    *variant.0,
-                    EnumVariantInfo {
-                        ty: Some(ty.clone()),
-                        ..*variant.1
-                    },
-                );
-                continue;
-            }
-            _ => {
-                actual.insert(*variant.0, variant.1.clone());
-                continue;
-            }
-        }
+        actual.insert(
+            *variant.0,
+            EnumVariantInfo {
+                ty: Some(type_to_actual(cucx, variant_ty, variant.1.name.span()).unwrap()),
+                ..*variant.1
+            },
+        );
     }
 
     actual
@@ -214,10 +265,6 @@ impl<'ctx> CodegenCtx<'ctx> {
     }
 }
 
-enum LazyDefinedFn {
-    GenericFn((TopLevel, GenericParams, GenericArgs)),
-}
-
 struct ModulesForMangle {
     names: Vec<Ident>,
 }
@@ -278,7 +325,7 @@ pub struct CompileUnitCtx<'ctx> {
     is_ifmatch_stmt: bool,
 
     // The elements of this array will begin to be generated sequentially after the module's code generation is finished.
-    lazy_define_fns: Vec<LazyDefinedFn>,
+    lazy_defines: Vec<(TopLevel, GenericParams, GenericArgs)>,
 }
 
 impl<'ctx> CompileUnitCtx<'ctx> {
@@ -307,7 +354,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             imported_modules: HashSet::new(),
             loop_break_bb_stk: Vec::new(),
             is_ifmatch_stmt: false,
-            lazy_define_fns: Vec::new(),
+            lazy_defines: Vec::new(),
         })
     }
 
@@ -473,13 +520,16 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             }
         }
 
-        def_generic_args(self, ast.generic_params.as_ref().unwrap(), generic_args)?;
+        self.tcx.push_generic_arg_table(GenericArgTable::from((
+            ast.generic_params.as_ref().unwrap().clone(),
+            generic_args.clone(),
+        )));
 
         let ty = create_struct_type(self, mangled_name, &ast.fields)?;
         // To resolve generics types when using this struct.
         let actual_fields = generic_types_to_actual_in_struct(self, &ast.fields);
 
-        undef_generic_args(self, ast.generic_params.as_ref().unwrap());
+        self.tcx.pop_generic_arg_table();
 
         let fields = actual_fields
             .iter()
@@ -513,13 +563,16 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             }
         }
 
-        def_generic_args(self, ast.generic_params.as_ref().unwrap(), generic_args)?;
+        self.tcx.push_generic_arg_table(GenericArgTable::from((
+            ast.generic_params.as_ref().unwrap().clone(),
+            generic_args.clone(),
+        )));
 
         let (variants, ty, _) = create_enum_type(self, ast, mangled_name, false);
         // To resolve generics types when using this struct.
         let variants = generic_types_to_actual_in_enum(self, &variants);
 
-        undef_generic_args(self, ast.generic_params.as_ref().unwrap());
+        self.tcx.pop_generic_arg_table();
 
         self.tcx.add_udt(
             mangled_name,
@@ -534,28 +587,135 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         Ok(ty)
     }
 
+    fn generic_args_to_actual(&self, generic_args: &GenericArgs) -> anyhow::Result<GenericArgs> {
+        let mut actual_types = Vec::new();
+
+        for ty in generic_args.types.iter() {
+            actual_types.push(type_to_actual(self, ty.clone(), generic_args.span)?);
+        }
+
+        assert_eq!(actual_types.len(), generic_args.types.len());
+
+        Ok(GenericArgs {
+            types: actual_types,
+            span: generic_args.span,
+        })
+    }
+
+    fn fn_types_to_actual(&self, fn_: &mut Fn) -> anyhow::Result<()> {
+        let mut actual_params = VecDeque::new();
+
+        for param in fn_.decl.params.v.iter() {
+            actual_params.push_back(Param {
+                ty: type_to_actual(self, param.ty.clone(), fn_.span)?,
+                ..*param
+            });
+        }
+
+        let actual_return_ty = match &fn_.decl.return_ty {
+            Some(ty) => Some(type_to_actual(self, ty.clone(), fn_.span)?),
+            None => None,
+        };
+
+        fn_.decl.params = Params {
+            v: actual_params,
+            ..fn_.decl.params
+        };
+
+        if let Some(ty) = actual_return_ty {
+            fn_.decl.return_ty = Some(ty);
+        }
+
+        Ok(())
+    }
+
+    fn impl_types_to_actual(&self, impl_: &Impl) -> anyhow::Result<Impl> {
+        let mut actual_items = Vec::new();
+
+        for item in impl_.items.iter() {
+            match &item.kind {
+                TopLevelKind::Fn(fn_) => {
+                    let mut fn_ = fn_.clone();
+                    self.fn_types_to_actual(&mut fn_)?;
+                    actual_items.push(TopLevel {
+                        kind: TopLevelKind::Fn(fn_),
+                        ..*item
+                    });
+                }
+                _ => todo!(),
+            }
+        }
+
+        Ok(Impl {
+            items: actual_items.into(),
+            ..impl_.clone()
+        })
+    }
+
     fn create_generic_type(&mut self, udt: &UserDefinedType) -> anyhow::Result<StructType<'ctx>> {
-        let kind = self
-            .tcx
-            .get_generic_info(mangle_udt_name(
-                self,
-                &UserDefinedType {
-                    name: udt.name,
-                    generic_args: None, // Generic table's key doesn't include generic arg types.
-                },
-            ))
-            .unwrap();
+        let mangled_name = mangle_udt_name(
+            self,
+            &UserDefinedType {
+                name: udt.name,
+                generic_args: None, // Generic table's key doesn't include generic arg types.
+            },
+        );
+
+        let kind = self.tcx.get_generic_info(mangled_name).unwrap();
 
         let generic_args = udt.generic_args.as_ref().unwrap();
+
+        // Define methods
+        if let Some(impl_) = self.tcx.get_generic_impl(mangled_name) {
+            let mut new_impl = impl_.0.clone();
+            new_impl.generic_params = None;
+
+            self.tcx.push_generic_arg_table(GenericArgTable::from((
+                impl_.0.generic_params.as_ref().unwrap().clone(),
+                generic_args.clone(),
+            )));
+
+            let generic_args_with_actual_types = self.generic_args_to_actual(generic_args)?;
+
+            // To avoid infinite loops, check if already defined.
+            if !self
+                .tcx
+                .is_defined_generic_impl(mangled_name, &generic_args_with_actual_types)
+            {
+                self.tcx.register_defined_generic_impl(
+                    mangled_name,
+                    generic_args_with_actual_types.clone(),
+                );
+
+                new_impl = self.impl_types_to_actual(&new_impl)?;
+
+                let bb_backup = self.builder.get_insert_block().unwrap();
+
+                build_top_level_with_generic_args(
+                    self,
+                    TopLevel {
+                        kind: TopLevelKind::Impl(new_impl.clone()),
+                        vis: impl_.1,
+                        span: impl_.2,
+                    },
+                    impl_.0.generic_params.clone().unwrap(),
+                    generic_args_with_actual_types,
+                )?;
+
+                self.builder.position_at_end(bb_backup);
+            }
+
+            self.tcx.pop_generic_arg_table();
+        }
 
         let mangled_generic_name = mangle_udt_name(self, udt);
 
         match kind.as_ref() {
             GenericKind::Struct(ast) => {
-                self.create_generic_struct_type(mangled_generic_name, ast, generic_args)
+                self.create_generic_struct_type(mangled_generic_name, ast, &generic_args)
             }
             GenericKind::Enum(ast) => {
-                self.create_generic_enum_type(mangled_generic_name, ast, generic_args)
+                self.create_generic_enum_type(mangled_generic_name, ast, &generic_args)
             }
             _ => unimplemented!(),
         }
@@ -584,6 +744,10 @@ impl<'ctx> CompileUnitCtx<'ctx> {
                     return self.create_generic_type(udt).map(|ty| ty.into());
                 }
 
+                if let Some(generic_arg) = self.tcx.lookup_generic_arg(udt.name.symbol()) {
+                    return self.conv_to_llvm_type(&generic_arg, span);
+                }
+
                 let mangled_name = mangle_udt_name(self, udt);
 
                 let udt_kind = match self.tcx.get_udt(mangled_name) {
@@ -600,13 +764,12 @@ impl<'ctx> CompileUnitCtx<'ctx> {
                 match udt_kind.as_ref() {
                     UdtKind::Struct(sty) => sty.ty.into(),
                     UdtKind::Enum(ety) => ety.ty.as_basic_type_enum(),
-                    UdtKind::GenericArg(ty) => self.conv_to_llvm_type(ty, span)?,
                 }
             }
 
             TyKind::Generic(gty) => {
-                let udt_kind = match self.tcx.get_udt(gty.name.symbol()) {
-                    Some(udt) => udt,
+                let actual_ty = match self.tcx.lookup_generic_arg(gty.name.symbol()) {
+                    Some(ty) => ty,
                     None => {
                         return Err(CodegenError::Undeclared {
                             name: gty.name.symbol(),
@@ -616,23 +779,10 @@ impl<'ctx> CompileUnitCtx<'ctx> {
                     }
                 };
 
-                match udt_kind.as_ref() {
-                    UdtKind::GenericArg(ty) => self.conv_to_llvm_type(ty, span)?,
-                    _ => unreachable!(),
-                }
+                self.conv_to_llvm_type(&actual_ty, span)?
             }
 
-            TyKind::Reference(rty) => {
-                // If the reference includes generic types, create a generic type.
-                // But return a pointer type.
-                if let TyKind::UserDefined(udt) = rty.get_base_type().kind.as_ref() {
-                    if udt.generic_args.is_some() {
-                        self.create_generic_type(udt)?;
-                    }
-                }
-
-                self.context().ptr_type(AddressSpace::default()).into()
-            }
+            TyKind::Reference(_) => self.context().ptr_type(AddressSpace::default()).into(),
 
             TyKind::Pointer(pty) => {
                 // If the reference includes generic types, create a generic type.
@@ -726,18 +876,20 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         Ok(())
     }
 
-    fn handle_lazy_define_fns(&mut self) {
-        let lazy_fns: Vec<_> = self.lazy_define_fns.drain(..).collect();
+    fn handle_lazy_defines(&mut self) -> anyhow::Result<()> {
+        let bb_backup = self.builder.get_insert_block();
 
-        for lazy in lazy_fns {
-            match lazy {
-                LazyDefinedFn::GenericFn((top, generic_params, generic_args)) => {
-                    def_generic_args(self, &generic_params, &generic_args).unwrap();
-                    build_top_level(self, top).unwrap();
-                    undef_generic_args(self, &generic_params);
-                }
-            }
+        let lazy_fns: Vec<_> = self.lazy_defines.drain(..).collect();
+
+        for (top, generic_params, generic_args) in lazy_fns {
+            build_top_level_with_generic_args(self, top, generic_params, generic_args)?;
         }
+
+        if let Some(bb) = bb_backup {
+            self.builder.position_at_end(bb);
+        }
+
+        Ok(())
     }
 
     // This function doesn't optimize modules.
@@ -759,7 +911,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
 
         self.build_main_fn()?;
 
-        self.handle_lazy_define_fns();
+        self.handle_lazy_defines()?;
 
         self.verify_module()?;
 

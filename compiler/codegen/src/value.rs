@@ -62,7 +62,10 @@ impl<'ctx> Value<'ctx> {
 
     /// If the value is `void`, this function **panics**
     pub fn get_value(&self) -> BasicValueEnum<'ctx> {
-        self.val.unwrap()
+        match &self.val {
+            Some(val) => *val,
+            None => panic!("Value type is {}", self.get_type().kind),
+        }
     }
 
     /// If the type is `void`, this function **panics**

@@ -6,12 +6,13 @@ use std::{
 
 use crate::{
     error::CodegenError,
-    generic::{def_generic_args, undef_generic_args},
     mangle::{mangle_name, mangle_udt_name},
-    stmt::{build_block, build_normal_let, build_statement, change_mutability_dup},
-    tcx::{EnumInfo, EnumVariantInfo, GenericKind, ReturnType, UdtKind, VariableTable},
+    stmt::{build_block, build_normal_let, build_statement},
+    tcx::{
+        EnumInfo, EnumVariantInfo, GenericArgTable, GenericKind, ReturnType, UdtKind, VariableTable,
+    },
     value::{has_signed, Value},
-    CompileUnitCtx, LazyDefinedFn,
+    CompileUnitCtx,
 };
 
 use inkwell::{
@@ -32,8 +33,9 @@ use kaede_ast::{
 use kaede_span::Span;
 use kaede_symbol::{Ident, Symbol};
 use kaede_type::{
-    is_same_type, make_fundamental_type, wrap_in_ref, FundamentalType, FundamentalTypeKind,
-    GenericArgs, Mutability, PointerType, ReferenceType, Ty, TyKind, UserDefinedType,
+    change_mutability_dup, is_same_type, make_fundamental_type, wrap_in_ref, FundamentalType,
+    FundamentalTypeKind, GenericArgs, Mutability, PointerType, ReferenceType, Ty, TyKind,
+    UserDefinedType,
 };
 
 pub fn mangle_generic_fn_name(
@@ -374,6 +376,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
         let value_ty = value.get_type();
 
+        // Prepare for external types
         let (value_ty, bkup) = if let TyKind::External(ety) = value_ty.kind.as_ref() {
             (
                 ety.ty.clone(),
@@ -637,6 +640,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
     ) -> anyhow::Result<Value<'ctx>> {
         let base_ty_of_ref = refty.get_base_type();
 
+        // Prepare for external types
         let (base_ty, bkup) = if let TyKind::External(ety) = base_ty_of_ref.kind.as_ref() {
             let bkup = self
                 .cucx
@@ -651,6 +655,9 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             TyKind::UserDefined(udt) => udt,
             _ => unimplemented!(),
         };
+
+        // For when the target was a generic user-defined type.
+        self.cucx.conv_to_llvm_type(&base_ty, node.target.span)?;
 
         let mangled_name = mangle_udt_name(self.cucx, udt);
 
@@ -767,7 +774,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                     name: *param_name,
                     enum_ty: enum_info.ty,
                     enum_value: target.clone(),
-                    variant_ty: ty.clone(),
+                    variant_ty: change_mutability_dup(ty.clone(), target.get_type().mutability),
                     span,
                 }),
                 None => {
@@ -1101,7 +1108,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         build_normal_let(
             self.cucx,
             &enum_unpack.name,
-            Mutability::Not,
+            enum_unpack.variant_ty.mutability,
             Some(variant_value),
             Rc::new(Ty::new_inferred(Mutability::Not)),
             enum_unpack.span,
@@ -1111,6 +1118,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
     }
 
     fn struct_literal(&mut self, node: &StructLiteral) -> anyhow::Result<Value<'ctx>> {
+        // Prepare for external types
         let bkup = if !node.external_modules.is_empty() {
             Some(
                 self.cucx
@@ -1293,20 +1301,16 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                     }
                 }
 
-                TyKind::Generic(gty) => {
-                    match self.cucx.tcx.get_udt(gty.name.symbol()).unwrap().as_ref() {
-                        UdtKind::GenericArg(actual) => match actual.kind.as_ref() {
-                            TyKind::Reference(rty) => match rty.refee_ty.kind.as_ref() {
-                                TyKind::Array((elem_ty, _)) => {
-                                    (rty.refee_ty.clone(), elem_ty.clone())
-                                }
-                                _ => todo!("Error"),
-                            },
+                TyKind::Generic(gty) => match self.cucx.tcx.lookup_generic_arg(gty.name.symbol()) {
+                    Some(ga) => match ga.kind.as_ref() {
+                        TyKind::Reference(rty) => match rty.refee_ty.kind.as_ref() {
+                            TyKind::Array((elem_ty, _)) => (rty.refee_ty.clone(), elem_ty.clone()),
                             _ => todo!("Error"),
                         },
                         _ => todo!("Error"),
-                    }
-                }
+                    },
+                    None => todo!("Error"),
+                },
 
                 _ => unreachable!(),
             }
@@ -1520,6 +1524,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         let (left, modules_bkup, generic_args) = match &node.lhs.kind {
             ExprKind::Ident(ident) => (ident, None, None),
             ExprKind::ExternalIdent(eident) => {
+                // Prepare for external types
                 let bkup = self
                     .cucx
                     .modules_for_mangle
@@ -1530,12 +1535,31 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             _ => todo!(),
         };
 
+        let udt = if generic_args.is_some() {
+            let udt = UserDefinedType {
+                name: *left,
+                generic_args: generic_args.clone(),
+            };
+            let ty = Ty {
+                kind: TyKind::UserDefined(udt.clone()).into(),
+                mutability: Mutability::Not,
+            };
+            // Generate methods for generic types.
+            self.cucx.conv_to_llvm_type(&ty, left.span())?;
+            udt
+        } else {
+            UserDefinedType {
+                name: *left,
+                generic_args: None,
+            }
+        };
+
         // Try to create new enum variant with value
         // If it fails, try to call static methods
         let result = if let ExprKind::FnCall(right) = &node.rhs.kind {
             if right.args.0.len() != 1 {
                 // Static methods with no arguments.
-                self.call_static_method(left, right)
+                self.call_static_method(&udt, right)
             } else {
                 let value = right.args.0.front().unwrap();
 
@@ -1549,7 +1573,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                     Ok(val)
                 } else {
                     // Couldn't create enum variant, so try to call static methods
-                    self.call_static_method(left, right)
+                    self.call_static_method(&udt, right)
                 }
             }
         } else if let ExprKind::Ident(right) = &node.rhs.kind {
@@ -1568,11 +1592,14 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
     fn call_static_method(
         &mut self,
-        object_name: &Ident,
+        udt: &UserDefinedType,
         call: &FnCall,
     ) -> anyhow::Result<Value<'ctx>> {
-        // For example: Apple::from
-        let actual_method_name = format!("{}::{}", object_name.as_str(), call.callee.as_str());
+        let mangled_method_name = format!(
+            "{}::{}",
+            mangle_udt_name(self.cucx, udt),
+            call.callee.as_str()
+        );
 
         // Convert arguments(exprs) to values
         let args = {
@@ -1585,7 +1612,12 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             args
         };
 
-        self.build_call_fn(actual_method_name.into(), args, call.span)
+        self.build_call_fn_without_mangle(
+            mangled_method_name.into(),
+            format!("{}::{}", udt, call.callee.as_str()).into(),
+            args,
+            call.span,
+        )
     }
 
     fn create_enum_variant(
@@ -1952,6 +1984,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             return self.str_indexing_or_method_call(&left, &node.rhs, left_ty);
         }
 
+        // Prepare for external types
         let (bkup, left_ty) = if let TyKind::External(ety) = left_ty.kind.as_ref() {
             (
                 Some(
@@ -1982,15 +2015,11 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                 .into());
             }
         } else if let TyKind::Generic(gty) = left_ty.kind.as_ref() {
-            let udt = self.cucx.tcx.get_udt(gty.name.symbol());
+            let generic_arg_type = self.cucx.tcx.lookup_generic_arg(gty.name.symbol()).unwrap();
 
-            if let UdtKind::GenericArg(actual) = udt.as_ref().unwrap().as_ref() {
-                // GenericArg(type) -> type
-                let left = Value::new(left.get_value(), actual.clone());
-                self.struct_access_or_tuple_indexing(&left, node.lhs.span, &node.rhs)
-            } else {
-                unreachable!()
-            }
+            // GenericArg(type) -> type
+            let left = Value::new(left.get_value(), generic_arg_type);
+            self.struct_access_or_tuple_indexing(&left, node.lhs.span, &node.rhs)
         } else {
             // --- Fundamental type method calling ---
             let call_node = match &node.rhs.kind {
@@ -2335,7 +2364,11 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
         // Only declare the function, not define it.
         // If this function is defined now, for some reason we get an error when verifying modules.
-        def_generic_args(self.cucx, generic_params, &generic_args).unwrap();
+        self.cucx.tcx.push_generic_arg_table(GenericArgTable::from((
+            generic_params.clone(),
+            generic_args.clone(),
+        )));
+
         self.cucx.declare_fn(
             mangled_name.as_str(),
             ast.decl
@@ -2349,13 +2382,12 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             false,
             span,
         )?;
-        undef_generic_args(self.cucx, generic_params);
 
-        self.cucx.lazy_define_fns.push(LazyDefinedFn::GenericFn((
-            top,
-            generic_params.clone(),
-            generic_args,
-        )));
+        self.cucx.tcx.pop_generic_arg_table();
+
+        self.cucx
+            .lazy_defines
+            .push((top, generic_params.clone(), generic_args));
 
         Ok(mangled_name)
     }
@@ -2378,6 +2410,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
     }
 
     fn call_fn(&mut self, node: &FnCall) -> anyhow::Result<Value<'ctx>> {
+        // Prepare for external types
         let bkup = if !node.external_modules.is_empty() {
             Some(
                 self.cucx
@@ -2421,24 +2454,29 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         evaled
     }
 
-    fn build_call_fn(
+    fn build_call_fn_without_mangle(
         &mut self,
-        name: Symbol,
+        mangled_name: Symbol,
+        name_for_error: Symbol,
         args: VecDeque<(Value<'ctx>, Span)>,
         span: Span,
     ) -> anyhow::Result<Value<'ctx>> {
-        let mangled_name = mangle_name(self.cucx, name);
-
         let func = self
             .cucx
             .module
-            .get_function(&mangled_name)
-            .or_else(|| self.cucx.module.get_function(name.as_str())); // No mangled function, external functions, external static methods
+            .get_function(mangled_name.as_str())
+            .or_else(|| self.cucx.module.get_function(name_for_error.as_str())); // No mangled function, external functions, external static methods
 
         let func = match func {
             Some(func) => func,
 
-            None => return Err(CodegenError::Undeclared { name, span }.into()),
+            None => {
+                return Err(CodegenError::Undeclared {
+                    name: name_for_error,
+                    span,
+                }
+                .into())
+            }
         };
 
         let function_info = self.cucx.tcx.get_function_info(func).unwrap();
@@ -2476,6 +2514,16 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             // Without return value (void function)
             None => Value::new_void(),
         })
+    }
+
+    fn build_call_fn(
+        &mut self,
+        name: Symbol,
+        args: VecDeque<(Value<'ctx>, Span)>,
+        span: Span,
+    ) -> anyhow::Result<Value<'ctx>> {
+        let mangled_name = mangle_name(self.cucx, name);
+        self.build_call_fn_without_mangle(mangled_name.into(), name, args, span)
     }
 
     fn verify_var_args(

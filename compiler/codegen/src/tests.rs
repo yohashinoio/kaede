@@ -728,7 +728,7 @@ fn array_as_argument() -> anyhow::Result<()> {
 
 #[test]
 fn array_as_mutable_argument() -> anyhow::Result<()> {
-    let program = r"fn modify(mut a: [i32; 2]) {
+    let program = r"fn modify(a: mut [i32; 2]) {
         a[0] = 48
         a[1] = 10
     }
@@ -752,7 +752,7 @@ fn array_as_mutable_argument() -> anyhow::Result<()> {
 
 #[test]
 fn immutable_array_as_mutable_argument() {
-    let program = r"fn modify(mut a: [i32; 2]) {
+    let program = r"fn modify(a: mut [i32; 2]) {
         a[0] = 48
         a[1] = 10
     }
@@ -872,7 +872,7 @@ fn tuple_as_argument() -> anyhow::Result<()> {
 
 #[test]
 fn tuple_as_mutable_argument() -> anyhow::Result<()> {
-    let program = r"fn modify(mut tup: (i32, bool)) {
+    let program = r"fn modify(tup: mut (i32, bool)) {
         tup.0 = 58
         tup.1 = true
     }
@@ -1277,7 +1277,7 @@ fn struct_as_mutable_argument() -> anyhow::Result<()> {
         is_female: bool,
     }
 
-    fn f(mut p: Person) {
+    fn f(p: mut Person) {
         p.age = 10
     }
 
@@ -2534,6 +2534,133 @@ fn static_method_with_no_args() -> anyhow::Result<()> {
     fn main(): i32 {
         let a = A::new()
         return a.get_size()
+    }"#;
+
+    assert_eq!(exec(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn generic_method() -> anyhow::Result<()> {
+    let program = r#"struct A<T> {
+        value: T,
+    }
+    impl<T> A<T> {
+        fn new(value: T): A<T> {
+            return A<T> { value: value }
+        }
+        fn get_value(self): T {
+            return self.value
+        }
+        fn is_equal(self, other: A<T>): bool {
+            return self.value == other.value
+        }
+    }
+    fn main(): i32 {
+        let a = A<i32>::new(58)
+        if a.is_equal(A<i32>::new(58)) {
+            return a.get_value()
+        }
+        return 123
+    }"#;
+
+    assert_eq!(exec(program)?, 58);
+
+    Ok(())
+}
+
+#[test]
+fn complex_generic_struct_method() -> anyhow::Result<()> {
+    let program = r#"pub enum Option<T> {
+        Some(T),
+        None,
+    }
+
+    pub struct List<T> {
+        value: Option<T>,
+        next: Option<List<T>>,
+    }
+
+    impl<T> List<T> {
+        fn new(): mut List<T> {
+            return List<T> { value: Option<T>::None, next: Option<List<T>>::None }
+        }
+
+        fn len(self): u32 {
+            return match self.next {
+                Option::Some(ne) => 1 + ne.len(),
+                Option::None => {
+                    match self.value {
+                        Option::Some(_) => 1,
+                        Option::None => 0
+                    }
+                }
+            }
+        }
+
+        fn push(mut self, elem: T) {
+            match self.next {
+                Option::Some(ne) => {
+                    ne.push(elem)
+                },
+
+                Option::None => {
+                    match self.value {
+                        Option::Some(_) => {
+                            let tmp = List<T> { value: Option<T>::Some(elem), next: Option<List<T>>::None }
+                            self.next = Option<List<T>>::Some(tmp)
+                        },
+                        Option::None => {
+                            // For the first push
+                            self.value = Option<T>::Some(elem)
+                        }
+                    }
+                }
+            }
+        }
+
+        fn at(self, idx: u32): Option<T> {
+            return match self.next {
+                Option::Some(ne) => {
+                    if idx == 0 {
+                        self.value
+                    } else {
+                        ne.at(idx - 1)
+                    }
+                },
+
+                Option::None => {
+                    self.value
+                }
+            }
+        }
+    }
+
+    fn main(): i32 {
+        let mut v = List<i32>::new()
+        v.push(48)
+        v.push(10)
+
+        let mut i = 0 as u32
+        let mut len = v.len()
+
+        let mut sum = 0
+
+        loop {
+            if i == len {
+                break
+            }
+
+            sum = sum + match v.at(i) {
+                Option::Some(tmp) => tmp,
+                Option::None => break,
+            }
+
+            i = i + 1
+        }
+
+        return sum
     }"#;
 
     assert_eq!(exec(program)?, 58);

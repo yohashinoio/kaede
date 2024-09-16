@@ -27,7 +27,7 @@ pub struct Parser {
 
     in_cond_expr: bool,
 
-    generic_param_names: Vec<Symbol>,
+    generic_param_names_stack: Vec<Vec<Symbol>>,
 
     imported_modules: Vec<Symbol>,
 }
@@ -40,7 +40,7 @@ impl Parser {
             checkpoint: 0,
             end_token: None,
             in_cond_expr: false,
-            generic_param_names: Vec::new(),
+            generic_param_names_stack: Vec::new(),
             file,
             imported_modules: Vec::new(),
         }

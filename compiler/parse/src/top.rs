@@ -52,8 +52,6 @@ impl Parser {
 
         self.consume_semi()?;
 
-        self.generic_param_names.clear();
-
         Ok(TopLevel { kind, vis, span })
     }
 
@@ -87,10 +85,6 @@ impl Parser {
         }
 
         Ok(if let Ok(span) = self.consume(&TokenKind::Gt) {
-            names.iter().for_each(|name| {
-                self.generic_param_names.push(name.symbol());
-            });
-
             Some(GenericParams {
                 names,
                 span: self.new_span(start, span.finish),
@@ -104,6 +98,18 @@ impl Parser {
     fn impl_(&mut self) -> ParseResult<Impl> {
         let start = self.consume(&TokenKind::Impl).unwrap().start;
 
+        // Push generic param names to determine if types is generic types.
+        let generic_params = if self.check(&TokenKind::Lt) {
+            self.generic_params()?
+        } else {
+            None
+        };
+
+        if let Some(params) = &generic_params {
+            self.generic_param_names_stack
+                .push(params.names.iter().map(|i| i.symbol()).collect());
+        }
+
         let (ty, _) = self.ty()?;
 
         self.consume(&TokenKind::OpenBrace)?;
@@ -112,9 +118,15 @@ impl Parser {
 
         loop {
             if let Ok(span) = self.consume(&TokenKind::CloseBrace) {
+                // Pop generic param names.
+                if generic_params.is_some() {
+                    self.generic_param_names_stack.pop();
+                }
+
                 return Ok(Impl {
+                    generic_params,
                     ty,
-                    items,
+                    items: Rc::new(items),
                     span: self.new_span(start, span.finish),
                 });
             }
@@ -148,6 +160,12 @@ impl Parser {
             None
         };
 
+        // Push generic param names to determine if types is generic types.
+        if let Some(params) = &generic_params {
+            self.generic_param_names_stack
+                .push(params.names.iter().map(|i| i.symbol()).collect());
+        }
+
         let params_start = self.consume(&TokenKind::OpenParen)?.start;
 
         let mutability = self.consume_b(&TokenKind::Mut).into();
@@ -175,10 +193,15 @@ impl Parser {
         };
 
         let (return_ty, finish) = if let Ok(span) = self.consume(&TokenKind::Colon) {
-            (Some(self.ty()?.0), span.finish)
+            (Some(Rc::new(self.ty()?.0)), span.finish)
         } else {
             (None, params.span.finish)
         };
+
+        // Pop generic param names.
+        if generic_params.is_some() {
+            self.generic_param_names_stack.pop();
+        }
 
         Ok(FnDecl {
             self_: if has_self { Some(mutability) } else { None },
@@ -266,11 +289,22 @@ impl Parser {
             None
         };
 
+        // Push generic param names to determine if types is generic types.
+        if let Some(params) = &generic_params {
+            self.generic_param_names_stack
+                .push(params.names.iter().map(|i| i.symbol()).collect());
+        }
+
         self.consume(&TokenKind::OpenBrace)?;
 
         let variants = self.enum_variants()?;
 
         let finish = self.consume(&TokenKind::CloseBrace)?.finish;
+
+        // Pop generic param names.
+        if generic_params.is_some() {
+            self.generic_param_names_stack.pop();
+        }
 
         Ok(Enum {
             name,
@@ -330,6 +364,12 @@ impl Parser {
             None
         };
 
+        // Push generic param names to determine if types is generic types.
+        if let Some(params) = &generic_params {
+            self.generic_param_names_stack
+                .push(params.names.iter().map(|i| i.symbol()).collect());
+        }
+
         self.consume(&TokenKind::OpenBrace)?;
 
         let fields = self.struct_fields()?;
@@ -337,6 +377,11 @@ impl Parser {
         let finish = self.consume(&TokenKind::CloseBrace)?.finish;
 
         let span = self.new_span(start, finish);
+
+        // Pop generic param names.
+        if generic_params.is_some() {
+            self.generic_param_names_stack.pop();
+        }
 
         Ok(Struct {
             name,

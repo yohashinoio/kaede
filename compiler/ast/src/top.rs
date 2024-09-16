@@ -69,17 +69,17 @@ pub struct Params {
     pub is_var_args: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FnDecl {
     pub self_: Option<Mutability>,
     pub name: Ident,
     pub generic_params: Option<GenericParams>,
     pub params: Params,
-    pub return_ty: Option<Ty>,
+    pub return_ty: Option<Rc<Ty>>,
     pub span: Span,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Fn {
     pub decl: FnDecl,
     pub body: Rc<Block>,
@@ -92,10 +92,11 @@ pub struct Import {
     pub span: Span,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Impl {
     pub ty: Ty,
-    pub items: Vec<TopLevel>,
+    pub generic_params: Option<GenericParams>,
+    pub items: Rc<Vec<TopLevel>>,
     pub span: Span,
 }
 

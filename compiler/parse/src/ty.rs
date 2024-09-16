@@ -113,8 +113,15 @@ impl Parser {
                         None
                     };
 
-                    if self.generic_param_names.contains(&type_ident.symbol()) {
-                        // Generic types
+                    let mut is_generic_type = false;
+                    for names in self.generic_param_names_stack.iter() {
+                        if names.contains(&type_ident.symbol()) {
+                            is_generic_type = true;
+                            break;
+                        }
+                    }
+
+                    if is_generic_type {
                         Ty {
                             kind: TyKind::Generic(GenericType { name: type_ident }).into(),
                             mutability: Mutability::Not,
