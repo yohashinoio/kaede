@@ -527,7 +527,7 @@ impl ReferenceType {
     }
 }
 
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone)]
 pub struct GenericType {
     pub name: Ident,
 }
