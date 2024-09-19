@@ -1978,10 +1978,10 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
         let left = build_expression(self.cucx, &node.lhs)?;
 
-        let left_ty = &left.get_type();
+        let left_ty = left.get_type();
 
         if left_ty.is_str() {
-            return self.str_indexing_or_method_call(&left, &node.rhs, left_ty);
+            return self.str_indexing_or_method_call(&left, &node.rhs, &left_ty);
         }
 
         // Prepare for external types
