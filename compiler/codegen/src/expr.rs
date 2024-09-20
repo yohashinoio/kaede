@@ -2552,7 +2552,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
     fn verify_arg(&mut self, arg: &(Value<'ctx>, Span), param: &Rc<Ty>) -> anyhow::Result<()> {
         let mismatched_err = Err(CodegenError::MismatchedTypes {
-            types: (param.kind.to_string(), arg.0.get_type().kind.to_string()),
+            types: (arg.0.get_type().kind.to_string(), param.kind.to_string()),
             span: arg.1,
         }
         .into());
