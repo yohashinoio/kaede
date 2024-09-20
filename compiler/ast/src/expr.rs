@@ -13,6 +13,7 @@ use crate::stmt::Block;
 pub struct ExternalIdent {
     pub external_modules: Vec<Ident>,
     pub ident: Ident,
+    pub generic_args: Option<GenericArgs>,
     pub span: Span,
 }
 

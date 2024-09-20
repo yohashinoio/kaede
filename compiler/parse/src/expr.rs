@@ -405,6 +405,7 @@ impl Parser {
                             kind: ExprKind::ExternalIdent(ExternalIdent {
                                 external_modules: external_module_names,
                                 ident: udt.name,
+                                generic_args: udt.generic_args.clone(),
                                 span: udt.name.span(),
                             }),
                         });

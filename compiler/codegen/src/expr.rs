@@ -318,7 +318,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
             ExprKind::LogicalNot(node) => self.logical_not(node)?,
 
-            ExprKind::FnCall(node) => self.call_fn(node)?,
+            ExprKind::FnCall(node) => self.fn_call(node)?,
 
             // Boolean literals
             ExprKind::True => self.boolean_literal(true),
@@ -1529,7 +1529,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                     .cucx
                     .modules_for_mangle
                     .drain_and_append(eident.external_modules.clone());
-                (&eident.ident, Some(bkup), None)
+                (&eident.ident, Some(bkup), eident.generic_args.clone())
             }
             ExprKind::GenericIdent(gident) => (&gident.0, None, Some(gident.1.clone())),
             _ => todo!(),
@@ -1558,8 +1558,8 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         // If it fails, try to call static methods
         let result = if let ExprKind::FnCall(right) = &node.rhs.kind {
             if right.args.0.len() != 1 {
-                // Static methods with no arguments.
-                self.call_static_method(&udt, right)
+                // Static methods
+                self.build_static_method_call(&udt, right)
             } else {
                 let value = right.args.0.front().unwrap();
 
@@ -1573,7 +1573,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                     Ok(val)
                 } else {
                     // Couldn't create enum variant, so try to call static methods
-                    self.call_static_method(&udt, right)
+                    self.build_static_method_call(&udt, right)
                 }
             }
         } else if let ExprKind::Ident(right) = &node.rhs.kind {
@@ -1590,7 +1590,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         result
     }
 
-    fn call_static_method(
+    fn build_static_method_call(
         &mut self,
         udt: &UserDefinedType,
         call: &FnCall,
@@ -2128,7 +2128,9 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             ),
 
             // Method
-            ExprKind::FnCall(node) => self.call_struct_method(left, mangled_struct_name, node),
+            ExprKind::FnCall(node) => {
+                self.build_struct_method_call(left, mangled_struct_name, node)
+            }
 
             kind => unreachable!("{:?}", kind),
         }
@@ -2203,7 +2205,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         ))
     }
 
-    fn call_struct_method(
+    fn build_struct_method_call(
         &mut self,
         struct_value: &Value<'ctx>,
         struct_name: Symbol,
@@ -2397,9 +2399,9 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         name: Symbol,
         args: VecDeque<(Value<'ctx>, Span)>,
         span: Span,
-        generic_info: &GenericKind,
+        generic_kind: &GenericKind,
     ) -> anyhow::Result<Value<'ctx>> {
-        let fn_ast_vis = match generic_info {
+        let fn_ast_vis = match generic_kind {
             GenericKind::Func(ast) => ast,
             _ => unreachable!(),
         };
@@ -2409,7 +2411,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         self.build_call_fn(mangled_name, args, span)
     }
 
-    fn call_fn(&mut self, node: &FnCall) -> anyhow::Result<Value<'ctx>> {
+    fn fn_call(&mut self, node: &FnCall) -> anyhow::Result<Value<'ctx>> {
         // Prepare for external types
         let bkup = if !node.external_modules.is_empty() {
             Some(
@@ -2441,7 +2443,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                 node.callee.symbol(),
                 args,
                 node.span,
-                unwraped.as_ref(),
+                &unwraped.kind,
             );
         }
 

@@ -128,6 +128,42 @@ fn import_struct_methods() -> anyhow::Result<()> {
 }
 
 #[test]
+fn import_struct_methods_with_arg_of_self_type() -> anyhow::Result<()> {
+    let tempdir = assert_fs::TempDir::new()?;
+
+    let module = tempdir.child("m.kd");
+    module.write_str(
+        r#"pub struct Apple {
+            size: i32,
+        }
+        impl Apple {
+            pub fn new(size: i32): Apple {
+                return Apple { size: size }
+            }
+
+            pub fn equals(self, other: Apple): bool {
+                return self.size == other.size
+            }
+        }"#,
+    )?;
+
+    let main = tempdir.child("main.kd");
+    main.write_str(
+        r#"import m
+        fn main(): i32 {
+            let apple = m.Apple::new(48);
+            let ichigo = m.Apple::new(10);
+            if !apple.equals(ichigo) {
+                return apple.size + ichigo.size
+            }
+            return 123
+        }"#,
+    )?;
+
+    test(58, &[module.path(), main.path()])
+}
+
+#[test]
 fn import_struct_methods_with_name_conflict() -> anyhow::Result<()> {
     let tempdir = assert_fs::TempDir::new()?;
 
@@ -387,4 +423,125 @@ fn nested_import() -> anyhow::Result<()> {
     )?;
 
     test(58, &[m1.path(), m2.path(), main.path()])
+}
+
+#[test]
+fn import_generic_methods() {
+    let tempdir = assert_fs::TempDir::new().unwrap();
+
+    let module = tempdir.child("m.kd");
+    module
+        .write_str(
+            r#"pub struct Apple<T> {
+            height: T,
+            width: T,
+        }
+
+        impl<T> Apple<T> {
+            pub fn new(height: T, width: T): mut Apple<T> {
+                return Apple<T> { height: height, width: width }
+            }
+
+            pub fn set_height(mut self, height: T) {
+                self.height = height
+            }
+
+            pub fn set_width(mut self, width: T) {
+                self.width = width
+            }
+
+            pub fn get_height(self): i32 {
+                return self.height
+            }
+
+            pub fn get_width(self): i32 {
+                return self.width
+            }
+        }"#,
+        )
+        .unwrap();
+
+    let main = tempdir.child("main.kd");
+    main.write_str(
+        r#"import m
+        fn main(): i32 {
+            let mut apple = m.Apple<i32>::new(123, 456)
+            apple.set_height(48)
+            apple.set_width(10)
+            return apple.get_height() + apple.get_width()
+        }"#,
+    )
+    .unwrap();
+
+    test(58, &[module.path(), main.path()]).unwrap();
+}
+
+#[test]
+fn import_generic_methods_with_arg_of_self_type() {
+    let tempdir = assert_fs::TempDir::new().unwrap();
+
+    let module = tempdir.child("m.kd");
+    module
+        .write_str(
+            r#"pub struct Apple<T> {
+            height: T,
+            width: T,
+        }
+
+        impl<T> Apple<T> {
+            pub fn new(height: T, width: T): mut Apple<T> {
+                return Apple<T> { height: height, width: width }
+            }
+
+            pub fn get(self): T {
+                return self.height + self.width
+            }
+
+            pub fn equals(self, other: Apple<T>): bool {
+                return self.height == other.height && self.width == other.width
+            }
+        }"#,
+        )
+        .unwrap();
+
+    let main = tempdir.child("main.kd");
+    main.write_str(
+        r#"import m
+        fn main(): i32 {
+            let apple = m.Apple<i32>::new(48, 10)
+            if apple.equals(m.Apple<i32>::new(48, 10)) {
+                return apple.get()
+            }
+            return 123
+        }"#,
+    )
+    .unwrap();
+
+    test(58, &[module.path(), main.path()]).unwrap();
+}
+
+#[test]
+fn import_function_with_arg_of_external_struct() -> anyhow::Result<()> {
+    let tempdir = assert_fs::TempDir::new()?;
+
+    let module1 = tempdir.child("m1.kd");
+    module1.write_str(
+        r#"pub struct Apple {
+            size: i32,
+        }
+
+        pub fn get_size(apple: Apple): i32 {
+            return apple.size
+        }"#,
+    )?;
+
+    let module2 = tempdir.child("m2.kd");
+    module2.write_str(
+        r#"import m1
+        fn main(): i32 {
+            return m1.get_size(m1.Apple { size: 58 })
+        }"#,
+    )?;
+
+    test(58, &[module1.path(), module2.path()])
 }

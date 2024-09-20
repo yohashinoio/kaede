@@ -97,7 +97,12 @@ pub enum GenericKind {
     Enum(Enum),
 }
 
-pub type GenericTable = HashMap<Symbol /* Mangled */, Rc<GenericKind>>;
+pub struct GenericTableValue {
+    pub kind: GenericKind,
+    pub is_external: Option<Vec<Ident>>,
+}
+
+pub type GenericTable = HashMap<Symbol /* Mangled */, Rc<GenericTableValue>>;
 
 #[derive(Default)]
 pub struct GenericImplTable {
@@ -212,11 +217,11 @@ impl<'ctx> TypeCtx<'ctx> {
         self.udt_table.get(&name).cloned()
     }
 
-    pub fn add_generic(&mut self, name: Symbol, value: GenericKind) {
+    pub fn add_generic(&mut self, name: Symbol, value: GenericTableValue) {
         assert!(self.generic_table.insert(name, Rc::new(value)).is_none());
     }
 
-    pub fn get_generic_info(&self, name: Symbol) -> Option<Rc<GenericKind>> {
+    pub fn get_generic_info(&self, name: Symbol) -> Option<Rc<GenericTableValue>> {
         self.generic_table.get(&name).cloned()
     }
 

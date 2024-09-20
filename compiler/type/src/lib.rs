@@ -20,16 +20,37 @@ pub fn change_mutability_dup(ty: Rc<Ty>, mutability: Mutability) -> Rc<Ty> {
 pub fn change_mutability(ty: &mut Ty, mutability: Mutability) {
     ty.mutability = mutability;
 
-    if let TyKind::Reference(rty) = ty.kind.as_ref() {
-        let new_refee_ty = Ty {
-            kind: rty.refee_ty.kind.clone(),
-            mutability,
-        };
+    match ty.kind.as_ref() {
+        TyKind::External(ety) => {
+            let mut ety_ty = Ty {
+                kind: ety.ty.kind.clone(),
+                mutability,
+            };
 
-        ty.kind = TyKind::Reference(ReferenceType {
-            refee_ty: new_refee_ty.into(),
-        })
-        .into();
+            change_mutability(&mut ety_ty, mutability);
+
+            ty.kind = TyKind::External(ExternalType {
+                module_name: ety.module_name,
+                ty: ety_ty.into(),
+            })
+            .into();
+        }
+
+        TyKind::Reference(rty) => {
+            let mut new_refee_ty = Ty {
+                kind: rty.refee_ty.kind.clone(),
+                mutability,
+            };
+
+            change_mutability(&mut new_refee_ty, mutability);
+
+            ty.kind = TyKind::Reference(ReferenceType {
+                refee_ty: new_refee_ty.into(),
+            })
+            .into();
+        }
+
+        _ => {}
     }
 }
 

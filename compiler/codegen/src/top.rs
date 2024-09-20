@@ -15,8 +15,8 @@ use crate::{
     mangle::{mangle_method, mangle_name, mangle_static_method, mangle_udt_name},
     stmt::build_block,
     tcx::{
-        EnumInfo, EnumVariantInfo, GenericArgTable, GenericKind, ReturnType, StructInfo, UdtKind,
-        VariableTable,
+        EnumInfo, EnumVariantInfo, GenericArgTable, GenericKind, GenericTableValue, ReturnType,
+        StructInfo, UdtKind, VariableTable,
     },
     CompileUnitCtx,
 };
@@ -183,13 +183,17 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
 
             TopLevelKind::Struct(node) => self.struct_(node)?,
 
-            TopLevelKind::Impl(node) => self.impl_(node, tl.vis, tl.span, false)?,
+            TopLevelKind::Impl(node) => self.impl_(node, tl.vis, tl.span)?,
 
             TopLevelKind::Enum(node) => self.enum_(node),
 
             TopLevelKind::Extern(node) => self.extern_(node)?,
 
             TopLevelKind::GenericFnInstance(node) => self.generic_fn_instance(node)?,
+
+            TopLevelKind::ExternalImpl(node) => {
+                self.external_impl(node.impl_, node.external_modules)?
+            }
         }
 
         Ok(())
@@ -245,9 +249,17 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
 
         // For generic
         if node.generic_params.is_some() {
-            self.cucx
-                .tcx
-                .add_generic(mangled_name, GenericKind::Enum(node));
+            self.cucx.tcx.add_generic(
+                mangled_name,
+                GenericTableValue {
+                    kind: GenericKind::Enum(node),
+                    is_external: if is_external {
+                        Some(self.cucx.modules_for_mangle.get())
+                    } else {
+                        None
+                    },
+                },
+            );
 
             // Generics are not created immediately, but are created when they are used.
             return;
@@ -269,13 +281,28 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         );
     }
 
-    fn impl_(
-        &mut self,
-        node: Impl,
-        vis: Visibility,
-        span: Span,
-        without_define: bool,
-    ) -> anyhow::Result<()> {
+    fn external_impl(&mut self, node: Impl, external_modules: Vec<Ident>) -> anyhow::Result<()> {
+        assert!(node.generic_params.is_none());
+
+        let ty = Rc::new(node.ty);
+
+        for item in node.items.iter() {
+            if item.vis.is_private() {
+                continue;
+            }
+
+            match &item.kind {
+                TopLevelKind::Fn(fn_) => {
+                    self.define_method(ty.clone(), fn_, Some(external_modules.clone()))?
+                }
+                _ => todo!("Error"),
+            }
+        }
+
+        Ok(())
+    }
+
+    fn impl_(&mut self, node: Impl, vis: Visibility, span: Span) -> anyhow::Result<()> {
         if node.generic_params.is_some() {
             let base_ty = if let TyKind::Reference(rty) = node.ty.kind.as_ref() {
                 rty.get_base_type()
@@ -308,7 +335,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
 
         for item in node.items.iter() {
             match &item.kind {
-                TopLevelKind::Fn(fn_) => self.handle_method(ty.clone(), fn_, without_define)?,
+                TopLevelKind::Fn(fn_) => self.define_method(ty.clone(), fn_, None)?,
                 _ => todo!("Error"),
             }
         }
@@ -329,9 +356,13 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
 
         // For generic
         if node.decl.generic_params.is_some() {
-            self.cucx
-                .tcx
-                .add_generic(mangled_name, GenericKind::Func((node, vis)));
+            self.cucx.tcx.add_generic(
+                mangled_name,
+                GenericTableValue {
+                    kind: GenericKind::Func((node, vis)),
+                    is_external: None,
+                },
+            );
 
             // Generic functions are not generated immediately, but are generated when they are used.
             return Ok(());
@@ -375,58 +406,95 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
     /// Static method can also be handled by this function
     ///
     /// If kind is `Normal`, it becomes a static method (said in C++ style)
-    fn handle_method(
+    fn define_method(
         &mut self,
         impl_for_ty: Rc<Ty>,
         node: &Fn,
-        without_define: bool,
+        is_external: Option<Vec<Ident> /* Module names */>,
     ) -> anyhow::Result<()> {
         let mangled_name = self.mangle_method(impl_for_ty.clone(), node);
-        self.handle_method_internal(&mangled_name, impl_for_ty, node.clone(), without_define)
+        self.define_method_internal(&mangled_name, impl_for_ty, node.clone(), is_external)
     }
 
-    fn handle_method_internal(
+    fn define_method_internal(
         &mut self,
         mangled_name: &str,
         impl_for_ty: Rc<Ty>,
         mut node: Fn,
-        without_define: bool,
+        is_external: Option<Vec<Ident> /* Module names */>,
     ) -> anyhow::Result<()> {
         let span = node.span;
+
+        // Preprocess external function (Parameter and return type wrapping)
+        if let Some(externals) = is_external {
+            self.preprocess_for_external_fn(&mut node, externals.clone())?;
+        }
 
         match node.decl.self_ {
             Some(mutability) => {
                 // Method
                 push_self_to_front(&mut node.decl.params, impl_for_ty, mutability);
-                if without_define {
-                    self.declare_fn(
-                        mangled_name,
-                        node.decl.params,
-                        node.decl.return_ty.into(),
-                        Linkage::External,
-                        false,
-                        span,
-                    )?;
-                } else {
-                    self.build_fn(mangled_name, node, span)?;
-                }
+                self.build_fn(mangled_name, node, span)?;
             }
 
             None => {
                 // Static method
-                if without_define {
-                    self.declare_fn(
-                        mangled_name,
-                        node.decl.params,
-                        node.decl.return_ty.into(),
-                        Linkage::External,
-                        false,
-                        span,
-                    )?;
-                } else {
-                    self.build_fn(mangled_name, node, span)?;
-                }
+                self.build_fn(mangled_name, node, span)?;
             }
+        }
+
+        Ok(())
+    }
+
+    fn preprocess_for_external_fn(
+        &mut self,
+        node: &mut Fn,
+        external_modules: Vec<Ident>,
+    ) -> anyhow::Result<()> {
+        // For return type.
+        let return_ty = if node.decl.return_ty.is_some() {
+            let ty = Rc::new(Ty {
+                kind: node.decl.return_ty.as_ref().unwrap().kind.clone(),
+                mutability: node.decl.return_ty.as_ref().unwrap().mutability,
+            });
+
+            // Wrapping with external type.
+            Some(if ty.is_udt() {
+                let mut wrapped = ty.clone();
+                for module in external_modules.iter().rev() {
+                    wrapped = Ty::new_external(*module, wrapped).into();
+                }
+                wrapped
+            } else {
+                // Builtin types
+                ty
+            })
+        } else {
+            None
+        };
+
+        node.decl.return_ty = return_ty;
+
+        // For parameters.
+        for param in node.decl.params.v.iter_mut() {
+            let ty = Rc::new(Ty {
+                kind: param.ty.kind.clone(),
+                mutability: param.ty.mutability,
+            });
+
+            // Wrapping with external type.
+            let wrapped = if ty.is_udt() {
+                let mut wrapped = ty.clone();
+                for module in external_modules.iter().rev() {
+                    wrapped = Ty::new_external(*module, wrapped).into();
+                }
+                wrapped
+            } else {
+                // Builtin types
+                ty
+            };
+
+            param.ty = wrapped;
         }
 
         Ok(())
@@ -437,28 +505,11 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         mangled_name: &str,
         impl_for_ty: Rc<Ty>,
         mut node: Fn,
-        is_external: Option<Ident /* Module name */>,
+        is_external: Option<Vec<Ident> /* Module names */>,
     ) -> anyhow::Result<()> {
-        let return_ty = if node.decl.return_ty.is_some() {
-            let ty = Rc::new(Ty {
-                kind: node.decl.return_ty.as_ref().unwrap().kind.clone(),
-                mutability: node.decl.return_ty.unwrap().mutability,
-            });
-
-            // Wrapping with external type.
-            Some(if let Some(module) = is_external {
-                if ty.is_udt() {
-                    Ty::new_external(module, ty).into()
-                } else {
-                    // Builtin types
-                    ty
-                }
-            } else {
-                ty
-            })
-        } else {
-            None
-        };
+        if let Some(externals) = is_external {
+            self.preprocess_for_external_fn(&mut node, externals.clone())?;
+        }
 
         match node.decl.self_ {
             Some(mutability) => {
@@ -467,7 +518,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                 self.declare_fn(
                     mangled_name,
                     node.decl.params,
-                    return_ty.into(),
+                    node.decl.return_ty.into(),
                     Linkage::External,
                     false,
                     node.span,
@@ -479,7 +530,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                 self.declare_fn(
                     mangled_name,
                     node.decl.params,
-                    return_ty.into(),
+                    node.decl.return_ty.into(),
                     Linkage::External,
                     false,
                     node.span,
@@ -588,9 +639,13 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
 
         // For generic
         if node.generic_params.is_some() {
-            self.cucx
-                .tcx
-                .add_generic(mangled_name, GenericKind::Struct(node));
+            self.cucx.tcx.add_generic(
+                mangled_name,
+                GenericTableValue {
+                    kind: GenericKind::Struct(node),
+                    is_external: None,
+                },
+            );
 
             // Generic structs are not created immediately, but are created when they are used.
             return Ok(());
@@ -657,7 +712,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         for top_level in psd_module.top_levels {
             // Without checking visibility.
             if let TopLevelKind::Impl(impl_) = top_level.kind {
-                self.import_impl(impl_, import_module)?;
+                self.import_impl(impl_, vec![import_module], top_level.vis, top_level.span)?;
                 continue;
             }
 
@@ -669,21 +724,8 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
             match top_level.kind {
                 TopLevelKind::Impl(_) => unreachable!(),
 
-                TopLevelKind::Fn(func) => {
-                    let return_ty = func.decl.return_ty.map(|ty| {
-                        if ty.is_udt() {
-                            Ty::new_external(
-                                import_module,
-                                Rc::new(Ty {
-                                    kind: ty.kind.clone(),
-                                    mutability: ty.mutability,
-                                }),
-                            )
-                            .into()
-                        } else {
-                            ty
-                        }
-                    });
+                TopLevelKind::Fn(mut func) => {
+                    self.preprocess_for_external_fn(&mut func, vec![import_module])?;
 
                     let mangled_name = {
                         let bkup = self
@@ -698,7 +740,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                     self.declare_fn(
                         &mangled_name,
                         func.decl.params,
-                        return_ty.into(),
+                        func.decl.return_ty.into(),
                         Linkage::External,
                         false,
                         func.span,
@@ -718,6 +760,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                 TopLevelKind::Extern(_) => todo!(),
 
                 TopLevelKind::GenericFnInstance(_) => unreachable!(),
+                TopLevelKind::ExternalImpl(_) => unreachable!(),
             }
         }
 
@@ -733,7 +776,22 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
     }
 
     fn import_struct(&mut self, struct_: Struct) -> anyhow::Result<()> {
-        let mangled_name = Symbol::from(mangle_name(self.cucx, struct_.name.symbol()));
+        if struct_.generic_params.is_some() {
+            let mangled_name = mangle_name(self.cucx, struct_.name.symbol()).into();
+
+            self.cucx.tcx.add_generic(
+                mangled_name,
+                GenericTableValue {
+                    kind: GenericKind::Struct(struct_),
+                    is_external: Some(self.cucx.modules_for_mangle.get()),
+                },
+            );
+
+            // Generics are not created immediately, but are created when they are used.
+            return Ok(());
+        }
+
+        let mangled_name = mangle_name(self.cucx, struct_.name.symbol()).into();
 
         let ty = create_struct_type(self.cucx, mangled_name, &struct_.fields)?;
 
@@ -755,7 +813,41 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         Ok(())
     }
 
-    fn import_impl(&mut self, impl_: Impl, import_module: Ident) -> anyhow::Result<()> {
+    fn import_impl(
+        &mut self,
+        impl_: Impl,
+        external_modules: Vec<Ident>,
+        vis: Visibility,
+        span: Span,
+    ) -> anyhow::Result<()> {
+        if impl_.generic_params.is_some() {
+            let base_ty = if let TyKind::Reference(rty) = impl_.ty.kind.as_ref() {
+                rty.get_base_type()
+            } else {
+                todo!("Error")
+            };
+
+            if let TyKind::UserDefined(udt) = base_ty.kind.as_ref() {
+                let mangled_name = mangle_udt_name(
+                    self.cucx,
+                    // Remove generic arguments.
+                    &UserDefinedType {
+                        name: udt.name,
+                        generic_args: None,
+                    },
+                );
+
+                self.cucx
+                    .tcx
+                    .add_generic_impl(mangled_name, (impl_, vis, span));
+
+                // Generic impls are not created immediately, but are created when they are used.
+                return Ok(());
+            } else {
+                todo!("Error")
+            }
+        }
+
         let impl_for_ty = Rc::new(impl_.ty);
 
         for item in impl_.items.iter() {
@@ -771,7 +863,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                         &mangled_name,
                         impl_for_ty.clone(),
                         func.clone(),
-                        Some(import_module),
+                        Some(external_modules.clone()),
                     )?;
                 }
 

@@ -137,6 +137,12 @@ pub struct GenericFnInstance {
 }
 
 #[derive(Debug)]
+pub struct ExternalImpl {
+    pub impl_: Impl,
+    pub external_modules: Vec<Ident>,
+}
+
+#[derive(Debug)]
 pub enum TopLevelKind {
     Fn(Fn),
     Struct(Struct),
@@ -147,4 +153,5 @@ pub enum TopLevelKind {
 
     // Internal use
     GenericFnInstance(GenericFnInstance),
+    ExternalImpl(ExternalImpl),
 }

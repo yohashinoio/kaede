@@ -16,8 +16,8 @@ use inkwell::{
 };
 use kaede_ast::{
     top::{
-        Enum, Fn, GenericParams, Impl, Import, Param, Params, Struct, StructField, TopLevel,
-        TopLevelKind, Visibility,
+        Enum, ExternalImpl, Fn, GenericParams, Impl, Import, Param, Params, Struct, StructField,
+        TopLevel, TopLevelKind, Visibility,
     },
     CompileUnit,
 };
@@ -508,6 +508,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         mangled_name: Symbol,
         ast: &Struct,
         generic_args: &GenericArgs,
+        is_external: Option<Vec<Ident>>,
     ) -> anyhow::Result<StructType<'ctx>> {
         // Check if already created.
         if let Some(udt_kind) = self.tcx.get_udt(mangled_name) {
@@ -538,7 +539,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             UdtKind::Struct(StructInfo {
                 ty,
                 fields,
-                is_external: None,
+                is_external,
             }),
         );
 
@@ -551,6 +552,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         mangled_name: Symbol,
         ast: &Enum,
         generic_args: &GenericArgs,
+        is_external: Option<Vec<Ident>>,
     ) -> anyhow::Result<StructType<'ctx>> {
         // Check if already created.
         if let Some(udt_kind) = self.tcx.get_udt(mangled_name) {
@@ -577,7 +579,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
                 name: ast.name.symbol(),
                 ty,
                 variants,
-                is_external: None,
+                is_external,
             }),
         );
 
@@ -658,13 +660,17 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             },
         );
 
-        let kind = self.tcx.get_generic_info(mangled_name).unwrap();
+        let generic_info = self.tcx.get_generic_info(mangled_name).unwrap();
+
+        let generic_kind = &generic_info.kind;
+        let is_external = &generic_info.is_external;
 
         let generic_args = udt.generic_args.as_ref().unwrap();
 
         // Define methods
         if let Some(impl_) = self.tcx.get_generic_impl(mangled_name) {
             let mut new_impl = impl_.0.clone();
+            // If you don't remove this, it will only be registered in the generic table, not defined.
             new_impl.generic_params = None;
 
             self.tcx.push_generic_arg_table(GenericArgTable::from((
@@ -690,10 +696,23 @@ impl<'ctx> CompileUnitCtx<'ctx> {
 
                 build_top_level_with_generic_args(
                     self,
-                    TopLevel {
-                        kind: TopLevelKind::Impl(new_impl.clone()),
-                        vis: impl_.1,
-                        span: impl_.2,
+                    if let Some(externals) = is_external {
+                        // External
+                        TopLevel {
+                            kind: TopLevelKind::ExternalImpl(ExternalImpl {
+                                impl_: new_impl.clone(),
+                                external_modules: externals.clone(),
+                            }),
+                            vis: impl_.1,
+                            span: impl_.2,
+                        }
+                    } else {
+                        // Internal
+                        TopLevel {
+                            kind: TopLevelKind::Impl(new_impl.clone()),
+                            vis: impl_.1,
+                            span: impl_.2,
+                        }
                     },
                     impl_.0.generic_params.clone().unwrap(),
                     generic_args_with_actual_types,
@@ -707,13 +726,19 @@ impl<'ctx> CompileUnitCtx<'ctx> {
 
         let mangled_generic_name = mangle_udt_name(self, udt);
 
-        match kind.as_ref() {
-            GenericKind::Struct(ast) => {
-                self.create_generic_struct_type(mangled_generic_name, ast, generic_args)
-            }
-            GenericKind::Enum(ast) => {
-                self.create_generic_enum_type(mangled_generic_name, ast, generic_args)
-            }
+        match generic_kind {
+            GenericKind::Struct(ast) => self.create_generic_struct_type(
+                mangled_generic_name,
+                ast,
+                generic_args,
+                is_external.clone(),
+            ),
+            GenericKind::Enum(ast) => self.create_generic_enum_type(
+                mangled_generic_name,
+                ast,
+                generic_args,
+                is_external.clone(),
+            ),
             _ => unimplemented!(),
         }
     }
