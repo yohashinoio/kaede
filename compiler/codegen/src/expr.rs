@@ -1004,7 +1004,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         let then_val = build_block_expression(self.cucx, &node.then)?;
 
         // Pop symbol table for enum unpack.
-        if let Some(_) = &node.enum_unpack {
+        if node.enum_unpack.is_some() {
             self.cucx.tcx.pop_symbol_table();
         }
 
