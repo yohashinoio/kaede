@@ -2411,8 +2411,8 @@ fn generic_enum_as_function_argument() -> anyhow::Result<()> {
 #[test]
 fn generic_enum_with_multiple_parameters() -> anyhow::Result<()> {
     let program = r#"enum Res<T1, T2> {
-            Ok(T1),
-            Err(T2),
+        Ok(T1),
+        Err(T2),
     }
 
     fn main(): i32 {

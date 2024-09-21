@@ -1614,12 +1614,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             args
         };
 
-        self.build_call_fn_without_mangle(
-            mangled_method_name.into(),
-            format!("{}::{}", udt, call.callee.as_str()).into(),
-            args,
-            call.span,
-        )
+        self.build_call_fn_without_mangle(mangled_method_name.into(), &args, call.span)
     }
 
     fn create_enum_variant(
@@ -2048,7 +2043,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         call_node: &FnCall,
     ) -> anyhow::Result<Value<'ctx>> {
         // For example: i32.add
-        let actual_method_name = format!("{}.{}", fundamental_ty_name, call_node.callee.as_str());
+        let method_name = format!("{}.{}", fundamental_ty_name, call_node.callee.as_str());
 
         // Convert arguments(exprs) to values
         let mut args = {
@@ -2064,7 +2059,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         // Push self to front
         args.push_front((value.clone(), call_node.args.1));
 
-        self.build_call_fn(actual_method_name.into(), args, call_node.span)
+        self.build_call_fn_without_mangle(method_name.into(), &args, call_node.span)
     }
 
     fn struct_access_or_tuple_indexing(
@@ -2102,10 +2097,9 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         struct_ty: &Rc<Ty>,
         left_span: Span,
     ) -> anyhow::Result<Value<'ctx>> {
-        let (udt, mangled_struct_name) = if let TyKind::UserDefined(udt) = struct_ty.kind.as_ref() {
-            (udt, mangle_udt_name(self.cucx, udt))
-        } else {
-            unreachable!()
+        let (udt, mangled_struct_name) = match struct_ty.kind.as_ref() {
+            TyKind::UserDefined(udt) => (udt, mangle_udt_name(self.cucx, udt)),
+            _ => unreachable!(),
         };
 
         match &right.kind {
@@ -2201,11 +2195,11 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
     fn build_struct_method_call(
         &mut self,
         struct_value: &Value<'ctx>,
-        struct_name: Symbol,
+        mangled_struct_name: Symbol,
         call_node: &FnCall,
     ) -> anyhow::Result<Value<'ctx>> {
-        // For example: Person.get_age
-        let actual_method_name = format!("{}.{}", struct_name, call_node.callee.as_str());
+        // For example: test.Person.get_age
+        let mangled_method_name = format!("{}.{}", mangled_struct_name, call_node.callee.as_str());
 
         // Convert arguments(exprs) to values
         let mut args = {
@@ -2221,7 +2215,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         // Push self to front
         args.push_front((struct_value.clone(), call_node.args.1));
 
-        self.build_call_fn(actual_method_name.into(), args, call_node.span)
+        self.build_call_fn_without_mangle(mangled_method_name.into(), &args, call_node.span)
     }
 
     fn str_indexing_or_method_call(
@@ -2247,7 +2241,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
                 args.push_front((left.clone(), node.args.1));
 
-                self.build_call_fn(method_name.into(), args, node.span)
+                self.build_call_fn_without_mangle(method_name.into(), &args, node.span)
             }
 
             _ => self.str_indexing(left, right, str_ty),
@@ -2388,7 +2382,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
     fn build_call_generic_fn(
         &mut self,
         name: Symbol,
-        args: VecDeque<(Value<'ctx>, Span)>,
+        args: &VecDeque<(Value<'ctx>, Span)>,
         span: Span,
         generic_kind: &GenericKind,
     ) -> anyhow::Result<Value<'ctx>> {
@@ -2397,9 +2391,9 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             _ => unreachable!(),
         };
 
-        let mangled_name = self.define_generic_fn_instance(name, fn_ast_vis, &args, span)?;
+        let mangled_name = self.define_generic_fn_instance(name, fn_ast_vis, args, span)?;
 
-        self.build_call_fn(mangled_name, args, span)
+        self.build_call_fn_without_mangle(mangled_name, args, span)
     }
 
     fn fn_call(&mut self, node: &FnCall) -> anyhow::Result<Value<'ctx>> {
@@ -2431,16 +2425,31 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
         if let Ok(kind) = symbol_kind {
             if let SymbolTableValue::Generic(info) = kind.as_ref() {
-                return self.build_call_generic_fn(
-                    node.callee.symbol(),
-                    args,
-                    node.span,
-                    &info.kind,
-                );
+                // Generic function
+                let evaled =
+                    self.build_call_generic_fn(node.callee.symbol(), &args, node.span, &info.kind);
+
+                if let Some(bkup) = bkup {
+                    self.cucx.modules_for_mangle.replace(bkup);
+                }
+
+                return evaled;
             }
         }
 
-        let evaled = self.build_call_fn(node.callee.symbol(), args, node.span);
+        // Normal function
+        let evaled = match self.build_call_fn(node.callee.symbol(), &args, node.span) {
+            Ok(val) => Ok(val),
+            Err(err) => {
+                err.downcast().and_then(|err| match err {
+                    CodegenError::Undeclared { .. } => {
+                        // If the function is not found, try to call the function without mangling. (For ffi)
+                        self.build_call_fn_without_mangle(node.callee.symbol(), &args, node.span)
+                    }
+                    _ => Err(err.into()),
+                })
+            }
+        };
 
         if let Some(bkup) = bkup {
             self.cucx.modules_for_mangle.replace(bkup);
@@ -2452,19 +2461,15 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
     fn build_call_fn_without_mangle(
         &mut self,
         mangled_name: Symbol,
-        non_mangled_name: Symbol,
-        args: VecDeque<(Value<'ctx>, Span)>,
+        args: &VecDeque<(Value<'ctx>, Span)>,
         span: Span,
     ) -> anyhow::Result<Value<'ctx>> {
-        let symbol_kind = match self.cucx.tcx.lookup_symbol(mangled_name, span) {
-            Ok(kind) => kind,
-            Err(_) => self.cucx.tcx.lookup_symbol(non_mangled_name, span)?, // TODO: Remove this
-        };
+        let symbol_kind = self.cucx.tcx.lookup_symbol(mangled_name, span)?;
         let fn_info = match symbol_kind.as_ref() {
             SymbolTableValue::Function(func) => func,
             _ => {
                 return Err(CodegenError::Undeclared {
-                    name: non_mangled_name,
+                    name: mangled_name,
                     span,
                 }
                 .into())
@@ -2472,9 +2477,9 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         };
 
         if fn_info.value.get_type().is_var_arg() {
-            self.verify_var_args(&args, &fn_info.param_types)?;
+            self.verify_var_args(args, &fn_info.param_types)?;
         } else {
-            self.verify_args(&args, &fn_info.param_types)?;
+            self.verify_args(args, &fn_info.param_types)?;
         }
 
         let return_value = self
@@ -2509,11 +2514,11 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
     fn build_call_fn(
         &mut self,
         name: Symbol,
-        args: VecDeque<(Value<'ctx>, Span)>,
+        args: &VecDeque<(Value<'ctx>, Span)>,
         span: Span,
     ) -> anyhow::Result<Value<'ctx>> {
         let mangled_name = mangle_name(self.cucx, name);
-        self.build_call_fn_without_mangle(mangled_name.into(), name, args, span)
+        self.build_call_fn_without_mangle(mangled_name.into(), args, span)
     }
 
     fn verify_var_args(
