@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs, path::PathBuf, rc::Rc};
+use std::{collections::HashMap, fs, rc::Rc};
 
 use inkwell::{module::Linkage, types::StructType, values::FunctionValue};
 use kaede_ast::top::{
@@ -739,12 +739,9 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         )?;
 
         // TODO: Optimize
-        let psd_module = Parser::new(
-            &fs::read_to_string(&path).unwrap(),
-            PathBuf::from(path).into(),
-        )
-        .run()
-        .unwrap();
+        let psd_module = Parser::new(&fs::read_to_string(&path).unwrap(), path.into())
+            .run()
+            .unwrap();
 
         // For mangle.
         let bkup = self
