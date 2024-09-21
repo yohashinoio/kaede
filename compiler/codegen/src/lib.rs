@@ -549,6 +549,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         self.tcx.insert_symbol_to_root_scope(
             mangled_name,
             SymbolTableValue::Struct(StructInfo {
+                mangled_name,
                 ty,
                 fields,
                 is_external,
@@ -590,6 +591,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         self.tcx.insert_symbol_to_root_scope(
             mangled_name,
             SymbolTableValue::Enum(EnumInfo {
+                mangled_name,
                 name: ast.name.symbol(),
                 ty,
                 variants,

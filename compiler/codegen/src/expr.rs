@@ -1597,11 +1597,42 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         udt: &UserDefinedType,
         call: &FnCall,
     ) -> anyhow::Result<Value<'ctx>> {
-        let mangled_method_name = format!(
-            "{}::{}",
-            mangle_udt_name(self.cucx, udt),
-            call.callee.as_str()
-        );
+        let symbol_kind = self
+            .cucx
+            .tcx
+            .lookup_symbol(mangle_name(self.cucx, udt.name.symbol()).into(), call.span)?;
+
+        let mangled_udt_name = match symbol_kind.as_ref() {
+            SymbolTableValue::Enum(enum_info) => enum_info.mangled_name,
+            SymbolTableValue::Struct(struct_info) => struct_info.mangled_name,
+            SymbolTableValue::Generic(generic_info) => {
+                let bkup = if let Some(externals) = &generic_info.is_external {
+                    Some(
+                        self.cucx
+                            .modules_for_mangle
+                            .drain_and_append(externals.clone()),
+                    )
+                } else {
+                    None
+                };
+
+                let mangled = match generic_info.kind {
+                    GenericKind::Enum(_) | GenericKind::Struct(_) => {
+                        mangle_udt_name(self.cucx, udt)
+                    }
+                    _ => unimplemented!(),
+                };
+
+                if let Some(bkup) = bkup {
+                    self.cucx.modules_for_mangle.replace(bkup);
+                }
+
+                mangled
+            }
+            _ => unimplemented!(),
+        };
+
+        let mangled_method_name = format!("{}::{}", mangled_udt_name, call.callee.as_str());
 
         // Convert arguments(exprs) to values
         let args = {

@@ -20,6 +20,7 @@ pub struct FunctionInfo<'ctx> {
 
 #[derive(Debug)]
 pub struct StructInfo<'ctx> {
+    pub mangled_name: Symbol,
     pub ty: StructType<'ctx>,
     pub fields: HashMap<Symbol, StructField>,
     pub is_external: Option<Vec<Ident>>,
@@ -36,6 +37,7 @@ pub struct EnumVariantInfo {
 #[derive(Debug, Clone)]
 pub struct EnumInfo<'ctx> {
     pub ty: StructType<'ctx>,
+    pub mangled_name: Symbol,
     pub name: Symbol, // Non-mangled
     pub variants: HashMap<Symbol, EnumVariantInfo>,
     pub is_external: Option<Vec<Ident>>,

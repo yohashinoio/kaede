@@ -297,6 +297,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         self.cucx.tcx.insert_symbol_to_root_scope(
             mangled_name,
             SymbolTableValue::Enum(EnumInfo {
+                mangled_name,
                 name,
                 ty,
                 variants,
@@ -690,6 +691,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         self.cucx.tcx.insert_symbol_to_root_scope(
             mangled_name,
             SymbolTableValue::Struct(StructInfo {
+                mangled_name,
                 ty,
                 fields,
                 is_external: None,
@@ -847,6 +849,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         self.cucx.tcx.insert_symbol_to_root_scope(
             mangled_name,
             SymbolTableValue::Struct(StructInfo {
+                mangled_name,
                 ty,
                 fields,
                 is_external: Some(self.cucx.modules_for_mangle.get()),
