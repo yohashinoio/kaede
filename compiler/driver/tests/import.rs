@@ -655,3 +655,31 @@ fn import_function_with_arg_of_external_enum() -> anyhow::Result<()> {
 
     test(58, &[module1.path(), module2.path()])
 }
+
+#[test]
+fn use_declaration() -> anyhow::Result<()> {
+    let tempdir = assert_fs::TempDir::new()?;
+
+    let module1 = tempdir.child("m1.kd");
+    module1.write_str(
+        r#"pub struct Apple {
+            size: i32,
+        }
+
+        pub fn get_size(apple: Apple): i32 {
+            return apple.size
+        }"#,
+    )?;
+
+    let module2 = tempdir.child("m2.kd");
+    module2.write_str(
+        r#"import m1
+        use m1.Apple
+        use m1.get_size
+        fn main(): i32 {
+            return get_size(Apple { size: 58 })
+        }"#,
+    )?;
+
+    test(58, &[module1.path(), module2.path()])
+}
