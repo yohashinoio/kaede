@@ -1,4 +1,4 @@
-use std::{collections::HashMap, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use inkwell::{
     types::StructType,
@@ -43,11 +43,87 @@ pub struct EnumInfo<'ctx> {
     pub is_external: Option<Vec<Ident>>,
 }
 
+#[derive(Debug, Clone)]
+pub struct AlreadyGeneratedGenericImpl {
+    pub table: Vec<GenericArgs>,
+}
+
+impl AlreadyGeneratedGenericImpl {
+    pub fn new() -> Self {
+        Self { table: Vec::new() }
+    }
+
+    pub fn insert(&mut self, args: GenericArgs) {
+        self.table.push(args);
+    }
+
+    pub fn contains(&self, args: &GenericArgs) -> bool {
+        let types = &args.types;
+
+        for args in &self.table {
+            if types == &args.types {
+                return true;
+            }
+        }
+
+        false
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct GenericImplInfo {
+    pub impl_: Impl,
+    pub visibility: Visibility,
+    pub span: Span,
+    pub already_generated: AlreadyGeneratedGenericImpl,
+}
+
+impl GenericImplInfo {
+    pub fn new(impl_: Impl, visibility: Visibility, span: Span) -> Self {
+        Self {
+            impl_,
+            visibility,
+            span,
+            already_generated: AlreadyGeneratedGenericImpl::new(),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct GenericStructInfo {
+    pub ast: Struct,
+    pub impl_info: Option<GenericImplInfo>,
+}
+
+impl GenericStructInfo {
+    pub fn new(ast: Struct) -> Self {
+        Self {
+            ast,
+            impl_info: None,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct GenericEnumInfo {
+    pub ast: Enum,
+    pub impl_info: Option<GenericImplInfo>,
+}
+
+impl GenericEnumInfo {
+    pub fn new(ast: Enum) -> Self {
+        Self {
+            ast,
+            impl_info: None,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum GenericKind {
-    Struct(Struct),
+    Struct(GenericStructInfo),
+    Enum(GenericEnumInfo),
     Func((Fn, Visibility)),
-    Enum(Enum),
 }
 
 #[derive(Debug)]
@@ -66,7 +142,7 @@ pub enum SymbolTableValue<'ctx> {
     Generic(GenericInfo),
 }
 
-pub type SymbolTable<'ctx> = HashMap<Symbol, Rc<SymbolTableValue<'ctx>>>;
+pub type SymbolTable<'ctx> = HashMap<Symbol, Rc<RefCell<SymbolTableValue<'ctx>>>>;
 
 #[derive(Debug, Clone)]
 pub enum ReturnType {
@@ -81,14 +157,6 @@ impl From<Option<Rc<Ty>>> for ReturnType {
             None => ReturnType::Void,
         }
     }
-}
-
-#[derive(Default)]
-pub struct GenericImplTable {
-    table: HashMap<Symbol /* Mangled */, Rc<(Impl, Visibility, Span)>>,
-
-    // Using a hashset would compare even Span, etc., so Vec is used.
-    already_defined: Vec<(Symbol /* Mangled */, GenericArgs)>,
 }
 
 pub struct GenericArgTable {
@@ -118,7 +186,6 @@ pub struct TypeCtx<'ctx> {
     // Pushed when create a new scope.
     symbol_tables: Vec<SymbolTable<'ctx>>,
 
-    generic_impl_table: GenericImplTable,
     generic_arg_table_stack: Vec<GenericArgTable>,
 }
 
@@ -140,7 +207,7 @@ impl<'ctx> TypeCtx<'ctx> {
         &self,
         symbol: Symbol,
         span: Span,
-    ) -> anyhow::Result<Rc<SymbolTableValue<'ctx>>> {
+    ) -> anyhow::Result<Rc<RefCell<SymbolTableValue<'ctx>>>> {
         for table in self.symbol_tables.iter().rev() {
             if let Some(value) = table.get(&symbol) {
                 return Ok(value.clone());
@@ -150,17 +217,40 @@ impl<'ctx> TypeCtx<'ctx> {
         Err(CodegenError::Undeclared { name: symbol, span }.into())
     }
 
-    pub fn insert_symbol_to_root_scope(
+    pub fn bind_symbol(
         &mut self,
-        symbol: Symbol,
-        value: Rc<SymbolTableValue<'ctx>>,
+        new_name: Symbol,
+        bindee: Rc<RefCell<SymbolTableValue<'ctx>>>,
         span: Span,
     ) -> anyhow::Result<()> {
         if self
             .symbol_tables
             .first_mut()
             .unwrap()
-            .insert(symbol, value)
+            .insert(new_name, bindee)
+            .is_some()
+        {
+            return Err(CodegenError::AlreadyDeclared {
+                name: new_name,
+                span,
+            }
+            .into());
+        }
+
+        Ok(())
+    }
+
+    pub fn insert_symbol_to_root_scope(
+        &mut self,
+        symbol: Symbol,
+        value: SymbolTableValue<'ctx>,
+        span: Span,
+    ) -> anyhow::Result<()> {
+        if self
+            .symbol_tables
+            .first_mut()
+            .unwrap()
+            .insert(symbol, Rc::new(RefCell::new(value)))
             .is_some()
         {
             return Err(CodegenError::AlreadyDeclared { name: symbol, span }.into());
@@ -179,7 +269,7 @@ impl<'ctx> TypeCtx<'ctx> {
             .symbol_tables
             .last_mut()
             .unwrap()
-            .insert(symbol, Rc::new(value))
+            .insert(symbol, Rc::new(RefCell::new(value)))
             .is_some()
         {
             return Err(CodegenError::AlreadyDeclared { name: symbol, span }.into());
@@ -194,18 +284,6 @@ impl<'ctx> TypeCtx<'ctx> {
 
     pub fn pop_symbol_table(&mut self) {
         self.symbol_tables.pop().unwrap();
-    }
-
-    pub fn add_generic_impl(&mut self, name: Symbol, value: (Impl, Visibility, Span)) {
-        assert!(self
-            .generic_impl_table
-            .table
-            .insert(name, value.into())
-            .is_none());
-    }
-
-    pub fn get_generic_impl(&self, name: Symbol) -> Option<Rc<(Impl, Visibility, Span)>> {
-        self.generic_impl_table.table.get(&name).cloned()
     }
 
     pub fn push_generic_arg_table(&mut self, table: GenericArgTable) {
@@ -234,21 +312,5 @@ impl<'ctx> TypeCtx<'ctx> {
         }
 
         None
-    }
-
-    pub fn register_defined_generic_impl(&mut self, name: Symbol, generic_args: GenericArgs) {
-        self.generic_impl_table
-            .already_defined
-            .push((name, generic_args));
-    }
-
-    pub fn is_defined_generic_impl(&self, name: Symbol, generic_args: &GenericArgs) -> bool {
-        for (n, args) in &self.generic_impl_table.already_defined {
-            if n == &name && args.types == generic_args.types {
-                return true;
-            }
-        }
-
-        false
     }
 }

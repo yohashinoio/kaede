@@ -662,11 +662,11 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
         let mangled_name = mangle_udt_name(self.cucx, udt);
 
-        let enum_info = match self
+        let enum_info = match &*self
             .cucx
             .tcx
             .lookup_symbol(mangled_name, node.span)?
-            .as_ref()
+            .borrow()
         {
             SymbolTableValue::Enum(enum_info) => enum_info.clone(),
             _ => {
@@ -1143,7 +1143,8 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         let struct_llvm_ty = self.cucx.conv_to_llvm_type(&struct_ty, node.span)?;
 
         let symbol_kind = self.cucx.tcx.lookup_symbol(mangled_name, node.span)?;
-        let struct_info = match symbol_kind.as_ref() {
+        let borrowed_symbol_kind = symbol_kind.borrow();
+        let struct_info = match &*borrowed_symbol_kind {
             SymbolTableValue::Struct(info) => info,
 
             _ => {
@@ -1416,7 +1417,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
     fn ident_expr(&mut self, ident: &Ident) -> anyhow::Result<Value<'ctx>> {
         let symbol_kind = self.cucx.tcx.lookup_symbol(ident.symbol(), ident.span())?;
-        let (ptr, ty) = match symbol_kind.as_ref() {
+        let (ptr, ty) = match &*symbol_kind.borrow() {
             SymbolTableValue::Variable(var) => (var.0, var.1.clone()),
             _ => {
                 return Err(CodegenError::Undeclared {
@@ -1602,7 +1603,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             .tcx
             .lookup_symbol(mangle_name(self.cucx, udt.name.symbol()).into(), call.span)?;
 
-        let mangled_udt_name = match symbol_kind.as_ref() {
+        let mangled_udt_name = match &*symbol_kind.borrow() {
             SymbolTableValue::Enum(enum_info) => enum_info.mangled_name,
             SymbolTableValue::Struct(struct_info) => struct_info.mangled_name,
             SymbolTableValue::Generic(generic_info) => {
@@ -1672,7 +1673,8 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         let enum_llvm_ty = self.cucx.conv_to_llvm_type(&enum_ty, span)?;
 
         let symbol_kind = self.cucx.tcx.lookup_symbol(mangled_name, span)?;
-        let enum_info = match symbol_kind.as_ref() {
+        let borrowed_symbol_kind = symbol_kind.borrow();
+        let enum_info = match &*borrowed_symbol_kind {
             SymbolTableValue::Enum(enum_info) => enum_info,
             _ => {
                 return Err(CodegenError::Undeclared {
@@ -2165,8 +2167,9 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         let llvm_struct_ty = self.cucx.conv_to_llvm_type(struct_ty, span)?;
 
         let symbol_kind = self.cucx.tcx.lookup_symbol(mangled_struct_name, span)?;
+        let borrowed_symbol_kind = symbol_kind.borrow();
         let struct_info = {
-            match symbol_kind.as_ref() {
+            match &*borrowed_symbol_kind {
                 SymbolTableValue::Struct(t) => t,
                 kind => unreachable!("{:?}", kind),
             }
@@ -2346,7 +2349,10 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         // Skip if the function is already defined.
         let symbol_kind = self.cucx.tcx.lookup_symbol(mangled_name, span);
         if symbol_kind.is_ok()
-            && matches!(symbol_kind.unwrap().as_ref(), SymbolTableValue::Function(_))
+            && matches!(
+                *symbol_kind.unwrap().borrow(),
+                SymbolTableValue::Function(_)
+            )
         {
             return Ok(mangled_name);
         }
@@ -2455,7 +2461,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         );
 
         if let Ok(kind) = symbol_kind {
-            if let SymbolTableValue::Generic(info) = kind.as_ref() {
+            if let SymbolTableValue::Generic(info) = &*kind.borrow() {
                 // Generic function
                 let evaled =
                     self.build_call_generic_fn(node.callee.symbol(), &args, node.span, &info.kind);
@@ -2496,7 +2502,8 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         span: Span,
     ) -> anyhow::Result<Value<'ctx>> {
         let symbol_kind = self.cucx.tcx.lookup_symbol(mangled_name, span)?;
-        let fn_info = match symbol_kind.as_ref() {
+        let borrowed_symbol_kind = symbol_kind.borrow();
+        let fn_info = match &*borrowed_symbol_kind {
             SymbolTableValue::Function(func) => func,
             _ => {
                 return Err(CodegenError::Undeclared {

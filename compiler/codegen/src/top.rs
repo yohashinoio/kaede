@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, fs, rc::Rc};
 
 use inkwell::{module::Linkage, types::StructType, values::FunctionValue};
 use kaede_ast::top::{
@@ -15,8 +15,8 @@ use crate::{
     mangle::{mangle_method, mangle_name, mangle_static_method, mangle_udt_name},
     stmt::build_block,
     tcx::{
-        EnumInfo, EnumVariantInfo, GenericArgTable, GenericInfo, GenericKind, ReturnType,
-        StructInfo, SymbolTable, SymbolTableValue,
+        EnumInfo, EnumVariantInfo, GenericArgTable, GenericEnumInfo, GenericImplInfo, GenericInfo,
+        GenericKind, GenericStructInfo, ReturnType, StructInfo, SymbolTable, SymbolTableValue,
     },
     CompileUnitCtx,
 };
@@ -217,7 +217,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
 
         self.cucx
             .tcx
-            .insert_symbol_to_root_scope(new_name.into(), bindee_symbol_kind, node.span)
+            .bind_symbol(new_name.into(), bindee_symbol_kind, node.span)
     }
 
     fn generic_fn_instance(&mut self, node: GenericFnInstance) -> anyhow::Result<()> {
@@ -274,14 +274,13 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
             self.cucx.tcx.insert_symbol_to_root_scope(
                 mangled_name,
                 SymbolTableValue::Generic(GenericInfo {
-                    kind: GenericKind::Enum(node),
+                    kind: GenericKind::Enum(GenericEnumInfo::new(node)),
                     is_external: if is_external {
                         Some(self.cucx.modules_for_mangle.get())
                     } else {
                         None
                     },
-                })
-                .into(),
+                }),
                 span,
             )?;
 
@@ -302,8 +301,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                 ty,
                 variants,
                 is_external,
-            })
-            .into(),
+            }),
             span,
         )
     }
@@ -312,6 +310,11 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         assert!(node.generic_params.is_none());
 
         let ty = Rc::new(node.ty);
+
+        let bkup = self
+            .cucx
+            .modules_for_mangle
+            .drain_and_append(external_modules.clone());
 
         for item in node.items.iter() {
             if item.vis.is_private() {
@@ -325,6 +328,8 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                 _ => todo!("Error"),
             }
         }
+
+        self.cucx.modules_for_mangle.replace(bkup);
 
         Ok(())
     }
@@ -347,9 +352,21 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                     },
                 );
 
-                self.cucx
-                    .tcx
-                    .add_generic_impl(mangled_name, (node, vis, span));
+                let symbol_kind = self.cucx.tcx.lookup_symbol(mangled_name, span)?;
+                match *symbol_kind.borrow_mut() {
+                    SymbolTableValue::Generic(ref mut generic_info) => match &mut generic_info.kind
+                    {
+                        GenericKind::Struct(info) => {
+                            info.impl_info = Some(GenericImplInfo::new(node, vis, span));
+                        }
+                        GenericKind::Enum(info) => {
+                            info.impl_info = Some(GenericImplInfo::new(node, vis, span));
+                        }
+                        _ => todo!("Error"),
+                    },
+
+                    _ => todo!("Error"),
+                }
 
                 // Generic impls are not created immediately, but are created when they are used.
                 return Ok(());
@@ -390,8 +407,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                 SymbolTableValue::Generic(GenericInfo {
                     kind: GenericKind::Func((node, vis)),
                     is_external: None,
-                })
-                .into(),
+                }),
                 span,
             )?;
 
@@ -653,7 +669,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
 
             table.insert(
                 name.symbol(),
-                SymbolTableValue::Variable((alloca, param_ty)).into(),
+                Rc::new(RefCell::new(SymbolTableValue::Variable((alloca, param_ty)))),
             );
         }
 
@@ -669,10 +685,9 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
             self.cucx.tcx.insert_symbol_to_root_scope(
                 mangled_name,
                 SymbolTableValue::Generic(GenericInfo {
-                    kind: GenericKind::Struct(node),
+                    kind: GenericKind::Struct(GenericStructInfo::new(node)),
                     is_external: None,
-                })
-                .into(),
+                }),
                 span,
             )?;
 
@@ -695,8 +710,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                 ty,
                 fields,
                 is_external: None,
-            })
-            .into(),
+            }),
             node.span,
         )?;
 
@@ -736,7 +750,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                 .collect::<Vec<_>>()
                 .join(".")
                 .into(),
-            SymbolTableValue::Module.into(),
+            SymbolTableValue::Module,
             module_path.span,
         )?;
 
@@ -825,10 +839,9 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
             self.cucx.tcx.insert_symbol_to_root_scope(
                 mangled_name,
                 SymbolTableValue::Generic(GenericInfo {
-                    kind: GenericKind::Struct(struct_),
+                    kind: GenericKind::Struct(GenericStructInfo::new(struct_)),
                     is_external: Some(self.cucx.modules_for_mangle.get()),
-                })
-                .into(),
+                }),
                 span,
             )?;
 
@@ -853,8 +866,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                 ty,
                 fields,
                 is_external: Some(self.cucx.modules_for_mangle.get()),
-            })
-            .into(),
+            }),
             span,
         )?;
 
@@ -885,9 +897,21 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                     },
                 );
 
-                self.cucx
-                    .tcx
-                    .add_generic_impl(mangled_name, (impl_, vis, span));
+                let symbol_kind = self.cucx.tcx.lookup_symbol(mangled_name, span)?;
+                match *symbol_kind.borrow_mut() {
+                    SymbolTableValue::Generic(ref mut generic_info) => match &mut generic_info.kind
+                    {
+                        GenericKind::Struct(info) => {
+                            info.impl_info = Some(GenericImplInfo::new(impl_, vis, span));
+                        }
+                        GenericKind::Enum(info) => {
+                            info.impl_info = Some(GenericImplInfo::new(impl_, vis, span));
+                        }
+                        _ => todo!("Error"),
+                    },
+
+                    _ => todo!("Error"),
+                }
 
                 // Generic impls are not created immediately, but are created when they are used.
                 return Ok(());

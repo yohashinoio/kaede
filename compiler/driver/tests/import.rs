@@ -725,7 +725,7 @@ fn use_declaration_with_generic_struct() -> anyhow::Result<()> {
 
         impl<T> Apple<T> {
             pub fn new(size: T): Apple<T> {
-                return Apple { size: size }
+                return Apple<T> { size: size }
             }
 
             pub fn get_size(self): T {
@@ -760,7 +760,7 @@ fn use_declaration_with_generic_enum() -> anyhow::Result<()> {
 
         impl<T> Apple<T> {
             pub fn new_ringo(size: T): Apple<T> {
-                return Apple::Ringo(size)
+                return Apple<T>::Ringo(size)
             }
 
             pub fn get_size(self): T {

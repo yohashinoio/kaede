@@ -1,4 +1,5 @@
 use std::{
+    cell::RefCell,
     collections::{HashMap, HashSet, VecDeque},
     rc::Rc,
 };
@@ -417,7 +418,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         span: Span,
     ) -> anyhow::Result<FunctionValue<'ctx>> {
         if let Ok(kind) = self.tcx.lookup_symbol(mangled_name, span) {
-            if let SymbolTableValue::Function(fn_) = kind.as_ref() {
+            if let SymbolTableValue::Function(fn_) = &*kind.borrow() {
                 // If the function is already declared, don't declare it again.
                 return Ok(fn_.value);
             }
@@ -436,8 +437,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
                 value: fn_value,
                 return_type,
                 param_types,
-            })
-            .into(),
+            }),
             span,
         )?;
 
@@ -524,7 +524,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
     ) -> anyhow::Result<StructType<'ctx>> {
         // Check if already created.
         if let Ok(kind) = self.tcx.lookup_symbol(mangled_name, ast.span) {
-            match kind.as_ref() {
+            match &*kind.borrow() {
                 SymbolTableValue::Struct(info) => return Ok(info.ty),
                 _ => unreachable!(),
             }
@@ -553,8 +553,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
                 ty,
                 fields,
                 is_external,
-            })
-            .into(),
+            }),
             ast.span,
         )?;
 
@@ -571,7 +570,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
     ) -> anyhow::Result<StructType<'ctx>> {
         // Check if already created.
         if let Ok(kind) = self.tcx.lookup_symbol(mangled_name, ast.span) {
-            match kind.as_ref() {
+            match &*kind.borrow() {
                 SymbolTableValue::Enum(info) => return Ok(info.ty),
                 _ => unreachable!(),
             }
@@ -596,8 +595,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
                 ty,
                 variants,
                 is_external,
-            })
-            .into(),
+            }),
             ast.span,
         )?;
 
@@ -678,39 +676,73 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             },
         );
 
-        let symbol_kind = self.tcx.lookup_symbol(mangled_name, udt.name.span())?;
-        let generic_info = match symbol_kind.as_ref() {
-            SymbolTableValue::Generic(generic_info) => generic_info,
-            _ => unreachable!(),
-        };
-
-        let generic_kind = &generic_info.kind;
-        let is_external = &generic_info.is_external;
-
         let generic_args = udt.generic_args.as_ref().unwrap();
 
+        let symbol_kind = self.tcx.lookup_symbol(mangled_name, udt.name.span())?;
+
+        let (impl_info, is_external) = {
+            let borrowed_symbol_kind = symbol_kind.borrow();
+            let generic_info = match &*borrowed_symbol_kind {
+                SymbolTableValue::Generic(generic_info) => generic_info,
+                _ => unreachable!(),
+            };
+
+            let generic_kind = &generic_info.kind;
+
+            (
+                match generic_kind {
+                    GenericKind::Struct(info) => info.impl_info.clone(),
+                    GenericKind::Enum(info) => info.impl_info.clone(),
+                    _ => unimplemented!(),
+                },
+                generic_info.is_external.clone(),
+            )
+        };
+
         // Define methods
-        if let Some(impl_) = self.tcx.get_generic_impl(mangled_name) {
-            let mut new_impl = impl_.0.clone();
+        if let Some(impl_info) = impl_info {
+            let impl_ = impl_info.impl_.clone();
+            let vis = impl_info.visibility;
+            let span = impl_info.span;
+
+            let mut new_impl = impl_.clone();
             // If you don't remove this, it will only be registered in the generic table, not defined.
             new_impl.generic_params = None;
 
             self.tcx.push_generic_arg_table(GenericArgTable::from((
-                impl_.0.generic_params.as_ref().unwrap().clone(),
+                impl_.generic_params.as_ref().unwrap().clone(),
                 generic_args.clone(),
             )));
 
             let generic_args_with_actual_types = self.generic_args_to_actual(generic_args)?;
 
             // To avoid infinite loops, check if already defined.
-            if !self
-                .tcx
-                .is_defined_generic_impl(mangled_name, &generic_args_with_actual_types)
+            if !impl_info
+                .already_generated
+                .contains(&generic_args_with_actual_types)
             {
-                self.tcx.register_defined_generic_impl(
-                    mangled_name,
-                    generic_args_with_actual_types.clone(),
-                );
+                // Register as already generated.
+                match *RefCell::borrow_mut(&symbol_kind) {
+                    SymbolTableValue::Generic(ref mut generic_info) => match &mut generic_info.kind
+                    {
+                        GenericKind::Struct(info) => info
+                            .impl_info
+                            .as_mut()
+                            .unwrap()
+                            .already_generated
+                            .insert(generic_args_with_actual_types.clone()),
+                        GenericKind::Enum(info) => info
+                            .impl_info
+                            .as_mut()
+                            .unwrap()
+                            .already_generated
+                            .insert(generic_args_with_actual_types.clone()),
+
+                        _ => unreachable!(),
+                    },
+
+                    _ => unreachable!(),
+                };
 
                 new_impl = self.impl_types_to_actual(&new_impl)?;
 
@@ -718,25 +750,25 @@ impl<'ctx> CompileUnitCtx<'ctx> {
 
                 build_top_level_with_generic_args(
                     self,
-                    if let Some(externals) = is_external {
+                    if let Some(externals) = &is_external {
                         // External
                         TopLevel {
                             kind: TopLevelKind::ExternalImpl(ExternalImpl {
                                 impl_: new_impl.clone(),
                                 external_modules: externals.clone(),
                             }),
-                            vis: impl_.1,
-                            span: impl_.2,
+                            vis,
+                            span,
                         }
                     } else {
                         // Internal
                         TopLevel {
                             kind: TopLevelKind::Impl(new_impl.clone()),
-                            vis: impl_.1,
-                            span: impl_.2,
+                            vis,
+                            span,
                         }
                     },
-                    impl_.0.generic_params.clone().unwrap(),
+                    impl_.generic_params.clone().unwrap(),
                     generic_args_with_actual_types,
                 )?;
 
@@ -748,16 +780,22 @@ impl<'ctx> CompileUnitCtx<'ctx> {
 
         let mangled_generic_name = mangle_udt_name(self, udt);
 
+        let borrowed_symbol_kind = symbol_kind.borrow();
+        let generic_kind = match &*borrowed_symbol_kind {
+            SymbolTableValue::Generic(generic_info) => &generic_info.kind,
+            _ => unreachable!(),
+        };
+
         match generic_kind {
-            GenericKind::Struct(ast) => self.create_generic_struct_type(
+            GenericKind::Struct(generic_struct_info) => self.create_generic_struct_type(
                 mangled_generic_name,
-                ast,
+                &generic_struct_info.ast,
                 generic_args,
                 is_external.clone(),
             ),
-            GenericKind::Enum(ast) => self.create_generic_enum_type(
+            GenericKind::Enum(generic_enum_info) => self.create_generic_enum_type(
                 mangled_generic_name,
-                ast,
+                &generic_enum_info.ast,
                 generic_args,
                 is_external.clone(),
             ),
@@ -794,7 +832,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
 
                 let mangled_name = mangle_udt_name(self, udt);
 
-                match self.tcx.lookup_symbol(mangled_name, span)?.as_ref() {
+                match &*self.tcx.lookup_symbol(mangled_name, span)?.borrow() {
                     SymbolTableValue::Struct(sty) => sty.ty.into(),
                     SymbolTableValue::Enum(ety) => ety.ty.as_basic_type_enum(),
                     _ => todo!("Error"),
