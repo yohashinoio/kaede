@@ -42,12 +42,26 @@ pub struct EnumInfo<'ctx> {
 }
 
 #[derive(Debug)]
+pub enum GenericKind {
+    Struct(Struct),
+    Func((Fn, Visibility)),
+    Enum(Enum),
+}
+
+#[derive(Debug)]
+pub struct GenericInfo {
+    pub kind: GenericKind,
+    pub is_external: Option<Vec<Ident>>,
+}
+
+#[derive(Debug)]
 pub enum SymbolTableValue<'ctx> {
     Variable((PointerValue<'ctx>, Rc<Ty> /* Variable type */)),
     Function(FunctionInfo<'ctx>),
     Struct(StructInfo<'ctx>),
     Enum(EnumInfo<'ctx>),
     Module,
+    Generic(GenericInfo),
 }
 
 pub type SymbolTable<'ctx> = HashMap<Symbol, Rc<SymbolTableValue<'ctx>>>;
@@ -66,20 +80,6 @@ impl From<Option<Rc<Ty>>> for ReturnType {
         }
     }
 }
-
-#[derive(Debug)]
-pub enum GenericKind {
-    Struct(Struct),
-    Func((Fn, Visibility)),
-    Enum(Enum),
-}
-
-pub struct GenericTableValue {
-    pub kind: GenericKind,
-    pub is_external: Option<Vec<Ident>>,
-}
-
-pub type GenericTable = HashMap<Symbol /* Mangled */, Rc<GenericTableValue>>;
 
 #[derive(Default)]
 pub struct GenericImplTable {
@@ -116,7 +116,6 @@ pub struct TypeCtx<'ctx> {
     // Pushed when create a new scope.
     symbol_tables: Vec<SymbolTable<'ctx>>,
 
-    generic_table: GenericTable,
     generic_impl_table: GenericImplTable,
     generic_arg_table_stack: Vec<GenericArgTable>,
 }
@@ -193,14 +192,6 @@ impl<'ctx> TypeCtx<'ctx> {
 
     pub fn pop_symbol_table(&mut self) {
         self.symbol_tables.pop().unwrap();
-    }
-
-    pub fn add_generic(&mut self, name: Symbol, value: GenericTableValue) {
-        assert!(self.generic_table.insert(name, Rc::new(value)).is_none());
-    }
-
-    pub fn get_generic_info(&self, name: Symbol) -> Option<Rc<GenericTableValue>> {
-        self.generic_table.get(&name).cloned()
     }
 
     pub fn add_generic_impl(&mut self, name: Symbol, value: (Impl, Visibility, Span)) {

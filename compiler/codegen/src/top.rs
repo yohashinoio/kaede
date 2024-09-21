@@ -15,7 +15,7 @@ use crate::{
     mangle::{mangle_method, mangle_name, mangle_static_method, mangle_udt_name},
     stmt::build_block,
     tcx::{
-        EnumInfo, EnumVariantInfo, GenericArgTable, GenericKind, GenericTableValue, ReturnType,
+        EnumInfo, EnumVariantInfo, GenericArgTable, GenericInfo, GenericKind, ReturnType,
         StructInfo, SymbolTable, SymbolTableValue,
     },
     CompileUnitCtx,
@@ -246,20 +246,22 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
 
     fn create_enum_type(&mut self, node: Enum, is_external: bool) -> anyhow::Result<()> {
         let mangled_name = Symbol::from(mangle_name(self.cucx, node.name.symbol()));
+        let span = node.span;
 
         // For generic
         if node.generic_params.is_some() {
-            self.cucx.tcx.add_generic(
+            self.cucx.tcx.insert_symbol_to_root_scope(
                 mangled_name,
-                GenericTableValue {
+                SymbolTableValue::Generic(GenericInfo {
                     kind: GenericKind::Enum(node),
                     is_external: if is_external {
                         Some(self.cucx.modules_for_mangle.get())
                     } else {
                         None
                     },
-                },
-            );
+                }),
+                span,
+            )?;
 
             // Generics are not created immediately, but are created when they are used.
             return Ok(());
@@ -278,7 +280,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                 variants,
                 is_external,
             }),
-            node.span,
+            span,
         )
     }
 
@@ -357,13 +359,16 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
 
         // For generic
         if node.decl.generic_params.is_some() {
-            self.cucx.tcx.add_generic(
+            let span = node.span;
+
+            self.cucx.tcx.insert_symbol_to_root_scope(
                 mangled_name,
-                GenericTableValue {
+                SymbolTableValue::Generic(GenericInfo {
                     kind: GenericKind::Func((node, vis)),
                     is_external: None,
-                },
-            );
+                }),
+                span,
+            )?;
 
             // Generic functions are not generated immediately, but are generated when they are used.
             return Ok(());
@@ -632,16 +637,18 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
 
     fn struct_(&mut self, node: Struct) -> anyhow::Result<()> {
         let mangled_name = mangle_name(self.cucx, node.name.symbol()).into();
+        let span = node.span;
 
         // For generic
         if node.generic_params.is_some() {
-            self.cucx.tcx.add_generic(
+            self.cucx.tcx.insert_symbol_to_root_scope(
                 mangled_name,
-                GenericTableValue {
+                SymbolTableValue::Generic(GenericInfo {
                     kind: GenericKind::Struct(node),
                     is_external: None,
-                },
-            );
+                }),
+                span,
+            )?;
 
             // Generic structs are not created immediately, but are created when they are used.
             return Ok(());
@@ -780,16 +787,19 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
     }
 
     fn import_struct(&mut self, struct_: Struct) -> anyhow::Result<()> {
+        let span = struct_.span;
+
         if struct_.generic_params.is_some() {
             let mangled_name = mangle_name(self.cucx, struct_.name.symbol()).into();
 
-            self.cucx.tcx.add_generic(
+            self.cucx.tcx.insert_symbol_to_root_scope(
                 mangled_name,
-                GenericTableValue {
+                SymbolTableValue::Generic(GenericInfo {
                     kind: GenericKind::Struct(struct_),
                     is_external: Some(self.cucx.modules_for_mangle.get()),
-                },
-            );
+                }),
+                span,
+            )?;
 
             // Generics are not created immediately, but are created when they are used.
             return Ok(());
@@ -812,7 +822,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                 fields,
                 is_external: Some(self.cucx.modules_for_mangle.get()),
             }),
-            struct_.span,
+            span,
         )?;
 
         Ok(())

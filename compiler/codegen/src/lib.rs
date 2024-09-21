@@ -674,7 +674,11 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             },
         );
 
-        let generic_info = self.tcx.get_generic_info(mangled_name).unwrap();
+        let symbol_kind = self.tcx.lookup_symbol(mangled_name, udt.name.span())?;
+        let generic_info = match symbol_kind.as_ref() {
+            SymbolTableValue::Generic(generic_info) => generic_info,
+            _ => unreachable!(),
+        };
 
         let generic_kind = &generic_info.kind;
         let is_external = &generic_info.is_external;

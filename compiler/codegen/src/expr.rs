@@ -2424,18 +2424,20 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             args
         };
 
-        let generic_info = self
-            .cucx
-            .tcx
-            .get_generic_info(mangle_name(self.cucx, node.callee.symbol()).into());
+        let symbol_kind = self.cucx.tcx.lookup_symbol(
+            mangle_name(self.cucx, node.callee.symbol()).into(),
+            node.span,
+        );
 
-        if let Some(unwraped) = generic_info {
-            return self.build_call_generic_fn(
-                node.callee.symbol(),
-                args,
-                node.span,
-                &unwraped.kind,
-            );
+        if let Ok(kind) = symbol_kind {
+            if let SymbolTableValue::Generic(info) = kind.as_ref() {
+                return self.build_call_generic_fn(
+                    node.callee.symbol(),
+                    args,
+                    node.span,
+                    &info.kind,
+                );
+            }
         }
 
         let evaled = self.build_call_fn(node.callee.symbol(), args, node.span);
