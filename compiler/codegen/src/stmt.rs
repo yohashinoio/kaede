@@ -12,20 +12,18 @@ use kaede_type::{
 };
 
 use crate::expr::build_tuple_indexing;
+use crate::tcx::{SymbolTable, SymbolTableValue};
 use crate::value::Value;
-use crate::{
-    error::CodegenError, expr::build_expression, get_loaded_pointer, tcx::VariableTable,
-    CompileUnitCtx,
-};
+use crate::{error::CodegenError, expr::build_expression, get_loaded_pointer, CompileUnitCtx};
 
 pub fn build_block(cucx: &mut CompileUnitCtx, block: &Block) -> anyhow::Result<()> {
-    cucx.tcx.push_variable_table(VariableTable::new());
+    cucx.tcx.push_symbol_table(SymbolTable::new());
 
     for stmt in &block.body {
         build_statement(cucx, stmt)?;
     }
 
-    cucx.tcx.pop_variable_table();
+    cucx.tcx.pop_symbol_table();
 
     Ok(())
 }
@@ -60,7 +58,11 @@ pub fn build_normal_let(
             // No type information was available, so infer from an initializer
             let alloca = cucx.create_entry_block_alloca(name.as_str(), &var_ty, span)?;
 
-            cucx.tcx.add_variable(name.symbol(), (alloca, var_ty));
+            cucx.tcx.insert_symbol_to_current_scope(
+                name.symbol(),
+                SymbolTableValue::Variable((alloca, var_ty)),
+                span,
+            )?;
 
             alloca
         } else {
@@ -80,7 +82,11 @@ pub fn build_normal_let(
 
             let alloca = cucx.create_entry_block_alloca(name.as_str(), &var_ty, span)?;
 
-            cucx.tcx.add_variable(name.symbol(), (alloca, var_ty));
+            cucx.tcx.insert_symbol_to_current_scope(
+                name.symbol(),
+                SymbolTableValue::Variable((alloca, var_ty)),
+                span,
+            )?;
 
             alloca
         };

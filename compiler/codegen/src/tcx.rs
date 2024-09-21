@@ -11,52 +11,12 @@ use kaede_type::{GenericArgs, Ty, TyKind};
 
 use crate::error::CodegenError;
 
-type Variable<'ctx> = (PointerValue<'ctx>, Rc<Ty> /* Variable type */);
-
 #[derive(Debug)]
-pub struct VariableTable<'ctx>(HashMap<Symbol, Variable<'ctx>>);
-
-impl<'ctx> VariableTable<'ctx> {
-    pub fn new() -> Self {
-        Self(HashMap::new())
-    }
-
-    pub fn lookup(&self, symbol: Symbol) -> Option<&Variable<'ctx>> {
-        self.0.get(&symbol)
-    }
-
-    pub fn add(&mut self, symbol: Symbol, var: Variable<'ctx>) {
-        self.0.insert(symbol, var);
-    }
-}
-
-impl<'ctx> Default for VariableTable<'ctx> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[derive(Clone)]
-pub enum ReturnType {
-    Type(Rc<Ty>),
-    Void,
-}
-
-impl From<Option<Rc<Ty>>> for ReturnType {
-    fn from(value: Option<Rc<Ty>>) -> Self {
-        match value {
-            Some(ty) => ReturnType::Type(ty),
-            None => ReturnType::Void,
-        }
-    }
-}
-
-pub struct FunctionInfo {
+pub struct FunctionInfo<'ctx> {
+    pub value: FunctionValue<'ctx>,
     pub return_type: ReturnType,
     pub param_types: Vec<Rc<Ty>>,
 }
-
-pub type FunctionTable<'ctx> = HashMap<FunctionValue<'ctx>, Rc<FunctionInfo>>;
 
 #[derive(Debug)]
 pub struct StructInfo<'ctx> {
@@ -73,7 +33,7 @@ pub struct EnumVariantInfo {
     pub ty: Option<Rc<Ty>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EnumInfo<'ctx> {
     pub ty: StructType<'ctx>,
     pub name: Symbol, // Non-mangled
@@ -82,13 +42,30 @@ pub struct EnumInfo<'ctx> {
 }
 
 #[derive(Debug)]
-pub enum UdtKind<'ctx> {
+pub enum SymbolTableValue<'ctx> {
+    Variable((PointerValue<'ctx>, Rc<Ty> /* Variable type */)),
+    Function(FunctionInfo<'ctx>),
     Struct(StructInfo<'ctx>),
     Enum(EnumInfo<'ctx>),
+    Module,
 }
 
-/// User defined type table
-pub type UdtTable<'ctx> = HashMap<Symbol /* Mangled */, Rc<UdtKind<'ctx>>>;
+pub type SymbolTable<'ctx> = HashMap<Symbol, Rc<SymbolTableValue<'ctx>>>;
+
+#[derive(Debug, Clone)]
+pub enum ReturnType {
+    Type(Rc<Ty>),
+    Void,
+}
+
+impl From<Option<Rc<Ty>>> for ReturnType {
+    fn from(value: Option<Rc<Ty>>) -> Self {
+        match value {
+            Some(ty) => ReturnType::Type(ty),
+            None => ReturnType::Void,
+        }
+    }
+}
 
 #[derive(Debug)]
 pub enum GenericKind {
@@ -136,9 +113,9 @@ impl From<(GenericParams, GenericArgs)> for GenericArgTable {
 
 #[derive(Default)]
 pub struct TypeCtx<'ctx> {
-    variable_table_stack: Vec<VariableTable<'ctx>>,
-    fn_table: FunctionTable<'ctx>,
-    udt_table: UdtTable<'ctx>,
+    // Pushed when create a new scope.
+    symbol_tables: Vec<SymbolTable<'ctx>>,
+
     generic_table: GenericTable,
     generic_impl_table: GenericImplTable,
     generic_arg_table_stack: Vec<GenericArgTable>,
@@ -158,63 +135,64 @@ impl<'ctx> TypeCtx<'ctx> {
         eprintln!("----------");
     }
 
-    #[allow(dead_code)]
-    pub fn dump_udt_table(&self) {
-        for (name, kind) in &self.udt_table {
-            eprintln!("---\n{}: {:?}\n---", name.as_str(), kind);
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn dump_generic_impl_table(&self) {
-        for (name, value) in &self.generic_impl_table.table {
-            eprintln!("{}: {:?}", name.as_str(), value);
-        }
-    }
-
-    pub fn lookup_variable(&self, ident: &Ident) -> anyhow::Result<&Variable<'ctx>> {
-        for table in self.variable_table_stack.iter().rev() {
-            if let Some(var) = table.lookup(ident.symbol()) {
-                return Ok(var);
+    pub fn lookup_symbol(
+        &self,
+        symbol: Symbol,
+        span: Span,
+    ) -> anyhow::Result<Rc<SymbolTableValue<'ctx>>> {
+        for table in self.symbol_tables.iter().rev() {
+            if let Some(value) = table.get(&symbol) {
+                return Ok(value.clone());
             }
         }
 
-        Err(CodegenError::Undeclared {
-            name: ident.symbol(),
-            span: ident.span(),
-        }
-        .into())
+        Err(CodegenError::Undeclared { name: symbol, span }.into())
     }
 
-    pub fn add_variable(&mut self, symbol: Symbol, var: Variable<'ctx>) {
-        self.variable_table_stack
+    pub fn insert_symbol_to_root_scope(
+        &mut self,
+        symbol: Symbol,
+        value: SymbolTableValue<'ctx>,
+        span: Span,
+    ) -> anyhow::Result<()> {
+        if self
+            .symbol_tables
+            .first_mut()
+            .unwrap()
+            .insert(symbol, Rc::new(value))
+            .is_some()
+        {
+            return Err(CodegenError::AlreadyDeclared { name: symbol, span }.into());
+        }
+
+        Ok(())
+    }
+
+    pub fn insert_symbol_to_current_scope(
+        &mut self,
+        symbol: Symbol,
+        value: SymbolTableValue<'ctx>,
+        span: Span,
+    ) -> anyhow::Result<()> {
+        if self
+            .symbol_tables
             .last_mut()
             .unwrap()
-            .add(symbol, var);
+            .insert(symbol, Rc::new(value))
+            .is_some()
+        {
+            return Err(CodegenError::AlreadyDeclared { name: symbol, span }.into());
+        }
+
+        Ok(())
     }
 
-    pub fn push_variable_table(&mut self, table: VariableTable<'ctx>) {
-        self.variable_table_stack.push(table);
+    pub fn push_symbol_table(&mut self, table: SymbolTable<'ctx>) {
+        self.symbol_tables.push(table);
     }
 
-    pub fn pop_variable_table(&mut self) {
-        self.variable_table_stack.pop().unwrap();
-    }
-
-    pub fn add_function_info(&mut self, fn_value: FunctionValue<'ctx>, info: FunctionInfo) {
-        assert!(self.fn_table.insert(fn_value, info.into()).is_none());
-    }
-
-    pub fn get_function_info(&mut self, fn_value: FunctionValue<'ctx>) -> Option<Rc<FunctionInfo>> {
-        self.fn_table.get(&fn_value).cloned()
-    }
-
-    pub fn add_udt(&mut self, name: Symbol, kind: UdtKind<'ctx>) {
-        assert!(self.udt_table.insert(name, kind.into()).is_none());
-    }
-
-    pub fn get_udt(&self, name: Symbol) -> Option<Rc<UdtKind<'ctx>>> {
-        self.udt_table.get(&name).cloned()
+    pub fn pop_symbol_table(&mut self) {
+        self.symbol_tables.pop().unwrap();
     }
 
     pub fn add_generic(&mut self, name: Symbol, value: GenericTableValue) {

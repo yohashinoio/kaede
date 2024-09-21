@@ -31,13 +31,11 @@ use kaede_type::{
 use mangle::mangle_udt_name;
 use tcx::{
     EnumInfo, EnumVariantInfo, FunctionInfo, GenericArgTable, GenericKind, ReturnType, StructInfo,
-    TypeCtx,
+    SymbolTable, SymbolTableValue, TypeCtx,
 };
 use top::{
     build_top_level, build_top_level_with_generic_args, create_enum_type, create_struct_type,
 };
-
-use crate::tcx::UdtKind;
 
 pub mod error;
 mod expr;
@@ -338,9 +336,12 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         let module = cgcx.context.create_module(&module_name);
         module.set_source_file_name(file_path.path().to_str().unwrap());
 
+        let mut tcx = TypeCtx::default();
+        tcx.push_symbol_table(SymbolTable::new()); // Top-level scope
+
         Ok(Self {
             cgcx,
-            tcx: Default::default(),
+            tcx,
             module,
             builder: cgcx.context.create_builder(),
             file_path,
@@ -409,25 +410,36 @@ impl<'ctx> CompileUnitCtx<'ctx> {
 
     fn declare_fn(
         &mut self,
-        name: &str,
+        mangled_name: Symbol,
         param_types: Vec<Rc<Ty>>,
         return_type: ReturnType,
         linkage: Option<Linkage>,
         is_var_args: bool,
         span: Span,
     ) -> anyhow::Result<FunctionValue<'ctx>> {
+        if let Ok(kind) = self.tcx.lookup_symbol(mangled_name, span) {
+            if let SymbolTableValue::Function(fn_) = kind.as_ref() {
+                // If the function is already declared, don't declare it again.
+                return Ok(fn_.value);
+            }
+        }
+
         let fn_type = self.create_fn_type(&param_types, &return_type, is_var_args, span)?;
 
-        let fn_value = self.module.add_function(name, fn_type, linkage);
+        let fn_value = self
+            .module
+            .add_function(mangled_name.as_str(), fn_type, linkage);
 
         // Store function information in table
-        self.tcx.add_function_info(
-            fn_value,
-            FunctionInfo {
+        self.tcx.insert_symbol_to_root_scope(
+            mangled_name,
+            SymbolTableValue::Function(FunctionInfo {
+                value: fn_value,
                 return_type,
                 param_types,
-            },
-        );
+            }),
+            span,
+        )?;
 
         Ok(fn_value)
     }
@@ -460,7 +472,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         .into()];
 
         self.declare_fn(
-            "GC_malloc",
+            Symbol::from("GC_malloc".to_owned()),
             param_types,
             ReturnType::Type(return_ty),
             None,
@@ -511,9 +523,9 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         is_external: Option<Vec<Ident>>,
     ) -> anyhow::Result<StructType<'ctx>> {
         // Check if already created.
-        if let Some(udt_kind) = self.tcx.get_udt(mangled_name) {
-            match udt_kind.as_ref() {
-                UdtKind::Struct(info) => return Ok(info.ty),
+        if let Ok(kind) = self.tcx.lookup_symbol(mangled_name, ast.span) {
+            match kind.as_ref() {
+                SymbolTableValue::Struct(info) => return Ok(info.ty),
                 _ => unreachable!(),
             }
         }
@@ -534,14 +546,15 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             .map(|field| (field.name.symbol(), field.clone()))
             .collect();
 
-        self.tcx.add_udt(
+        self.tcx.insert_symbol_to_root_scope(
             mangled_name,
-            UdtKind::Struct(StructInfo {
+            SymbolTableValue::Struct(StructInfo {
                 ty,
                 fields,
                 is_external,
             }),
-        );
+            ast.span,
+        )?;
 
         Ok(ty)
     }
@@ -555,9 +568,9 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         is_external: Option<Vec<Ident>>,
     ) -> anyhow::Result<StructType<'ctx>> {
         // Check if already created.
-        if let Some(udt_kind) = self.tcx.get_udt(mangled_name) {
-            match udt_kind.as_ref() {
-                UdtKind::Enum(info) => return Ok(info.ty),
+        if let Ok(kind) = self.tcx.lookup_symbol(mangled_name, ast.span) {
+            match kind.as_ref() {
+                SymbolTableValue::Enum(info) => return Ok(info.ty),
                 _ => unreachable!(),
             }
         }
@@ -573,15 +586,16 @@ impl<'ctx> CompileUnitCtx<'ctx> {
 
         self.tcx.pop_generic_arg_table();
 
-        self.tcx.add_udt(
+        self.tcx.insert_symbol_to_root_scope(
             mangled_name,
-            UdtKind::Enum(EnumInfo {
+            SymbolTableValue::Enum(EnumInfo {
                 name: ast.name.symbol(),
                 ty,
                 variants,
                 is_external,
             }),
-        );
+            ast.span,
+        )?;
 
         Ok(ty)
     }
@@ -772,20 +786,10 @@ impl<'ctx> CompileUnitCtx<'ctx> {
 
                 let mangled_name = mangle_udt_name(self, udt);
 
-                let udt_kind = match self.tcx.get_udt(mangled_name) {
-                    Some(udt) => udt,
-                    None => {
-                        return Err(CodegenError::Undeclared {
-                            name: udt.name.symbol(),
-                            span,
-                        }
-                        .into());
-                    }
-                };
-
-                match udt_kind.as_ref() {
-                    UdtKind::Struct(sty) => sty.ty.into(),
-                    UdtKind::Enum(ety) => ety.ty.as_basic_type_enum(),
+                match self.tcx.lookup_symbol(mangled_name, span)?.as_ref() {
+                    SymbolTableValue::Struct(sty) => sty.ty.into(),
+                    SymbolTableValue::Enum(ety) => ety.ty.as_basic_type_enum(),
+                    _ => todo!("Error"),
                 }
             }
 

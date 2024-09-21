@@ -9,7 +9,8 @@ use crate::{
     mangle::{mangle_name, mangle_udt_name},
     stmt::{build_block, build_normal_let, build_statement},
     tcx::{
-        EnumInfo, EnumVariantInfo, GenericArgTable, GenericKind, ReturnType, UdtKind, VariableTable,
+        EnumInfo, EnumVariantInfo, GenericArgTable, GenericKind, ReturnType, SymbolTable,
+        SymbolTableValue,
     },
     value::{has_signed, Value},
     CompileUnitCtx,
@@ -104,7 +105,7 @@ pub fn build_block_expression<'ctx>(
         return Ok(Value::new_unit());
     }
 
-    cucx.tcx.push_variable_table(VariableTable::new());
+    cucx.tcx.push_symbol_table(SymbolTable::new());
 
     let mut idx: usize = 0;
 
@@ -129,7 +130,7 @@ pub fn build_block_expression<'ctx>(
         }
     };
 
-    cucx.tcx.pop_variable_table();
+    cucx.tcx.pop_symbol_table();
 
     Ok(value)
 }
@@ -661,19 +662,13 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
         let mangled_name = mangle_udt_name(self.cucx, udt);
 
-        let udt_kind = match self.cucx.tcx.get_udt(mangled_name) {
-            Some(udt) => udt,
-            None => {
-                return Err(CodegenError::Undeclared {
-                    name: udt.name.symbol(),
-                    span: node.span,
-                }
-                .into())
-            }
-        };
-
-        let enum_info = match udt_kind.as_ref() {
-            UdtKind::Enum(enum_info) => enum_info,
+        let enum_info = match self
+            .cucx
+            .tcx
+            .lookup_symbol(mangled_name, node.span)?
+            .as_ref()
+        {
+            SymbolTableValue::Enum(enum_info) => enum_info.clone(),
             _ => {
                 return Err(CodegenError::Undeclared {
                     name: udt.name.symbol(),
@@ -683,9 +678,9 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             }
         };
 
-        self.check_exhaustiveness_for_match_on_enum(enum_info, &node.arms, node.span)?;
+        self.check_exhaustiveness_for_match_on_enum(&enum_info, &node.arms, node.span)?;
 
-        let result = self.build_match_on_enum(enum_info, target, &node.arms, node.span);
+        let result = self.build_match_on_enum(&enum_info, target, &node.arms, node.span);
 
         if let Some(bkup) = bkup {
             self.cucx.modules_for_mangle.replace(bkup);
@@ -999,11 +994,19 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
 
         // Enum unpack (optional)
         if let Some(enum_unpack) = &node.enum_unpack {
+            // Push symbol table for enum unpack.
+            self.cucx.tcx.push_symbol_table(SymbolTable::new());
+
             self.build_enum_unpack(enum_unpack)?;
         }
 
         // Build then code
         let then_val = build_block_expression(self.cucx, &node.then)?;
+
+        // Pop symbol table for enum unpack.
+        if let Some(_) = &node.enum_unpack {
+            self.cucx.tcx.pop_symbol_table();
+        }
 
         // Since there can be no more than one terminator per block
         if self.cucx.no_terminator() {
@@ -1139,20 +1142,9 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         // If this is a generic type, the type is generated here.
         let struct_llvm_ty = self.cucx.conv_to_llvm_type(&struct_ty, node.span)?;
 
-        let udt_kind = match self.cucx.tcx.get_udt(mangled_name) {
-            Some(udt) => udt.clone(),
-
-            None => {
-                return Err(CodegenError::Undeclared {
-                    name: node.struct_ty.name.symbol(),
-                    span: node.struct_ty.name.span(),
-                }
-                .into());
-            }
-        };
-
-        let struct_info = match udt_kind.as_ref() {
-            UdtKind::Struct(info) => info,
+        let symbol_kind = self.cucx.tcx.lookup_symbol(mangled_name, node.span)?;
+        let struct_info = match symbol_kind.as_ref() {
+            SymbolTableValue::Struct(info) => info,
 
             _ => {
                 return Err(CodegenError::Undeclared {
@@ -1423,7 +1415,17 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
     }
 
     fn ident_expr(&mut self, ident: &Ident) -> anyhow::Result<Value<'ctx>> {
-        let (ptr, ty) = self.cucx.tcx.lookup_variable(ident)?.clone();
+        let symbol_kind = self.cucx.tcx.lookup_symbol(ident.symbol(), ident.span())?;
+        let (ptr, ty) = match symbol_kind.as_ref() {
+            SymbolTableValue::Variable(var) => (var.0, var.1.clone()),
+            _ => {
+                return Err(CodegenError::Undeclared {
+                    name: ident.symbol(),
+                    span: ident.span(),
+                }
+                .into())
+            }
+        };
 
         let llvm_ty = self.cucx.conv_to_llvm_type(&ty, ident.span())?;
 
@@ -1643,19 +1645,9 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         // If this is a generic type, the type is generated here.
         let enum_llvm_ty = self.cucx.conv_to_llvm_type(&enum_ty, span)?;
 
-        let udt_kind = match self.cucx.tcx.get_udt(mangled_name) {
-            Some(udt) => udt,
-            None => {
-                return Err(CodegenError::Undeclared {
-                    name: enum_name.symbol(),
-                    span: enum_name.span(),
-                }
-                .into())
-            }
-        };
-
-        let enum_info = match udt_kind.as_ref() {
-            UdtKind::Enum(enum_info) => enum_info,
+        let symbol_kind = self.cucx.tcx.lookup_symbol(mangled_name, span)?;
+        let enum_info = match symbol_kind.as_ref() {
+            SymbolTableValue::Enum(enum_info) => enum_info,
             _ => {
                 return Err(CodegenError::Undeclared {
                     name: enum_name.symbol(),
@@ -2147,11 +2139,12 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
     ) -> anyhow::Result<Value<'ctx>> {
         let llvm_struct_ty = self.cucx.conv_to_llvm_type(struct_ty, span)?;
 
-        let udt_kind = self.cucx.tcx.get_udt(mangled_struct_name).unwrap();
-
-        let struct_info = match udt_kind.as_ref() {
-            UdtKind::Struct(t) => t,
-            kind => unreachable!("{:?}", kind),
+        let symbol_kind = self.cucx.tcx.lookup_symbol(mangled_struct_name, span)?;
+        let struct_info = {
+            match symbol_kind.as_ref() {
+                SymbolTableValue::Struct(t) => t,
+                kind => unreachable!("{:?}", kind),
+            }
         };
 
         let field_info = match struct_info.fields.get(&field_name.symbol()) {
@@ -2326,11 +2319,9 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         let mangled_name = mangle_generic_fn_name(self.cucx, name, &generic_args);
 
         // Skip if the function is already defined.
-        if self
-            .cucx
-            .module
-            .get_function(mangled_name.as_str())
-            .is_some()
+        let symbol_kind = self.cucx.tcx.lookup_symbol(mangled_name, span);
+        if symbol_kind.is_ok()
+            && matches!(symbol_kind.unwrap().as_ref(), SymbolTableValue::Function(_))
         {
             return Ok(mangled_name);
         }
@@ -2372,7 +2363,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         )));
 
         self.cucx.declare_fn(
-            mangled_name.as_str(),
+            mangled_name,
             ast.decl
                 .params
                 .v
@@ -2459,41 +2450,36 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
     fn build_call_fn_without_mangle(
         &mut self,
         mangled_name: Symbol,
-        name_for_error: Symbol,
+        non_mangled_name: Symbol,
         args: VecDeque<(Value<'ctx>, Span)>,
         span: Span,
     ) -> anyhow::Result<Value<'ctx>> {
-        let func = self
-            .cucx
-            .module
-            .get_function(mangled_name.as_str())
-            .or_else(|| self.cucx.module.get_function(name_for_error.as_str())); // No mangled function, external functions, external static methods
-
-        let func = match func {
-            Some(func) => func,
-
-            None => {
+        let symbol_kind = match self.cucx.tcx.lookup_symbol(mangled_name, span) {
+            Ok(kind) => kind,
+            Err(_) => self.cucx.tcx.lookup_symbol(non_mangled_name, span)?, // TODO: Remove this
+        };
+        let fn_info = match symbol_kind.as_ref() {
+            SymbolTableValue::Function(func) => func,
+            _ => {
                 return Err(CodegenError::Undeclared {
-                    name: name_for_error,
+                    name: non_mangled_name,
                     span,
                 }
                 .into())
             }
         };
 
-        let function_info = self.cucx.tcx.get_function_info(func).unwrap();
-
-        if func.get_type().is_var_arg() {
-            self.verify_var_args(&args, &function_info.param_types)?;
+        if fn_info.value.get_type().is_var_arg() {
+            self.verify_var_args(&args, &fn_info.param_types)?;
         } else {
-            self.verify_args(&args, &function_info.param_types)?;
+            self.verify_args(&args, &fn_info.param_types)?;
         }
 
         let return_value = self
             .cucx
             .builder
             .build_call(
-                func,
+                fn_info.value,
                 args.iter()
                     .map(|a| a.0.get_value().into())
                     .collect::<Vec<_>>()
@@ -2507,7 +2493,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             // With return value
             Some(val) => Value::new(
                 val,
-                match &function_info.return_type {
+                match &fn_info.return_type {
                     ReturnType::Type(ty) => ty.clone(),
                     ReturnType::Void => unreachable!(),
                 },

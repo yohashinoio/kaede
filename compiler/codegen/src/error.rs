@@ -7,6 +7,9 @@ pub enum CodegenError {
     #[error("{}:{}:{} `{}` was not declared in this scope", span.file, span.start.line, span.start.column, .name)]
     Undeclared { name: Symbol, span: Span },
 
+    #[error("{}:{}:{} `{}` is already declared", span.file, span.start.line, span.start.column, .name)]
+    AlreadyDeclared { name: Symbol, span: Span },
+
     #[error("{}:{}:{} variable `{}` declared void", span.file, span.start.line, span.start.column, .name)]
     VoidVariable { name: Symbol, span: Span },
 
