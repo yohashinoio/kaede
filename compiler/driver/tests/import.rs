@@ -662,12 +662,34 @@ fn use_declaration() -> anyhow::Result<()> {
 
     let module1 = tempdir.child("m1.kd");
     module1.write_str(
-        r#"pub struct Apple {
+        r#"pub fn get_58(): i32 {
+            return 58
+        }
+
+        pub struct Apple {
             size: i32,
         }
 
-        pub fn get_size(apple: Apple): i32 {
-            return apple.size
+        impl Apple {
+            pub fn new(size: i32): Apple {
+                return Apple { size: size }
+            }
+
+            pub fn get_size(self): i32 {
+                return self.size
+            }
+        }
+
+        pub enum Fruit {
+            Ringo(Apple)
+        }
+
+        impl Fruit {
+            pub fn get_size(self): i32 {
+                return match self {
+                    Fruit::Ringo(a) => a.get_size()
+                }
+            }
         }"#,
     )?;
 
@@ -675,9 +697,88 @@ fn use_declaration() -> anyhow::Result<()> {
     module2.write_str(
         r#"import m1
         use m1.Apple
-        use m1.get_size
+        use m1.get_58
+        use m1.Fruit
         fn main(): i32 {
-            return get_size(Apple { size: 58 })
+            let apple = Apple::new(58)
+            let fruit = Fruit::Ringo(apple)
+            let size = fruit.get_size()
+            if size == get_58() && size == apple.get_size() {
+                return size
+            }
+            return 123
+        }"#,
+    )?;
+
+    test(58, &[module1.path(), module2.path()])
+}
+
+#[test]
+fn use_declaration_with_generic_struct() -> anyhow::Result<()> {
+    let tempdir = assert_fs::TempDir::new()?;
+
+    let module1 = tempdir.child("m1.kd");
+    module1.write_str(
+        r#"pub struct Apple<T> {
+            size: T,
+        }
+
+        impl<T> Apple<T> {
+            pub fn new(size: T): Apple<T> {
+                return Apple { size: size }
+            }
+
+            pub fn get_size(self): T {
+                return self.size
+            }
+        }"#,
+    )?;
+
+    let module2 = tempdir.child("m2.kd");
+    module2.write_str(
+        r#"import m1
+        use m1.Apple
+        fn main(): i32 {
+            let apple = Apple<i32>::new(58)
+            return apple.get_size()
+        }"#,
+    )?;
+
+    test(58, &[module1.path(), module2.path()])
+}
+
+#[test]
+fn use_declaration_with_generic_enum() -> anyhow::Result<()> {
+    let tempdir = assert_fs::TempDir::new()?;
+
+    let module1 = tempdir.child("m1.kd");
+    module1.write_str(
+        r#"pub enum Apple<T> {
+            Ringo(T),
+            Budo,
+        }
+
+        impl<T> Apple<T> {
+            pub fn new_ringo(size: T): Apple<T> {
+                return Apple::Ringo(size)
+            }
+
+            pub fn get_size(self): T {
+                return match self {
+                    Apple::Ringo(s) => s,
+                    Apple::Budo => 123,
+                }
+            }
+        }"#,
+    )?;
+
+    let module2 = tempdir.child("m2.kd");
+    module2.write_str(
+        r#"import m1
+        use m1.Apple
+        fn main(): i32 {
+            let apple = Apple<i32>::new_ringo(58)
+            return apple.get_size()
         }"#,
     )?;
 

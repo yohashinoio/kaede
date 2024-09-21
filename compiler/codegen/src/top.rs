@@ -3,7 +3,7 @@ use std::{collections::HashMap, fs, path::PathBuf, rc::Rc};
 use inkwell::{module::Linkage, types::StructType, values::FunctionValue};
 use kaede_ast::top::{
     Enum, EnumVariant, Extern, Fn, GenericFnInstance, GenericParams, Impl, Import, Param, Params,
-    Struct, StructField, TopLevel, TopLevelKind, Visibility,
+    Path, Struct, StructField, TopLevel, TopLevelKind, Use, Visibility,
 };
 use kaede_parse::Parser;
 use kaede_span::Span;
@@ -194,9 +194,30 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
             TopLevelKind::ExternalImpl(node) => {
                 self.external_impl(node.impl_, node.external_modules)?
             }
+
+            TopLevelKind::Use(node) => self.use_(node)?,
         }
 
         Ok(())
+    }
+
+    fn use_(&mut self, node: Use) -> anyhow::Result<()> {
+        let bindee_name = node
+            .path
+            .segments
+            .iter()
+            .map(|i| i.as_str())
+            .collect::<Vec<_>>()
+            .join(".")
+            .into();
+
+        let bindee_symbol_kind = self.cucx.tcx.lookup_symbol(bindee_name, node.span)?;
+
+        let new_name = mangle_name(self.cucx, node.path.segments.last().unwrap().symbol());
+
+        self.cucx
+            .tcx
+            .insert_symbol_to_root_scope(new_name.into(), bindee_symbol_kind, node.span)
     }
 
     fn generic_fn_instance(&mut self, node: GenericFnInstance) -> anyhow::Result<()> {
@@ -259,7 +280,8 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                     } else {
                         None
                     },
-                }),
+                })
+                .into(),
                 span,
             )?;
 
@@ -279,7 +301,8 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                 ty,
                 variants,
                 is_external,
-            }),
+            })
+            .into(),
             span,
         )
     }
@@ -366,7 +389,8 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                 SymbolTableValue::Generic(GenericInfo {
                     kind: GenericKind::Func((node, vis)),
                     is_external: None,
-                }),
+                })
+                .into(),
                 span,
             )?;
 
@@ -646,7 +670,8 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                 SymbolTableValue::Generic(GenericInfo {
                     kind: GenericKind::Struct(node),
                     is_external: None,
-                }),
+                })
+                .into(),
                 span,
             )?;
 
@@ -668,7 +693,8 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                 ty,
                 fields,
                 is_external: None,
-            }),
+            })
+            .into(),
             node.span,
         )?;
 
@@ -679,37 +705,43 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         self.import_module(node.module_path)
     }
 
-    fn import_module(&mut self, module_path: Ident) -> anyhow::Result<()> {
-        let import_module = module_path;
+    fn import_module(&mut self, module_path: Path) -> anyhow::Result<()> {
+        let mut path = self.cucx.file_path.path().parent().unwrap().to_path_buf();
 
-        let path = self
-            .cucx
-            .file_path
-            .path()
-            .parent()
-            .unwrap()
-            .join(import_module.as_str())
-            .with_extension("kd");
+        for (idx, segment) in module_path.segments.iter().enumerate() {
+            if idx == module_path.segments.len() - 1 {
+                path = path.join(segment.as_str()).with_extension("kd");
+                break;
+            }
+
+            path = path.join(segment.as_str());
+        }
 
         if !path.exists() {
             return Err(CodegenError::FileNotFoundForModule {
-                span: module_path.span(),
-                mod_name: module_path.symbol(),
+                span: module_path.span,
+                mod_name: module_path.segments.last().unwrap().symbol(),
             }
             .into());
         }
 
         // Insert module name to symbol table.
         self.cucx.tcx.insert_symbol_to_root_scope(
-            import_module.symbol(),
-            SymbolTableValue::Module,
-            import_module.span(),
+            module_path
+                .segments
+                .iter()
+                .map(|i| i.as_str())
+                .collect::<Vec<_>>()
+                .join(".")
+                .into(),
+            SymbolTableValue::Module.into(),
+            module_path.span,
         )?;
 
         // TODO: Optimize
         let psd_module = Parser::new(
             &fs::read_to_string(&path).unwrap(),
-            PathBuf::from(module_path.as_str()).into(),
+            PathBuf::from(path).into(),
         )
         .run()
         .unwrap();
@@ -718,12 +750,17 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         let bkup = self
             .cucx
             .modules_for_mangle
-            .drain_and_append(vec![import_module]);
+            .drain_and_append(module_path.segments.clone());
 
         for top_level in psd_module.top_levels {
             // Without checking visibility.
             if let TopLevelKind::Impl(impl_) = top_level.kind {
-                self.import_impl(impl_, vec![import_module], top_level.vis, top_level.span)?;
+                self.import_impl(
+                    impl_,
+                    module_path.segments.clone(),
+                    top_level.vis,
+                    top_level.span,
+                )?;
                 continue;
             }
 
@@ -736,17 +773,9 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                 TopLevelKind::Impl(_) => unreachable!(),
 
                 TopLevelKind::Fn(mut func) => {
-                    self.preprocess_for_external_fn(&mut func, vec![import_module])?;
+                    self.preprocess_for_external_fn(&mut func, module_path.segments.clone())?;
 
-                    let mangled_name = {
-                        let bkup = self
-                            .cucx
-                            .modules_for_mangle
-                            .drain_and_append(vec![import_module]);
-                        let mangled_name = mangle_name(self.cucx, func.decl.name.symbol());
-                        self.cucx.modules_for_mangle.replace(bkup);
-                        mangled_name
-                    };
+                    let mangled_name = mangle_name(self.cucx, func.decl.name.symbol());
 
                     self.declare_fn(
                         mangled_name.into(),
@@ -767,8 +796,8 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                 }
 
                 TopLevelKind::Import(_) => todo!(),
-
                 TopLevelKind::Extern(_) => todo!(),
+                TopLevelKind::Use(_) => todo!(),
 
                 TopLevelKind::GenericFnInstance(_) => unreachable!(),
                 TopLevelKind::ExternalImpl(_) => unreachable!(),
@@ -777,7 +806,9 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
 
         self.cucx.modules_for_mangle.replace(bkup);
 
-        self.cucx.imported_modules.insert(module_path.symbol());
+        self.cucx
+            .imported_modules
+            .insert(module_path.segments.last().unwrap().symbol());
 
         Ok(())
     }
@@ -797,7 +828,8 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                 SymbolTableValue::Generic(GenericInfo {
                     kind: GenericKind::Struct(struct_),
                     is_external: Some(self.cucx.modules_for_mangle.get()),
-                }),
+                })
+                .into(),
                 span,
             )?;
 
@@ -821,7 +853,8 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                 ty,
                 fields,
                 is_external: Some(self.cucx.modules_for_mangle.get()),
-            }),
+            })
+            .into(),
             span,
         )?;
 

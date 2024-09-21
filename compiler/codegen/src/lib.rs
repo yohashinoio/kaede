@@ -16,8 +16,8 @@ use inkwell::{
 };
 use kaede_ast::{
     top::{
-        Enum, ExternalImpl, Fn, GenericParams, Impl, Import, Param, Params, Struct, StructField,
-        TopLevel, TopLevelKind, Visibility,
+        Enum, ExternalImpl, Fn, GenericParams, Impl, Import, Param, Params, Path, Struct,
+        StructField, TopLevel, TopLevelKind, Visibility,
     },
     CompileUnit,
 };
@@ -436,7 +436,8 @@ impl<'ctx> CompileUnitCtx<'ctx> {
                 value: fn_value,
                 return_type,
                 param_types,
-            }),
+            })
+            .into(),
             span,
         )?;
 
@@ -551,7 +552,8 @@ impl<'ctx> CompileUnitCtx<'ctx> {
                 ty,
                 fields,
                 is_external,
-            }),
+            })
+            .into(),
             ast.span,
         )?;
 
@@ -592,7 +594,8 @@ impl<'ctx> CompileUnitCtx<'ctx> {
                 ty,
                 variants,
                 is_external,
-            }),
+            })
+            .into(),
             ast.span,
         )?;
 
@@ -861,14 +864,23 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             .collect::<Vec<_>>();
 
         for lib in autoload_libs {
+            let mut path_segments = Vec::new();
+
+            for segment in lib.iter() {
+                path_segments.push(Ident::new(
+                    segment.to_str().unwrap().to_string().into(),
+                    Span::dummy(),
+                ));
+            }
+
             build_top_level(
                 self,
                 TopLevel {
                     kind: TopLevelKind::Import(Import {
-                        module_path: Ident::new(
-                            Symbol::from(lib.to_str().unwrap().to_string()),
-                            Span::dummy(),
-                        ),
+                        module_path: Path {
+                            segments: path_segments,
+                            span: Span::dummy(),
+                        },
                         span: Span::dummy(),
                     }),
                     vis: Visibility::Private,

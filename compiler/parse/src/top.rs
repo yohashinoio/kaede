@@ -1,8 +1,8 @@
 use std::{collections::VecDeque, rc::Rc};
 
 use kaede_ast::top::{
-    Enum, EnumVariant, Extern, Fn, FnDecl, GenericParams, Impl, Import, Param, Params, Struct,
-    StructField, TopLevel, TopLevelKind, Visibility,
+    Enum, EnumVariant, Extern, Fn, FnDecl, GenericParams, Impl, Import, Param, Params, Path,
+    Struct, StructField, TopLevel, TopLevelKind, Use, Visibility,
 };
 use kaede_lex::token::TokenKind;
 use kaede_span::Location;
@@ -45,6 +45,11 @@ impl Parser {
             TokenKind::Extern => {
                 let kind = self.extern_()?;
                 (kind.span, TopLevelKind::Extern(kind))
+            }
+
+            TokenKind::Use => {
+                let kind = self.use_()?;
+                (kind.span, TopLevelKind::Use(kind))
             }
 
             _ => unreachable!("{:?}", token.kind),
@@ -135,16 +140,50 @@ impl Parser {
         }
     }
 
+    fn path(&mut self) -> ParseResult<Path> {
+        let start = self.first().span.start;
+
+        let mut segments = Vec::new();
+
+        loop {
+            let segment = self.ident()?;
+
+            segments.push(segment);
+
+            if !self.consume_b(&TokenKind::Dot) {
+                break;
+            }
+        }
+
+        let finish = self.first().span.finish;
+
+        Ok(Path {
+            segments,
+            span: self.new_span(start, finish),
+        })
+    }
+
+    fn use_(&mut self) -> ParseResult<Use> {
+        let start = self.consume(&TokenKind::Use).unwrap().start;
+
+        let path = self.path()?;
+
+        let span = self.new_span(start, path.span.finish);
+
+        Ok(Use { path, span })
+    }
+
     fn import(&mut self) -> ParseResult<Import> {
         let start = self.consume(&TokenKind::Import).unwrap().start;
 
-        let module_path = self.ident()?;
+        let module_path = self.path()?;
 
-        if !self.imported_modules.contains(&module_path.symbol()) {
-            self.imported_modules.push(module_path.symbol());
+        let last = module_path.segments.last().unwrap().symbol();
+        if !self.imported_modules.contains(&last) {
+            self.imported_modules.push(last);
         }
 
-        let span = self.new_span(start, module_path.span().finish);
+        let span = self.new_span(start, module_path.span.finish);
 
         Ok(Import { module_path, span })
     }

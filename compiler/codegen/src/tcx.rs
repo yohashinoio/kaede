@@ -151,14 +151,14 @@ impl<'ctx> TypeCtx<'ctx> {
     pub fn insert_symbol_to_root_scope(
         &mut self,
         symbol: Symbol,
-        value: SymbolTableValue<'ctx>,
+        value: Rc<SymbolTableValue<'ctx>>,
         span: Span,
     ) -> anyhow::Result<()> {
         if self
             .symbol_tables
             .first_mut()
             .unwrap()
-            .insert(symbol, Rc::new(value))
+            .insert(symbol, value)
             .is_some()
         {
             return Err(CodegenError::AlreadyDeclared { name: symbol, span }.into());

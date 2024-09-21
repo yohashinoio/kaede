@@ -6,6 +6,12 @@ use kaede_type::{Mutability, Ty};
 
 use crate::{expr::StringLiteral, stmt::Block};
 
+#[derive(Debug)]
+pub struct Path {
+    pub segments: Vec<Ident>,
+    pub span: Span,
+}
+
 /// Accessibility
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Copy)]
 pub enum Visibility {
@@ -88,7 +94,7 @@ pub struct Fn {
 
 #[derive(Debug)]
 pub struct Import {
-    pub module_path: Ident,
+    pub module_path: Path,
     pub span: Span,
 }
 
@@ -124,6 +130,12 @@ pub struct Extern {
 }
 
 #[derive(Debug)]
+pub struct Use {
+    pub path: Path,
+    pub span: Span,
+}
+
+#[derive(Debug)]
 pub struct TopLevel {
     pub kind: TopLevelKind,
     pub vis: Visibility,
@@ -150,6 +162,7 @@ pub enum TopLevelKind {
     Impl(Impl),
     Enum(Enum),
     Extern(Extern),
+    Use(Use),
 
     // Internal use
     GenericFnInstance(GenericFnInstance),
