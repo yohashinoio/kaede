@@ -249,6 +249,41 @@ fn import_enum() -> anyhow::Result<()> {
 }
 
 #[test]
+fn import_enum_methods() -> anyhow::Result<()> {
+    let tempdir = assert_fs::TempDir::new()?;
+
+    let module = tempdir.child("m.kd");
+    module.write_str(
+        r#"pub enum Fruit {
+            Apple(i32),
+            Orange,
+        }
+        impl Fruit {
+            pub fn new(s: i32): mut Fruit {
+                return Fruit::Apple(s)
+            }
+            pub fn get(self): i32 {
+                return match self {
+                    Fruit::Apple(s) => s,
+                    Fruit::Orange => 123
+                }
+            }
+        }"#,
+    )?;
+
+    let main = tempdir.child("main.kd");
+    main.write_str(
+        r#"import m
+        fn main(): i32 {
+            let apple = m.Fruit::new(58)
+            return apple.get()
+        }"#,
+    )?;
+
+    test(58, &[module.path(), main.path()])
+}
+
+#[test]
 fn import_complex_enum() -> anyhow::Result<()> {
     let tempdir = assert_fs::TempDir::new()?;
 
@@ -426,7 +461,7 @@ fn nested_import() -> anyhow::Result<()> {
 }
 
 #[test]
-fn import_generic_methods() {
+fn import_generic_struct_methods() {
     let tempdir = assert_fs::TempDir::new().unwrap();
 
     let module = tempdir.child("m.kd");
@@ -469,6 +504,51 @@ fn import_generic_methods() {
             apple.set_height(48)
             apple.set_width(10)
             return apple.get_height() + apple.get_width()
+        }"#,
+    )
+    .unwrap();
+
+    test(58, &[module.path(), main.path()]).unwrap();
+}
+
+#[test]
+fn import_generic_enum_methods_with_arg_of_self_type() {
+    let tempdir = assert_fs::TempDir::new().unwrap();
+
+    let module = tempdir.child("m.kd");
+    module
+        .write_str(
+            r#"pub enum Apple<T> {
+            Ringo(i32),
+            Budo,
+        }
+
+        impl<T> Apple<T> {
+            pub fn new_ringo(size: T): mut Apple<T> {
+                return Apple<T>::Ringo(size)
+            }
+
+            pub fn add(self, other: Apple<T>): T {
+                let self_size = match self {
+                    Apple::Ringo(s) => s,
+                    Apple::Budo => 123,
+                }
+
+                return match other {
+                    Apple::Ringo(s) => self_size + s,
+                    Apple::Budo => self_size + 123,
+                }
+            }
+        }"#,
+        )
+        .unwrap();
+
+    let main = tempdir.child("main.kd");
+    main.write_str(
+        r#"import m
+        fn main(): i32 {
+            let apple = m.Apple<i32>::new_ringo(48)
+            return apple.add(m.Apple<i32>::new_ringo(10))
         }"#,
     )
     .unwrap();
@@ -540,6 +620,36 @@ fn import_function_with_arg_of_external_struct() -> anyhow::Result<()> {
         r#"import m1
         fn main(): i32 {
             return m1.get_size(m1.Apple { size: 58 })
+        }"#,
+    )?;
+
+    test(58, &[module1.path(), module2.path()])
+}
+
+#[test]
+fn import_function_with_arg_of_external_enum() -> anyhow::Result<()> {
+    let tempdir = assert_fs::TempDir::new()?;
+
+    let module1 = tempdir.child("m1.kd");
+    module1.write_str(
+        r#"pub enum Apple {
+            Ringo(i32),
+            Budo,
+        }
+
+        pub fn get_size(apple: Apple): i32 {
+            return match apple {
+                Apple::Ringo(s) => s,
+                Apple::Budo => 123,
+            }
+        }"#,
+    )?;
+
+    let module2 = tempdir.child("m2.kd");
+    module2.write_str(
+        r#"import m1
+        fn main(): i32 {
+            return m1.get_size(m1.Apple::Ringo(58))
         }"#,
     )?;
 
