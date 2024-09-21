@@ -155,6 +155,7 @@ impl Cursor<'_> {
                     "extern" => self.create_token(TokenKind::Extern),
                     "as" => self.create_token(TokenKind::As),
                     "self" => self.create_token(TokenKind::Self_),
+                    "use" => self.create_token(TokenKind::Use),
 
                     // Identifier
                     _ => self.create_token(TokenKind::Ident(ident)),
