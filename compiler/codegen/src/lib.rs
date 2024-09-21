@@ -272,7 +272,6 @@ impl ModulesForMangle {
     }
 
     fn get(&self) -> Vec<Ident> {
-        // TODO: Optimize
         self.names.clone()
     }
 
