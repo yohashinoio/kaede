@@ -1,5 +1,4 @@
 use std::{
-    cell::RefCell,
     collections::{HashMap, HashSet, VecDeque},
     rc::Rc,
 };
@@ -722,7 +721,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
                 .contains(&generic_args_with_actual_types)
             {
                 // Register as already generated.
-                match *RefCell::borrow_mut(&symbol_kind) {
+                match *symbol_kind.borrow_mut() {
                     SymbolTableValue::Generic(ref mut generic_info) => match &mut generic_info.kind
                     {
                         GenericKind::Struct(info) => info
