@@ -3,21 +3,19 @@
 //!
 //! I tried testing using AOT compilation, but single-threaded JIT compilation was faster
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use inkwell::{
     context::Context, module::Module, support::load_library_permanently, OptimizationLevel,
 };
+use kaede_common::{kaede_gc_lib_path, kaede_lib_path};
 use kaede_parse::Parser;
 
-use super::*;
+use crate::{codegen_compile_unit, error::CodegenError, CodegenCtx};
 
 fn jit_compile(module: &Module) -> anyhow::Result<i32> {
-    let kaede_gc_lib_path = format!("{}/lib/libkgc.so", kaede_dir());
-    let kaede_std_lib_path = format!("{}/lib/libkd.so", kaede_dir());
-
-    let kaede_gc_lib_path = Path::new(&kaede_gc_lib_path);
-    let kaede_std_lib_path = Path::new(&kaede_std_lib_path);
+    let kaede_gc_lib_path = kaede_gc_lib_path();
+    let kaede_std_lib_path = kaede_lib_path();
 
     // Load bdw-gc (boehm-gc)
     if kaede_gc_lib_path.exists() {

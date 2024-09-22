@@ -1,5 +1,6 @@
 use core::panic;
 use std::{
+    ffi::OsStr,
     fs,
     path::{Path, PathBuf},
     process::Command,
@@ -10,7 +11,7 @@ use anyhow::{anyhow, Context as _};
 use colored::Colorize;
 use inkwell::{context::Context, module::Module, OptimizationLevel};
 use kaede_codegen::{codegen_compile_unit, error::CodegenError, CodegenCtx};
-use kaede_common::kaede_dir;
+use kaede_common::{kaede_gc_lib_path, kaede_lib_path};
 use kaede_parse::Parser;
 use tempfile::{NamedTempFile, TempPath};
 
@@ -99,11 +100,11 @@ fn emit_object_file_to_tempfile(bitcode_path: &Path) -> anyhow::Result<TempPath>
 fn emit_exe_file(obj_path: &Path, output_file_path: &Path) -> anyhow::Result<()> {
     let status = Command::new("cc")
         .args([
-            "-o",
-            output_file_path.to_str().unwrap(),
-            obj_path.to_str().unwrap(),
-            &format!("{}/lib/libkgc.so", kaede_dir()), // Link with garbage collector
-            &format!("{}/lib/libkd.so", kaede_dir()),  // Link with standard library
+            OsStr::new("-o"),
+            output_file_path.as_os_str(),
+            obj_path.as_os_str(),
+            kaede_gc_lib_path().as_os_str(), // Link with garbage collector
+            kaede_lib_path().as_os_str(),    // Link with standard library
         ])
         .status()?;
 

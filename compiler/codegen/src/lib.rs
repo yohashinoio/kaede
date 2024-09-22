@@ -1,3 +1,4 @@
+use core::panic;
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     rc::Rc,
@@ -21,7 +22,7 @@ use kaede_ast::{
     },
     CompileUnit,
 };
-use kaede_common::kaede_dir;
+use kaede_common::kaede_autoload_dir;
 use kaede_span::{file::FilePath, Span};
 use kaede_symbol::{Ident, Symbol};
 use kaede_type::{
@@ -897,7 +898,13 @@ impl<'ctx> CompileUnitCtx<'ctx> {
     }
 
     fn import_autoloads(&mut self) -> anyhow::Result<()> {
-        let autoload_libs = std::fs::read_dir(format!("{}/lib/src/autoload/", kaede_dir()))?
+        let autoload_dir = kaede_autoload_dir();
+
+        if !autoload_dir.exists() {
+            panic!("Autoload directory not found!");
+        }
+
+        let autoload_libs = std::fs::read_dir(autoload_dir)?
             .map(|entry| entry.unwrap().path())
             .filter(|path| path.is_file() && path.extension().is_some_and(|e| e == "kd")) // Exclude non-source files
             .collect::<Vec<_>>();
