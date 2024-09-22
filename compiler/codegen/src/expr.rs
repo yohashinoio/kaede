@@ -380,7 +380,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         // Prepare for external types
         let (value_ty, bkup) = if let TyKind::External(ety) = value_ty.kind.as_ref() {
             (
-                ety.ty.clone(),
+                ety.get_base_type(),
                 Some(
                     self.cucx
                         .modules_for_mangle
@@ -395,7 +395,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             TyKind::Reference(refty) => self.build_match_on_reference(node, &value, refty),
             TyKind::Fundamental(fty) => self.build_match_on_fundamental_value(node, &value, fty),
 
-            _ => todo!("Unsupported enum target"),
+            kind => todo!("Unsupported enum target: {}", kind),
         };
 
         if let Some(bkup) = bkup {
