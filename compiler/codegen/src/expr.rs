@@ -2482,6 +2482,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                     CodegenError::Undeclared { .. } => {
                         // If the function is not found, try to call the function without mangling. (For ffi)
                         self.build_call_fn_without_mangle(node.callee.symbol(), &args, node.span)
+                            .map_err(|_| err.into())
                     }
                     _ => Err(err.into()),
                 })
