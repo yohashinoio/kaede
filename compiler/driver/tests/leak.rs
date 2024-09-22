@@ -41,7 +41,7 @@ fn leak_check_with_valgrind() -> anyhow::Result<()> {
         .args([
             "-O0",
             "--display-llvm-ir",
-            program_file.path().to_str().unwrap(),
+            &program_file.path().to_string_lossy(),
         ])
         .assert()
         .success();
@@ -52,7 +52,7 @@ fn leak_check_with_valgrind() -> anyhow::Result<()> {
     let asm = assert_fs::NamedTempFile::new("leak.s")?;
     asm.write_binary(
         &Command::new("llc")
-            .args([llvm_ir.path().to_str().unwrap(), "-o", "-"])
+            .args([&llvm_ir.path().to_string_lossy(), "-o", "-"])
             .assert()
             .success()
             .get_output()
@@ -63,17 +63,17 @@ fn leak_check_with_valgrind() -> anyhow::Result<()> {
     Command::new("cc")
         .args([
             "-g",
-            asm.path().to_str().unwrap(),
+            &asm.path().to_string_lossy(),
             KAEDE_GC_LIB_PATH,
             "-o",
-            executable.path().to_str().unwrap(),
+            &executable.path().to_string_lossy(),
         ])
         .assert()
         .success();
 
     // Leak check
     Command::new("valgrind")
-        .args(["--leak-check=full", executable.path().to_str().unwrap()])
+        .args(["--leak-check=full", &executable.path().to_string_lossy()])
         .assert()
         .code(predicate::eq(58))
         .stderr(

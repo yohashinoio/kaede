@@ -21,14 +21,14 @@ fn jit_compile(module: &Module) -> anyhow::Result<i32> {
     if kaede_gc_lib_path.exists() {
         load_library_permanently(&kaede_gc_lib_path)?;
     } else {
-        panic!("{} not found!", kaede_gc_lib_path.to_str().unwrap());
+        panic!("{} not found!", kaede_gc_lib_path.to_string_lossy());
     }
 
     // Load standard libarary
     if kaede_std_lib_path.exists() {
         load_library_permanently(&kaede_std_lib_path)?;
     } else {
-        panic!("{} not found!", kaede_std_lib_path.to_str().unwrap());
+        panic!("{} not found!", kaede_std_lib_path.to_string_lossy());
     }
 
     let ee = module
@@ -52,6 +52,7 @@ fn exec(program: &str) -> Result<i32, CodegenError> {
     let module = codegen_compile_unit(
         &cgcx,
         file,
+        &None,
         Parser::new(program, file).run().unwrap(),
         false,
     )

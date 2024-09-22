@@ -27,14 +27,14 @@ struct Args {
     #[arg(
         short,
         long,
-        help = "instead of a file, we receive a program from the commandline argument"
+        help = "Instead of a file, we receive a program from the commandline argument"
     )]
     program: Option<String>,
 
     #[arg(short = 'o')]
     output: Option<PathBuf>,
 
-    #[arg(short = 'O', default_value_t = 2, help = "optimization level (0-3)")]
+    #[arg(short = 'O', default_value_t = 2, help = "Optimization level (0-3)")]
     opt_level: u8,
 
     #[arg(
@@ -43,6 +43,9 @@ struct Args {
         help = "Outputs object files without invoking the linker"
     )]
     c: bool,
+
+    #[arg(long, help = "Project root directory")]
+    root_dir: Option<PathBuf>,
 
     // Do not load standard libraries that automatically load
     // Will not be used except when building standard libraries
@@ -85,8 +88,8 @@ fn emit_object_file_to_tempfile(bitcode_path: &Path) -> anyhow::Result<TempPath>
             "-filetype=obj",
             "-relocation-model=pic", // Set relocation model
             "-o",
-            temppath.to_str().unwrap(),
-            bitcode_path.to_str().unwrap(),
+            &temppath.to_string_lossy(),
+            &bitcode_path.to_string_lossy(),
         ])
         .status()?;
 
@@ -118,6 +121,7 @@ fn emit_exe_file(obj_path: &Path, output_file_path: &Path) -> anyhow::Result<()>
 fn compile<'ctx>(
     cgcx: &'ctx CodegenCtx<'_>,
     unit_infos: Vec<CompileUnitInfo>,
+    root_dir: &'ctx Option<PathBuf>,
     no_autoload: bool,
 ) -> anyhow::Result<Module<'ctx>> {
     let mut compiled_modules = Vec::new();
@@ -127,7 +131,7 @@ fn compile<'ctx>(
 
         let ast = Parser::new(&unit_info.program, file).run()?;
 
-        let module = codegen_compile_unit(cgcx, file, ast, no_autoload)?;
+        let module = codegen_compile_unit(cgcx, file, root_dir, ast, no_autoload)?;
 
         compiled_modules.push(module);
     }
@@ -151,7 +155,7 @@ fn display_optimized_llvm_ir(opt_level: OptimizationLevel, module: &Module) -> a
         .args([
             "-S",
             &format!("-O{}", opt_level as u32),
-            bitcode_path.to_str().unwrap(),
+            &bitcode_path.to_string_lossy(),
         ])
         .status()?;
 
@@ -174,8 +178,8 @@ fn optimize_with_opt(
         .args([
             &format!("-O{}", opt_level as u32),
             "-o",
-            temppath.to_str().unwrap(),
-            bitcode_path.to_str().unwrap(),
+            &temppath.to_string_lossy(),
+            &bitcode_path.to_string_lossy(),
         ])
         .status()?;
 
@@ -199,54 +203,53 @@ fn emit_optimized_object_file_to_tempfile(
 
 fn compile_and_output_obj(
     unit_infos: Vec<CompileUnitInfo>,
-    opt_level: OptimizationLevel,
-    display_llvm_ir: bool,
-    output_file_path: &Path,
-    no_autoload: bool,
+    option: CompileOption,
 ) -> anyhow::Result<()> {
     let context = Context::create();
     let cgcx = CodegenCtx::new(&context)?;
 
-    let module = compile(&cgcx, unit_infos, no_autoload)?;
+    let module = compile(&cgcx, unit_infos, &option.root_dir, option.no_autoload)?;
 
     // Emit
-    if display_llvm_ir {
-        display_optimized_llvm_ir(opt_level, &module)?;
+    if option.display_llvm_ir {
+        display_optimized_llvm_ir(option.opt_level, &module)?;
     } else {
-        let obj_path = emit_optimized_object_file_to_tempfile(opt_level, &module)?;
+        let obj_path = emit_optimized_object_file_to_tempfile(option.opt_level, &module)?;
 
-        fs::rename(obj_path, output_file_path)?;
+        fs::rename(obj_path, option.output_file_path)?;
     }
 
     Ok(())
 }
 
-fn compile_and_link(
-    unit_infos: Vec<CompileUnitInfo>,
-    opt_level: OptimizationLevel,
-    display_llvm_ir: bool,
-    output_file_path: &Path,
-    no_autoload: bool,
-) -> anyhow::Result<()> {
+fn compile_and_link(unit_infos: Vec<CompileUnitInfo>, option: CompileOption) -> anyhow::Result<()> {
     let context = Context::create();
     let cgcx = CodegenCtx::new(&context)?;
 
-    let module = compile(&cgcx, unit_infos, no_autoload)?;
+    let module = compile(&cgcx, unit_infos, &option.root_dir, option.no_autoload)?;
 
     if module.get_function("main").is_none() {
         return Err(CodegenError::MainNotFound.into());
     }
 
     // Emit
-    if display_llvm_ir {
-        display_optimized_llvm_ir(opt_level, &module)?;
+    if option.display_llvm_ir {
+        display_optimized_llvm_ir(option.opt_level, &module)?;
     } else {
-        let obj_path = emit_optimized_object_file_to_tempfile(opt_level, &module)?;
+        let obj_path = emit_optimized_object_file_to_tempfile(option.opt_level, &module)?;
 
-        emit_exe_file(&obj_path, output_file_path)?;
+        emit_exe_file(&obj_path, &option.output_file_path)?;
     }
 
     Ok(())
+}
+
+struct CompileOption {
+    opt_level: OptimizationLevel,
+    display_llvm_ir: bool,
+    output_file_path: PathBuf,
+    root_dir: Option<PathBuf>,
+    no_autoload: bool,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -256,14 +259,17 @@ fn main() -> anyhow::Result<()> {
 
     let file_paths = args.files;
 
-    let opt_level = to_inkwell_opt_level(args.opt_level);
-
-    let display_llvmir = args.display_llvm_ir;
-
-    let output_file_path =
-        &args
-            .output
-            .unwrap_or(PathBuf::from(if args.c { "a.o" } else { "a.out" }));
+    let option = CompileOption {
+        opt_level: to_inkwell_opt_level(args.opt_level),
+        display_llvm_ir: args.display_llvm_ir,
+        output_file_path: args.output.unwrap_or(PathBuf::from(if args.c {
+            "a.o"
+        } else {
+            "a.out"
+        })),
+        root_dir: args.root_dir,
+        no_autoload: args.no_autoload,
+    };
 
     if let Some(program) = args.program {
         compile_and_link(
@@ -271,10 +277,7 @@ fn main() -> anyhow::Result<()> {
                 file_path: PathBuf::from("<commandline>"),
                 program,
             }],
-            opt_level,
-            display_llvmir,
-            output_file_path,
-            args.no_autoload,
+            option,
         )?;
 
         return Ok(());
@@ -298,26 +301,14 @@ fn main() -> anyhow::Result<()> {
 
     if args.c {
         // Emit object files
-        if let Err(err) = compile_and_output_obj(
-            programs,
-            opt_level,
-            display_llvmir,
-            output_file_path,
-            args.no_autoload,
-        ) {
+        if let Err(err) = compile_and_output_obj(programs, option) {
             // If backtrace is enabled, it is also displayed
             eprintln!("{}: {:?}", "Error".bright_red(), err);
             std::process::exit(1);
         }
     } else {
         // Emit exe files
-        if let Err(err) = compile_and_link(
-            programs,
-            opt_level,
-            display_llvmir,
-            output_file_path,
-            args.no_autoload,
-        ) {
+        if let Err(err) = compile_and_link(programs, option) {
             // If backtrace is enabled, it is also displayed
             eprintln!("{}: {:?}", "Error".bright_red(), err);
             std::process::exit(1);

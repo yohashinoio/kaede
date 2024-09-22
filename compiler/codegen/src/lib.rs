@@ -1,6 +1,7 @@
 use core::panic;
 use std::{
     collections::{HashMap, HashSet, VecDeque},
+    path::{Component, PathBuf},
     rc::Rc,
 };
 
@@ -203,10 +204,11 @@ fn generic_types_to_actual_in_enum(
 pub fn codegen_compile_unit<'ctx>(
     cgcx: &'ctx CodegenCtx<'ctx>,
     file_path: FilePath,
+    root_dir: &'ctx Option<PathBuf>,
     cu: CompileUnit,
     no_autoload: bool,
 ) -> anyhow::Result<Module<'ctx>> {
-    let cucx = CompileUnitCtx::new(cgcx, file_path)?;
+    let cucx = CompileUnitCtx::new(cgcx, file_path, root_dir)?;
 
     cucx.codegen(cu.top_levels, no_autoload)
 }
@@ -308,6 +310,8 @@ pub struct CompileUnitCtx<'ctx> {
 
     imported_modules: HashSet<Symbol>,
 
+    root_dir: &'ctx Option<PathBuf>,
+
     modules_for_mangle: ModulesForMangle,
 
     /// Block to jump to when a `break` is executed
@@ -324,7 +328,17 @@ pub struct CompileUnitCtx<'ctx> {
 }
 
 impl<'ctx> CompileUnitCtx<'ctx> {
-    pub fn new(cgcx: &'ctx CodegenCtx<'ctx>, file_path: FilePath) -> anyhow::Result<Self> {
+    pub fn new(
+        cgcx: &'ctx CodegenCtx<'ctx>,
+        file_path: FilePath,
+        root_dir: &'ctx Option<PathBuf>,
+    ) -> anyhow::Result<Self> {
+        if let Some(root_dir) = &root_dir {
+            if !root_dir.is_dir() {
+                panic!("Root directory is not a directory");
+            }
+        }
+
         let module_name = file_path
             .path()
             .file_stem()
@@ -334,7 +348,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             .unwrap();
 
         let module = cgcx.context.create_module(&module_name);
-        module.set_source_file_name(file_path.path().to_str().unwrap());
+        module.set_source_file_name(&file_path.path().to_string_lossy());
 
         let mut tcx = TypeCtx::default();
         tcx.push_symbol_table(SymbolTable::new()); // Top-level scope
@@ -345,6 +359,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             module,
             builder: cgcx.context.create_builder(),
             file_path,
+            root_dir,
             modules_for_mangle: ModulesForMangle::new(&[Ident::new(
                 module_name.into(),
                 Span::dummy(),
@@ -362,6 +377,39 @@ impl<'ctx> CompileUnitCtx<'ctx> {
 
     pub fn get_size_in_bits(&self, type_: &dyn AnyType) -> u64 {
         self.cgcx.target_data.get_bit_size(type_)
+    }
+
+    pub fn mangle_prefix(&self) -> anyhow::Result<String> {
+        let diff_from_root = if let Some(root_dir) = self.root_dir {
+            // Get the canonical paths.
+            let root_dir = root_dir.canonicalize()?;
+            let file_parent = self.file_path.path().parent().unwrap().canonicalize()?;
+
+            file_parent
+                .strip_prefix(root_dir)?
+                .components()
+                .filter_map(|c| {
+                    if let Component::Normal(os_str) = c {
+                        os_str.to_str()
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(".")
+        } else {
+            "".to_owned()
+        };
+
+        Ok(if diff_from_root.is_empty() {
+            self.modules_for_mangle.create_mangle_prefix()
+        } else {
+            format!(
+                "{}.{}",
+                diff_from_root,
+                self.modules_for_mangle.create_mangle_prefix(),
+            )
+        })
     }
 
     /// Create a new stack allocation instruction in the entry block of the function
@@ -778,7 +826,9 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             self.tcx.pop_generic_arg_table();
         }
 
-        let mangled_generic_name = mangle_udt_name(self, udt);
+        let mangled_generic_name = self
+            .tcx
+            .resolve_module(mangle_udt_name(self, udt), udt.name.span());
 
         let borrowed_symbol_kind = symbol_kind.borrow();
         let generic_kind = match &*borrowed_symbol_kind {
@@ -786,16 +836,17 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             _ => unreachable!(),
         };
 
+        // Create an actual type from a generic type.
         match generic_kind {
-            GenericKind::Struct(generic_struct_info) => self.create_generic_struct_type(
+            GenericKind::Struct(info) => self.create_generic_struct_type(
                 mangled_generic_name,
-                &generic_struct_info.ast,
+                &info.ast,
                 generic_args,
                 is_external.clone(),
             ),
-            GenericKind::Enum(generic_enum_info) => self.create_generic_enum_type(
+            GenericKind::Enum(info) => self.create_generic_enum_type(
                 mangled_generic_name,
-                &generic_enum_info.ast,
+                &info.ast,
                 generic_args,
                 is_external.clone(),
             ),
@@ -914,7 +965,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
 
             for segment in lib.iter() {
                 path_segments.push(Ident::new(
-                    segment.to_str().unwrap().to_string().into(),
+                    segment.to_string_lossy().to_string().into(),
                     Span::dummy(),
                 ));
             }

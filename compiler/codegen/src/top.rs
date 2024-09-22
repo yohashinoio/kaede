@@ -5,6 +5,7 @@ use kaede_ast::top::{
     Enum, EnumVariant, Extern, Fn, GenericFnInstance, GenericParams, Impl, Import, Param, Params,
     Path, Struct, StructField, TopLevel, TopLevelKind, Use, Visibility,
 };
+use kaede_common::kaede_lib_src_dir;
 use kaede_parse::Parser;
 use kaede_span::Span;
 use kaede_symbol::{Ident, Symbol};
@@ -217,7 +218,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
 
         self.cucx
             .tcx
-            .bind_symbol(new_name.into(), bindee_symbol_kind, node.span)
+            .bind_symbol_to_new_name(new_name.into(), bindee_symbol_kind, node.span)
     }
 
     fn generic_fn_instance(&mut self, node: GenericFnInstance) -> anyhow::Result<()> {
@@ -722,7 +723,14 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
     }
 
     fn import_module(&mut self, module_path: Path) -> anyhow::Result<()> {
-        let mut path = self.cucx.file_path.path().parent().unwrap().to_path_buf();
+        let path_prefix = if module_path.segments.first().unwrap().as_str() == "std" {
+            // Standard library
+            kaede_lib_src_dir()
+        } else {
+            self.cucx.file_path.path().parent().unwrap().to_path_buf()
+        };
+
+        let mut path = path_prefix;
 
         for (idx, segment) in module_path.segments.iter().enumerate() {
             if idx == module_path.segments.len() - 1 {
@@ -740,19 +748,6 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
             }
             .into());
         }
-
-        // Insert module name to symbol table.
-        self.cucx.tcx.insert_symbol_to_root_scope(
-            module_path
-                .segments
-                .iter()
-                .map(|i| i.as_str())
-                .collect::<Vec<_>>()
-                .join(".")
-                .into(),
-            SymbolTableValue::Module,
-            module_path.span,
-        )?;
 
         // TODO: Optimize
         let psd_module = Parser::new(&fs::read_to_string(&path).unwrap(), path.into())
@@ -814,8 +809,23 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
 
                 TopLevelKind::GenericFnInstance(_) => unreachable!(),
                 TopLevelKind::ExternalImpl(_) => unreachable!(),
-            }
+            };
         }
+
+        let module_name = module_path.segments.last().unwrap().symbol();
+        let module_path_s = module_path
+            .segments
+            .iter()
+            .map(|i| i.as_str())
+            .collect::<Vec<_>>()
+            .join(".")
+            .into();
+        // Bind module name to the actual module path
+        self.cucx.tcx.insert_symbol_to_root_scope(
+            module_name,
+            SymbolTableValue::Module(module_path_s),
+            module_path.span,
+        )?;
 
         self.cucx.modules_for_mangle.replace(bkup);
 

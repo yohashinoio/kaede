@@ -3,18 +3,21 @@
 use assert_cmd::prelude::*;
 use assert_fs::prelude::*;
 use predicates::prelude::*;
-use std::{ffi::OsString, path::Path, process::Command};
+use std::{path::Path, process::Command};
 
-fn test(expect: i32, file_paths: &[&Path]) -> anyhow::Result<()> {
+fn test(expect: i32, file_paths: &[&Path], root_dir: &Path) -> anyhow::Result<()> {
     let exe = assert_fs::NamedTempFile::new("a.out")?;
 
     let mut args = file_paths
         .into_iter()
-        .map(|p| p.as_os_str().to_os_string())
-        .collect::<Vec<OsString>>();
+        .map(|p| p.to_string_lossy().to_string())
+        .collect::<Vec<String>>();
 
-    args.push(OsString::from("-o"));
-    args.push(exe.path().as_os_str().to_os_string());
+    args.push("-o".to_string());
+    args.push(exe.path().to_string_lossy().to_string());
+
+    args.push("--root-dir".to_string());
+    args.push(root_dir.to_string_lossy().to_string());
 
     let compile_output = Command::cargo_bin(env!("CARGO_BIN_EXE_kaede"))?
         .args(args)
@@ -24,7 +27,7 @@ fn test(expect: i32, file_paths: &[&Path]) -> anyhow::Result<()> {
     let llvm_ir = assert_fs::NamedTempFile::new("ir")?;
     llvm_ir.write_binary(&compile_output.get_output().stdout)?;
 
-    Command::new(format!("{}", exe.path().to_str().unwrap()))
+    Command::new(format!("{}", exe.path().to_string_lossy()))
         .assert()
         .code(predicate::eq(expect));
 
@@ -50,7 +53,7 @@ fn import_functions() -> anyhow::Result<()> {
         }"#,
     )?;
 
-    test(58, &[module1.path(), module2.path(), main.path()])
+    test(58, &[module1.path(), module2.path(), main.path()], &tempdir)
 }
 
 #[test]
@@ -74,7 +77,7 @@ fn import_i32_methods() -> anyhow::Result<()> {
         }"#,
     )?;
 
-    test(58, &[module.path(), main.path()])
+    test(58, &[module.path(), main.path()], &tempdir)
 }
 
 #[test]
@@ -124,7 +127,7 @@ fn import_struct_methods() -> anyhow::Result<()> {
         }"#,
     )?;
 
-    test(58, &[module1.path(), module2.path(), main.path()])
+    test(58, &[module1.path(), module2.path(), main.path()], &tempdir)
 }
 
 #[test]
@@ -160,7 +163,7 @@ fn import_struct_methods_with_arg_of_self_type() -> anyhow::Result<()> {
         }"#,
     )?;
 
-    test(58, &[module.path(), main.path()])
+    test(58, &[module.path(), main.path()], &tempdir)
 }
 
 #[test]
@@ -187,7 +190,7 @@ fn import_struct_methods_with_name_conflict() -> anyhow::Result<()> {
         }"#,
     )?;
 
-    test(58, &[module.path(), main.path()])
+    test(58, &[module.path(), main.path()], &tempdir)
 }
 
 #[test]
@@ -213,7 +216,7 @@ fn imported_typed_member() -> anyhow::Result<()> {
         }"#,
     )?;
 
-    test(58, &[module.path(), main.path()])
+    test(58, &[module.path(), main.path()], &tempdir)
 }
 
 #[test]
@@ -245,7 +248,7 @@ fn import_enum() -> anyhow::Result<()> {
         }"#,
     )?;
 
-    test(58, &[module.path(), main.path()])
+    test(58, &[module.path(), main.path()], &tempdir)
 }
 
 #[test]
@@ -280,7 +283,7 @@ fn import_enum_methods() -> anyhow::Result<()> {
         }"#,
     )?;
 
-    test(58, &[module.path(), main.path()])
+    test(58, &[module.path(), main.path()], &tempdir)
 }
 
 #[test]
@@ -322,7 +325,7 @@ fn import_complex_enum() -> anyhow::Result<()> {
         }"#,
     )?;
 
-    test(58, &[module.path(), main.path()])
+    test(58, &[module.path(), main.path()], &tempdir)
 }
 
 #[test]
@@ -369,7 +372,7 @@ fn enum_with_imported_struct() -> anyhow::Result<()> {
         }"#,
     )?;
 
-    test(58, &[module.path(), main.path()])
+    test(58, &[module.path(), main.path()], &tempdir)
 }
 
 #[test]
@@ -411,7 +414,7 @@ fn import_enum_and_call_variant_method() -> anyhow::Result<()> {
         }"#,
     )?;
 
-    test(58, &[module.path(), main.path()])
+    test(58, &[module.path(), main.path()], &tempdir)
 }
 
 #[test]
@@ -457,7 +460,7 @@ fn nested_import() -> anyhow::Result<()> {
         }"#,
     )?;
 
-    test(58, &[m1.path(), m2.path(), main.path()])
+    test(58, &[m1.path(), m2.path(), main.path()], &tempdir)
 }
 
 #[test]
@@ -508,7 +511,7 @@ fn import_generic_struct_methods() {
     )
     .unwrap();
 
-    test(58, &[module.path(), main.path()]).unwrap();
+    test(58, &[module.path(), main.path()], &tempdir).unwrap();
 }
 
 #[test]
@@ -553,7 +556,7 @@ fn import_generic_enum_methods_with_arg_of_self_type() {
     )
     .unwrap();
 
-    test(58, &[module.path(), main.path()]).unwrap();
+    test(58, &[module.path(), main.path()], &tempdir).unwrap();
 }
 
 #[test]
@@ -597,7 +600,7 @@ fn import_generic_methods_with_arg_of_self_type() {
     )
     .unwrap();
 
-    test(58, &[module.path(), main.path()]).unwrap();
+    test(58, &[module.path(), main.path()], &tempdir).unwrap();
 }
 
 #[test]
@@ -623,7 +626,7 @@ fn import_function_with_arg_of_external_struct() -> anyhow::Result<()> {
         }"#,
     )?;
 
-    test(58, &[module1.path(), module2.path()])
+    test(58, &[module1.path(), module2.path()], &tempdir)
 }
 
 #[test]
@@ -653,7 +656,7 @@ fn import_function_with_arg_of_external_enum() -> anyhow::Result<()> {
         }"#,
     )?;
 
-    test(58, &[module1.path(), module2.path()])
+    test(58, &[module1.path(), module2.path()], &tempdir)
 }
 
 #[test]
@@ -710,7 +713,7 @@ fn use_declaration() -> anyhow::Result<()> {
         }"#,
     )?;
 
-    test(58, &[module1.path(), module2.path()])
+    test(58, &[module1.path(), module2.path()], &tempdir)
 }
 
 #[test]
@@ -744,7 +747,7 @@ fn use_declaration_with_generic_struct() -> anyhow::Result<()> {
         }"#,
     )?;
 
-    test(58, &[module1.path(), module2.path()])
+    test(58, &[module1.path(), module2.path()], &tempdir)
 }
 
 #[test]
@@ -782,5 +785,36 @@ fn use_declaration_with_generic_enum() -> anyhow::Result<()> {
         }"#,
     )?;
 
-    test(58, &[module1.path(), module2.path()])
+    test(58, &[module1.path(), module2.path()], &tempdir)
+}
+
+#[test]
+fn import_module_in_directory() -> anyhow::Result<()> {
+    let tempdir = assert_fs::TempDir::new()?;
+
+    let module1 = tempdir.child("dir/m1.kd");
+    module1.write_str(
+        "pub struct Apple { size: i32 }
+        pub enum Fruit { Ringo(Apple), Ichigo(i32) }
+        pub fn get_58(): i32 { return 58 }",
+    )?;
+
+    let module2 = tempdir.child("m2.kd");
+    module2.write_str(
+        r#"import dir.m1
+        use m1.Fruit
+        fn main(): i32 {
+            let apple = Fruit::Ringo(m1.Apple { size: 58 });
+            let n = match apple {
+                Fruit::Ringo(a) => a.size,
+                Fruit::Ichigo(n) => n,
+            }
+            if n == m1.get_58() {
+                return n
+            }
+            return 123
+        }"#,
+    )?;
+
+    test(58, &[module1.path(), module2.path()], &tempdir)
 }

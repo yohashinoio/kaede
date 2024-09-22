@@ -5,11 +5,7 @@ use crate::CompileUnitCtx;
 
 /// Mangled by the current module name
 pub fn mangle_name(cucx: &CompileUnitCtx, name: Symbol) -> String {
-    format!(
-        "{}.{}",
-        cucx.modules_for_mangle.create_mangle_prefix(),
-        name
-    )
+    format!("{}.{}", cucx.mangle_prefix().unwrap(), name)
 }
 
 pub fn mangle_method(cucx: &CompileUnitCtx, impl_for: &UserDefinedType, name: Symbol) -> String {
