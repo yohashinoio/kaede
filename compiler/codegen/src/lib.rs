@@ -379,7 +379,19 @@ impl<'ctx> CompileUnitCtx<'ctx> {
         self.cgcx.target_data.get_bit_size(type_)
     }
 
-    pub fn mangle_prefix(&self) -> anyhow::Result<String> {
+    /// Canonicalize module name (m -> dir1.dir2.m)
+    fn canonicalize_module(&self, module_chain: Symbol) -> Symbol {
+        let symbol_kind = self.tcx.lookup_symbol(module_chain, Span::dummy());
+        if let Ok(symbol_kind) = symbol_kind {
+            if let SymbolTableValue::Module(resolved) = &*symbol_kind.borrow() {
+                return *resolved;
+            }
+        }
+
+        module_chain
+    }
+
+    pub fn mangle_prefix(&self) -> anyhow::Result<Symbol> {
         let diff_from_root = if let Some(root_dir) = self.root_dir {
             // Get the canonical paths.
             let root_dir = root_dir.canonicalize()?;
@@ -401,14 +413,13 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             "".to_owned()
         };
 
+        let module =
+            self.canonicalize_module(self.modules_for_mangle.create_mangle_prefix().into());
+
         Ok(if diff_from_root.is_empty() {
-            self.modules_for_mangle.create_mangle_prefix()
+            module
         } else {
-            format!(
-                "{}.{}",
-                diff_from_root,
-                self.modules_for_mangle.create_mangle_prefix(),
-            )
+            format!("{}.{}", diff_from_root, module.as_str()).into()
         })
     }
 
@@ -826,9 +837,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             self.tcx.pop_generic_arg_table();
         }
 
-        let mangled_generic_name = self
-            .tcx
-            .resolve_module(mangle_udt_name(self, udt), udt.name.span());
+        let mangled_generic_name = mangle_udt_name(self, udt);
 
         let borrowed_symbol_kind = symbol_kind.borrow();
         let generic_kind = match &*borrowed_symbol_kind {

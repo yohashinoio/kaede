@@ -203,22 +203,30 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
     }
 
     fn use_(&mut self, node: Use) -> anyhow::Result<()> {
-        let bindee_name = node
-            .path
-            .segments
-            .iter()
-            .map(|i| i.as_str())
-            .collect::<Vec<_>>()
-            .join(".")
-            .into();
+        let modules = node.path.segments[..node.path.segments.len() - 1].to_vec();
+        let name = node.path.segments.last().unwrap().symbol();
 
-        let bindee_symbol_kind = self.cucx.tcx.lookup_symbol(bindee_name, node.span)?;
+        let bkup = self.cucx.modules_for_mangle.drain_and_append(modules);
+        // Create actual mangled name.
+        let actual_name = mangle_name(self.cucx, name).into();
+        self.cucx.modules_for_mangle.replace(bkup);
 
-        let new_name = mangle_name(self.cucx, node.path.segments.last().unwrap().symbol());
+        // Mangle for current module.
+        let new_name = mangle_name(self.cucx, name).into();
 
+        if actual_name == new_name {
+            // No need to bind.
+            // This happens when the file name is the same in another hierarchy.
+            // For example, `foo.kd` and `bar/foo.kd`.
+            return Ok(());
+        }
+
+        let bindee = self.cucx.tcx.lookup_symbol(actual_name, node.span)?;
         self.cucx
             .tcx
-            .bind_symbol_to_new_name(new_name.into(), bindee_symbol_kind, node.span)
+            .bind_symbol_to_new_name(new_name, bindee, node.span)?;
+
+        Ok(())
     }
 
     fn generic_fn_instance(&mut self, node: GenericFnInstance) -> anyhow::Result<()> {

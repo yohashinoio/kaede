@@ -203,37 +203,11 @@ impl<'ctx> TypeCtx<'ctx> {
         eprintln!("----------");
     }
 
-    /// Resolve module (m -> dir1.dir2.m)
-    pub fn resolve_module(&self, symbol: Symbol, span: Span) -> Symbol {
-        let mut splited = symbol.as_str().split(".").collect::<Vec<_>>();
-
-        let mut resolved_module = None;
-
-        if 2 <= splited.len() {
-            let maybe_module = splited.first().unwrap();
-
-            let symbol_kind = self.lookup_symbol(maybe_module.to_string().into(), span);
-            if let Ok(symbol_kind) = symbol_kind {
-                if let SymbolTableValue::Module(module_name) = &*symbol_kind.borrow() {
-                    resolved_module = Some(*module_name);
-                }
-            }
-
-            if let Some(resolved) = &resolved_module {
-                splited[0] = resolved.as_str();
-            }
-        }
-
-        splited.join(".").into()
-    }
-
     pub fn lookup_symbol(
         &self,
         symbol: Symbol,
         span: Span,
     ) -> anyhow::Result<Rc<RefCell<SymbolTableValue<'ctx>>>> {
-        let symbol = self.resolve_module(symbol, span);
-
         for table in self.symbol_tables.iter().rev() {
             if let Some(value) = table.get(&symbol) {
                 return Ok(value.clone());

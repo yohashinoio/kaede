@@ -2455,37 +2455,27 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             args
         };
 
-        let symbol_kind = self.cucx.tcx.lookup_symbol(
-            mangle_name(self.cucx, node.callee.symbol()).into(),
-            node.span,
-        );
+        let mangled_name = mangle_name(self.cucx, node.callee.symbol()).into();
 
-        if let Ok(kind) = symbol_kind {
-            if let SymbolTableValue::Generic(info) = &*kind.borrow() {
-                // Generic function
-                let evaled =
-                    self.build_call_generic_fn(node.callee.symbol(), &args, node.span, &info.kind);
+        let symbol_kind = self.cucx.tcx.lookup_symbol(mangled_name, node.span);
 
-                if let Some(bkup) = bkup {
-                    self.cucx.modules_for_mangle.replace(bkup);
+        let evaled = match symbol_kind {
+            Ok(kind) => match &*kind.borrow() {
+                SymbolTableValue::Generic(info) => {
+                    // Generic function
+                    self.build_call_generic_fn(node.callee.symbol(), &args, node.span, &info.kind)
                 }
+                SymbolTableValue::Function(_) => {
+                    // Normal function
+                    self.build_call_fn_without_mangle(mangled_name, &args, node.span)
+                }
+                _ => todo!("Error"),
+            },
 
-                return evaled;
-            }
-        }
-
-        // Normal function
-        let evaled = match self.build_call_fn(node.callee.symbol(), &args, node.span) {
-            Ok(val) => Ok(val),
             Err(err) => {
-                err.downcast().and_then(|err| match err {
-                    CodegenError::Undeclared { .. } => {
-                        // If the function is not found, try to call the function without mangling. (For ffi)
-                        self.build_call_fn_without_mangle(node.callee.symbol(), &args, node.span)
-                            .map_err(|_| err.into())
-                    }
-                    _ => Err(err.into()),
-                })
+                // FFI function
+                self.build_call_fn_without_mangle(node.callee.symbol(), &args, node.span)
+                    .map_err(|_| err.into())
             }
         };
 
@@ -2548,16 +2538,6 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             // Without return value (void function)
             None => Value::new_void(),
         })
-    }
-
-    fn build_call_fn(
-        &mut self,
-        name: Symbol,
-        args: &VecDeque<(Value<'ctx>, Span)>,
-        span: Span,
-    ) -> anyhow::Result<Value<'ctx>> {
-        let mangled_name = mangle_name(self.cucx, name);
-        self.build_call_fn_without_mangle(mangled_name.into(), args, span)
     }
 
     fn verify_var_args(

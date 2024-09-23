@@ -818,3 +818,61 @@ fn import_module_in_directory() -> anyhow::Result<()> {
 
     test(58, &[module1.path(), module2.path()], &tempdir)
 }
+
+#[test]
+fn import_hierarchical_module() -> anyhow::Result<()> {
+    let tempdir = assert_fs::TempDir::new()?;
+
+    let module1 = tempdir.child("dir/dir2/m2.kd");
+    module1.write_str(
+        "import m1
+        pub enum Fruit { Ringo(m1.Apple), Ichigo(i32) }
+        pub fn get_48(): i32 { return 48 }
+        pub fn get_10(): i32 { return 10 }",
+    )?;
+
+    let module2 = tempdir.child("dir/dir2/m1.kd");
+    module2.write_str(
+        "import m2
+        pub struct Apple { size: i32 }
+        pub fn get_58(): i32 { return m2.get_48() + m2.get_10() }",
+    )?;
+
+    let module3 = tempdir.child("dir/m.kd");
+    module3.write_str(
+        r#"import dir2.m1
+        pub fn f(): i32 {
+            return m1.get_58()
+        }"#,
+    )?;
+
+    let module4 = tempdir.child("m2.kd");
+    module4.write_str(
+        r#"import dir.dir2.m1
+        import dir.dir2.m2
+        import dir.m
+        use m2.Fruit
+        fn main(): i32 {
+            let apple = Fruit::Ringo(m1.Apple { size: 58 });
+            let n = match apple {
+                Fruit::Ringo(a) => a.size,
+                Fruit::Ichigo(n) => n,
+            }
+            if n == m1.get_58() {
+                return m.f()
+            }
+            return 123
+        }"#,
+    )?;
+
+    test(
+        58,
+        &[
+            module1.path(),
+            module2.path(),
+            module3.path(),
+            module4.path(),
+        ],
+        &tempdir,
+    )
+}
