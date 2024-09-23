@@ -2475,7 +2475,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             Err(err) => {
                 // FFI function
                 self.build_call_fn_without_mangle(node.callee.symbol(), &args, node.span)
-                    .map_err(|_| err.into())
+                    .map_err(|_| err)
             }
         };
 
