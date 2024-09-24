@@ -851,9 +851,9 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
     fn import_struct(&mut self, struct_: Struct) -> anyhow::Result<()> {
         let span = struct_.span;
 
-        if struct_.generic_params.is_some() {
-            let mangled_name = mangle_name(self.cucx, struct_.name.symbol()).into();
+        let mangled_name = mangle_name(self.cucx, struct_.name.symbol()).into();
 
+        if struct_.generic_params.is_some() {
             self.cucx.tcx.insert_symbol_to_root_scope(
                 mangled_name,
                 SymbolTableValue::Generic(GenericInfo {
@@ -866,8 +866,6 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
             // Generics are not created immediately, but are created when they are used.
             return Ok(());
         }
-
-        let mangled_name = mangle_name(self.cucx, struct_.name.symbol()).into();
 
         let ty = create_struct_type(self.cucx, mangled_name, &struct_.fields)?;
 
