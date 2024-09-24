@@ -876,3 +876,55 @@ fn import_hierarchical_module() -> anyhow::Result<()> {
         &tempdir,
     )
 }
+
+#[test]
+fn import_same_name_module_with_same_name_struct() {
+    let tempdir = assert_fs::TempDir::new().unwrap();
+
+    let module1 = tempdir.child("dir/m.kd");
+    module1
+        .write_str(
+            r#"pub struct Apple {
+            size: i32,
+        }
+
+        impl Apple {
+            pub fn new_ringo(size: i32): Apple {
+                return Apple { size: 58 }
+            }
+            pub fn get_size(self): i32 {
+                return self.size
+            }
+        }"#,
+        )
+        .unwrap();
+
+    let module2 = tempdir.child("m.kd");
+    module2
+        .write_str(
+            r#"import dir.m
+        struct Apple {
+            width: i32,
+            height: i32,
+        }
+
+        impl Apple {
+            fn get(self): i32 {
+                return self.width + self.height
+            }
+        }
+
+        fn main(): i32 {
+            let apple = m.Apple::new_ringo(58)
+            let apple2 = Apple { width: 48, height: 10 }
+
+            if apple.get_size() == apple2.get() {
+                return apple.size
+            }
+            return 123
+        }"#,
+        )
+        .unwrap();
+
+    test(58, &[module1.path(), module2.path()], &tempdir).unwrap();
+}

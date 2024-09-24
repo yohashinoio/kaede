@@ -263,14 +263,17 @@ impl<'ctx> CodegenCtx<'ctx> {
     }
 }
 
+#[derive(Clone)]
 struct ModulesForMangle {
     names: Vec<Ident>,
+    is_external: bool,
 }
 
 impl ModulesForMangle {
-    fn new(names: &[Ident]) -> Self {
+    fn new(names: &[Ident], is_external: bool) -> Self {
         Self {
             names: names.to_vec(),
+            is_external,
         }
     }
 
@@ -286,16 +289,21 @@ impl ModulesForMangle {
             .join(".")
     }
 
-    fn drain_and_append(&mut self, mut v: Vec<Ident>) -> Vec<Ident> {
-        let drained = self.names.drain(..).collect();
+    // Returns a backup.
+    fn change_for_external(&mut self, mut v: Vec<Ident>) -> Self {
+        let backup = self.clone();
 
+        self.is_external = true;
+        self.names.clear();
         self.names.append(&mut v);
 
-        drained
+        backup
     }
 
-    fn replace(&mut self, backup: Vec<Ident>) {
-        self.names = backup;
+    fn change_for_internal(&mut self, backup: Self) {
+        self.is_external = false;
+
+        *self = backup;
     }
 }
 
@@ -360,10 +368,10 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             builder: cgcx.context.create_builder(),
             file_path,
             root_dir,
-            modules_for_mangle: ModulesForMangle::new(&[Ident::new(
-                module_name.into(),
-                Span::dummy(),
-            )]),
+            modules_for_mangle: ModulesForMangle::new(
+                &[Ident::new(module_name.into(), Span::dummy())],
+                false,
+            ),
             imported_modules: HashSet::new(),
             loop_break_bb_stk: Vec::new(),
             is_ifmatch_stmt: false,
@@ -413,8 +421,20 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             "".to_owned()
         };
 
-        let module =
-            self.canonicalize_module(self.modules_for_mangle.create_mangle_prefix().into());
+        let module = Symbol::from(self.modules_for_mangle.create_mangle_prefix());
+
+        // The following process is for the following case.
+        //
+        // Define `Apple` in `m.kd` and import `dir/m.kd`.
+        // Then, if `Apple`` is also defined in `dir/m.kd`, an error occurs.
+        let module = if module.as_str()
+            == self.file_path.path().file_stem().unwrap().to_string_lossy()
+            && !self.modules_for_mangle.is_external
+        {
+            module
+        } else {
+            self.canonicalize_module(module)
+        };
 
         Ok(if diff_from_root.is_empty() {
             module
@@ -870,11 +890,11 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             TyKind::External(ety) => {
                 let bkup = self
                     .modules_for_mangle
-                    .drain_and_append(vec![ety.module_name]);
+                    .change_for_external(vec![ety.module_name]);
 
                 let ty = self.conv_to_llvm_type(&ety.ty, span)?;
 
-                self.modules_for_mangle.replace(bkup);
+                self.modules_for_mangle.change_for_internal(bkup);
 
                 ty
             }

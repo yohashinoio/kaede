@@ -384,7 +384,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                 Some(
                     self.cucx
                         .modules_for_mangle
-                        .drain_and_append(ety.get_module_names_recursively()),
+                        .change_for_external(ety.get_module_names_recursively()),
                 ),
             )
         } else {
@@ -399,7 +399,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         };
 
         if let Some(bkup) = bkup {
-            self.cucx.modules_for_mangle.replace(bkup);
+            self.cucx.modules_for_mangle.change_for_internal(bkup);
         }
 
         result
@@ -646,7 +646,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             let bkup = self
                 .cucx
                 .modules_for_mangle
-                .drain_and_append(ety.get_module_names_recursively());
+                .change_for_external(ety.get_module_names_recursively());
             (ety.get_base_type(), Some(bkup))
         } else {
             (base_ty_of_ref, None)
@@ -683,7 +683,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         let result = self.build_match_on_enum(&enum_info, target, &node.arms, node.span);
 
         if let Some(bkup) = bkup {
-            self.cucx.modules_for_mangle.replace(bkup);
+            self.cucx.modules_for_mangle.change_for_internal(bkup);
         }
 
         result
@@ -1126,7 +1126,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             Some(
                 self.cucx
                     .modules_for_mangle
-                    .drain_and_append(node.external_modules.clone()),
+                    .change_for_external(node.external_modules.clone()),
             )
         } else {
             None
@@ -1193,7 +1193,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         );
 
         if let Some(bkup) = bkup {
-            self.cucx.modules_for_mangle.replace(bkup);
+            self.cucx.modules_for_mangle.change_for_internal(bkup);
         }
 
         Ok(value)
@@ -1531,7 +1531,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                 let bkup = self
                     .cucx
                     .modules_for_mangle
-                    .drain_and_append(eident.external_modules.clone());
+                    .change_for_external(eident.external_modules.clone());
                 (&eident.ident, Some(bkup), eident.generic_args.clone())
             }
             ExprKind::GenericIdent(gident) => (&gident.0, None, Some(gident.1.clone())),
@@ -1587,7 +1587,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         };
 
         if let Some(bkup) = modules_bkup {
-            self.cucx.modules_for_mangle.replace(bkup);
+            self.cucx.modules_for_mangle.change_for_internal(bkup);
         }
 
         result
@@ -1611,7 +1611,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                     Some(
                         self.cucx
                             .modules_for_mangle
-                            .drain_and_append(externals.clone()),
+                            .change_for_external(externals.clone()),
                     )
                 } else {
                     None
@@ -1625,7 +1625,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                 };
 
                 if let Some(bkup) = bkup {
-                    self.cucx.modules_for_mangle.replace(bkup);
+                    self.cucx.modules_for_mangle.change_for_internal(bkup);
                 }
 
                 mangled
@@ -2010,7 +2010,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
                 Some(
                     self.cucx
                         .modules_for_mangle
-                        .drain_and_append(ety.get_module_names_recursively()),
+                        .change_for_external(ety.get_module_names_recursively()),
                 ),
                 ety.get_base_type(),
             )
@@ -2063,7 +2063,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         };
 
         if let Some(bkup) = bkup {
-            self.cucx.modules_for_mangle.replace(bkup);
+            self.cucx.modules_for_mangle.change_for_internal(bkup);
         }
 
         result
@@ -2439,7 +2439,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             Some(
                 self.cucx
                     .modules_for_mangle
-                    .drain_and_append(node.external_modules.clone()),
+                    .change_for_external(node.external_modules.clone()),
             )
         } else {
             None
@@ -2480,7 +2480,7 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
         };
 
         if let Some(bkup) = bkup {
-            self.cucx.modules_for_mangle.replace(bkup);
+            self.cucx.modules_for_mangle.change_for_internal(bkup);
         }
 
         evaled

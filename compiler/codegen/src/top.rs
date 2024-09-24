@@ -206,10 +206,10 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         let modules = node.path.segments[..node.path.segments.len() - 1].to_vec();
         let name = node.path.segments.last().unwrap().symbol();
 
-        let bkup = self.cucx.modules_for_mangle.drain_and_append(modules);
+        let bkup = self.cucx.modules_for_mangle.change_for_external(modules);
         // Create actual mangled name.
         let actual_name = mangle_name(self.cucx, name).into();
-        self.cucx.modules_for_mangle.replace(bkup);
+        self.cucx.modules_for_mangle.change_for_internal(bkup);
 
         // Mangle for current module.
         let new_name = mangle_name(self.cucx, name).into();
@@ -323,7 +323,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         let bkup = self
             .cucx
             .modules_for_mangle
-            .drain_and_append(external_modules.clone());
+            .change_for_external(external_modules.clone());
 
         for item in node.items.iter() {
             if item.vis.is_private() {
@@ -338,7 +338,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
             }
         }
 
-        self.cucx.modules_for_mangle.replace(bkup);
+        self.cucx.modules_for_mangle.change_for_internal(bkup);
 
         Ok(())
     }
@@ -766,7 +766,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         let bkup = self
             .cucx
             .modules_for_mangle
-            .drain_and_append(module_path.segments.clone());
+            .change_for_external(module_path.segments.clone());
 
         for top_level in psd_module.top_levels {
             // Without checking visibility.
@@ -835,7 +835,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
             module_path.span,
         )?;
 
-        self.cucx.modules_for_mangle.replace(bkup);
+        self.cucx.modules_for_mangle.change_for_internal(bkup);
 
         self.cucx
             .imported_modules
