@@ -915,7 +915,17 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                     },
                 );
 
-                let symbol_kind = self.cucx.tcx.lookup_symbol(mangled_name, span)?;
+                let symbol_kind = self.cucx.tcx.lookup_symbol(mangled_name, span);
+                let symbol_kind = match symbol_kind {
+                    Ok(symbol_kind) => symbol_kind,
+
+                    Err(_) => {
+                        // It could be that it was a impl of a non-public, user-defined type.
+                        // If it's an error, don't make an error here, just make an error when compiling the file.
+                        return Ok(());
+                    }
+                };
+
                 match *symbol_kind.borrow_mut() {
                     SymbolTableValue::Generic(ref mut generic_info) => match &mut generic_info.kind
                     {

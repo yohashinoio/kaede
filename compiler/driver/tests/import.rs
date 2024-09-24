@@ -928,3 +928,76 @@ fn import_same_name_module_with_same_name_struct() {
 
     test(58, &[module1.path(), module2.path()], &tempdir).unwrap();
 }
+
+#[test]
+fn import_generic_struct_from_module_in_directory() {
+    let tempdir = assert_fs::TempDir::new().unwrap();
+
+    let module1 = tempdir.child("dir/m.kd");
+    module1
+        .write_str(
+            r#"pub struct Apple<T> {
+            size: T,
+        }
+
+        impl<T> Apple<T> {
+            pub fn new(size: T): Apple<T> {
+                return Apple<T> { size: size }
+            }
+
+            pub fn get_size(self): T {
+                return self.size
+            }
+        }"#,
+        )
+        .unwrap();
+
+    let module2 = tempdir.child("m.kd");
+    module2
+        .write_str(
+            r#"import dir.m
+        fn main(): i32 {
+            let apple = m.Apple<i32>::new(58)
+            return apple.get_size()
+        }"#,
+        )
+        .unwrap();
+
+    test(58, &[module1.path(), module2.path()], &tempdir).unwrap();
+}
+
+#[test]
+fn import_function_with_non_public_generic_struct() {
+    let tempdir = assert_fs::TempDir::new().unwrap();
+
+    let module1 = tempdir.child("m1.kd");
+    module1
+        .write_str(
+            r#"struct Apple<T> {
+            size: i32,
+        }
+
+        impl<T> Apple<T> {
+            fn new(size: T): Apple {
+                return Apple { size: size }
+            }
+        }
+
+        pub fn get_58(): i32 {
+            return 58
+        }"#,
+        )
+        .unwrap();
+
+    let module2 = tempdir.child("m2.kd");
+    module2
+        .write_str(
+            r#"import m1
+        fn main(): i32 {
+            return m1.get_58()
+        }"#,
+        )
+        .unwrap();
+
+    test(58, &[module1.path(), module2.path()], &tempdir).unwrap();
+}
