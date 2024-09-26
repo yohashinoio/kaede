@@ -1566,17 +1566,26 @@ impl<'a, 'ctx> ExprBuilder<'a, 'ctx> {
             } else {
                 let value = right.args.0.front().unwrap();
 
-                if let Ok(val) = self.create_enum_variant(
+                match self.create_enum_variant(
                     left,
                     &right.callee,
                     Some(value),
                     generic_args,
                     right.span,
                 ) {
-                    Ok(val)
-                } else {
-                    // Couldn't create enum variant, so try to call static methods
-                    self.build_static_method_call(&udt, right)
+                    Ok(val) => Ok(val),
+                    Err(err) => {
+                        err.downcast().and_then(|e| match e {
+                            CodegenError::Undeclared { name, .. }
+                            | CodegenError::NoVariant {
+                                parent_name: name, ..
+                            } if name == left.symbol() => {
+                                // Couldn't create enum variant, so try to call static methods
+                                self.build_static_method_call(&udt, right)
+                            }
+                            _ => Err(e.into()),
+                        })
+                    }
                 }
             }
         } else if let ExprKind::Ident(right) = &node.rhs.kind {
