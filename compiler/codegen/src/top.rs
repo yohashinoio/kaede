@@ -2,12 +2,12 @@ use std::{cell::RefCell, collections::HashMap, fs, rc::Rc};
 
 use inkwell::{module::Linkage, types::StructType, values::FunctionValue};
 use kaede_ast::top::{
-    Enum, EnumVariant, Extern, Fn, GenericFnInstance, GenericParams, Impl, Import, Param, Params,
-    Path, Struct, StructField, TopLevel, TopLevelKind, Use, Visibility,
+    Enum, EnumVariant, Extern, Fn, GenericFnInstance, GenericParams, Impl, Param, Params, Path,
+    Struct, StructField, TopLevel, TopLevelKind, Use, Visibility,
 };
 use kaede_common::kaede_lib_src_dir;
 use kaede_parse::Parser;
-use kaede_span::Span;
+use kaede_span::{file::FilePath, Span};
 use kaede_symbol::{Ident, Symbol};
 use kaede_type::{change_mutability_dup, GenericArgs, Mutability, Ty, TyKind, UserDefinedType};
 
@@ -178,7 +178,7 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
     /// Generate top-level code
     fn build(&mut self, tl: TopLevel) -> anyhow::Result<()> {
         match tl.kind {
-            TopLevelKind::Import(node) => self.import_(node)?,
+            TopLevelKind::Import(node) => self.import_module(node.module_path)?,
 
             TopLevelKind::Fn(node) => self.func(node, tl.vis)?,
 
@@ -726,10 +726,6 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
         Ok(())
     }
 
-    fn import_(&mut self, node: Import) -> anyhow::Result<()> {
-        self.import_module(node.module_path)
-    }
-
     fn import_module(&mut self, module_path: Path) -> anyhow::Result<()> {
         let path_prefix = if module_path.segments.first().unwrap().as_str() == "std" {
             // Standard library
@@ -757,27 +753,52 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
             .into());
         }
 
+        // Prevent duplicate imports
+        if self.cucx.imported_module_paths.contains(&path) {
+            return Ok(());
+        } else {
+            self.cucx.imported_module_paths.insert(path.canonicalize()?);
+        }
+
         // TODO: Optimize
-        let psd_module = Parser::new(&fs::read_to_string(&path).unwrap(), path.into())
+        let psd_module = Parser::new(&fs::read_to_string(&path).unwrap(), path.clone().into())
             .run()
             .unwrap();
 
         // For mangle.
+        let file_bkup = self.cucx.file_path;
+        self.cucx.file_path = FilePath::from(path.to_path_buf());
         let bkup = self
             .cucx
             .modules_for_mangle
-            .change_for_external(module_path.segments.clone());
+            .change_for_external(vec![*module_path.segments.last().unwrap()]);
 
         for top_level in psd_module.top_levels {
             // Without checking visibility.
-            if let TopLevelKind::Impl(impl_) = top_level.kind {
-                self.import_impl(
-                    impl_,
-                    module_path.segments.clone(),
-                    top_level.vis,
-                    top_level.span,
-                )?;
-                continue;
+            match top_level.kind {
+                TopLevelKind::Impl(impl_) => {
+                    self.import_impl(
+                        impl_,
+                        module_path.segments.clone(),
+                        top_level.vis,
+                        top_level.span,
+                    )?;
+                    continue;
+                }
+
+                TopLevelKind::Import(import_) => {
+                    self.import_module(import_.module_path)?;
+                    continue;
+                }
+
+                TopLevelKind::Use(use_) => {
+                    self.use_(use_)?;
+                    continue;
+                }
+
+                TopLevelKind::Extern(_) => todo!(),
+
+                _ => {}
             }
 
             // Check visibility.
@@ -811,14 +832,15 @@ impl<'a, 'ctx> TopLevelBuilder<'a, 'ctx> {
                     self.import_enum(enum_)?;
                 }
 
-                TopLevelKind::Import(_) => todo!(),
-                TopLevelKind::Extern(_) => todo!(),
-                TopLevelKind::Use(_) => todo!(),
-
+                TopLevelKind::Use(_) => unreachable!(),
+                TopLevelKind::Extern(_) => unreachable!(),
+                TopLevelKind::Import(_) => unreachable!(),
                 TopLevelKind::GenericFnInstance(_) => unreachable!(),
                 TopLevelKind::ExternalImpl(_) => unreachable!(),
             };
         }
+
+        self.cucx.file_path = file_bkup;
 
         let module_name = module_path.segments.last().unwrap().symbol();
         let module_path_s = module_path

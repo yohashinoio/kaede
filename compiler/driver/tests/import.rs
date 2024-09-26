@@ -823,33 +823,40 @@ fn import_module_in_directory() -> anyhow::Result<()> {
 fn import_hierarchical_module() -> anyhow::Result<()> {
     let tempdir = assert_fs::TempDir::new()?;
 
-    let module1 = tempdir.child("dir/dir2/m2.kd");
+    let module1 = tempdir.child("dir/dir2/m1.kd");
     module1.write_str(
+        "pub struct Apple {
+            size: i32,
+        }",
+    )?;
+
+    let module2 = tempdir.child("dir/dir2/m2.kd");
+    module2.write_str(
         "import m1
         pub enum Fruit { Ringo(m1.Apple), Ichigo(i32) }
         pub fn get_48(): i32 { return 48 }
         pub fn get_10(): i32 { return 10 }",
     )?;
 
-    let module2 = tempdir.child("dir/dir2/m1.kd");
-    module2.write_str(
+    let module3 = tempdir.child("dir/dir2/m3.kd");
+    module3.write_str(
         "import m2
-        pub struct Apple { size: i32 }
         pub fn get_58(): i32 { return m2.get_48() + m2.get_10() }",
     )?;
 
-    let module3 = tempdir.child("dir/m.kd");
-    module3.write_str(
-        r#"import dir2.m1
+    let module4 = tempdir.child("dir/m.kd");
+    module4.write_str(
+        r#"import dir2.m3
         pub fn f(): i32 {
-            return m1.get_58()
+            return m3.get_58()
         }"#,
     )?;
 
-    let module4 = tempdir.child("m2.kd");
-    module4.write_str(
+    let module5 = tempdir.child("m2.kd");
+    module5.write_str(
         r#"import dir.dir2.m1
         import dir.dir2.m2
+        import dir.dir2.m3
         import dir.m
         use m2.Fruit
         fn main(): i32 {
@@ -858,7 +865,7 @@ fn import_hierarchical_module() -> anyhow::Result<()> {
                 Fruit::Ringo(a) => a.size,
                 Fruit::Ichigo(n) => n,
             }
-            if n == m1.get_58() {
+            if n == m3.get_58() {
                 return m.f()
             }
             return 123
@@ -872,6 +879,7 @@ fn import_hierarchical_module() -> anyhow::Result<()> {
             module2.path(),
             module3.path(),
             module4.path(),
+            module5.path(),
         ],
         &tempdir,
     )

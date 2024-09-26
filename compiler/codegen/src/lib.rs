@@ -333,6 +333,9 @@ pub struct CompileUnitCtx<'ctx> {
 
     // The elements of this array will begin to be generated sequentially after the module's code generation is finished.
     lazy_defines: Vec<(TopLevel, GenericParams, GenericArgs)>,
+
+    // The paths of the modules that have been imported.
+    imported_module_paths: HashSet<PathBuf>,
 }
 
 impl<'ctx> CompileUnitCtx<'ctx> {
@@ -376,6 +379,7 @@ impl<'ctx> CompileUnitCtx<'ctx> {
             loop_break_bb_stk: Vec::new(),
             is_ifmatch_stmt: false,
             lazy_defines: Vec::new(),
+            imported_module_paths: HashSet::new(),
         })
     }
 
