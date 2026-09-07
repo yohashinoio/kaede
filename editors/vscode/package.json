@@ -39,11 +39,11 @@
     "test": "vscode-tmgrammar-test -g syntaxes/kaede.tmLanguage.json 'tests/**/*.kd'"
   },
   "dependencies": {
-    "vscode-languageclient": "^10.1.0"
+    "vscode-languageclient": "^10.1.1"
   },
   "devDependencies": {
-    "@types/node": "^26.4.0",
-    "@types/vscode": "^1.134.0",
+    "@types/node": "^26.4.1",
+    "@types/vscode": "^1.136.0",
     "typescript": "^7.0.2",
     "vscode-tmgrammar-test": "^0.1.3"
   }
